@@ -19,6 +19,7 @@ SENS_QPS=${SENS_QPS:-"$(seq 1 16)"}
 SENS_DEPTHS=${SENS_DEPTHS:-"1 2 4 8 16 32 64"}
 SENS_AXES=${SENS_AXES:-"mc_threads pipeline qp depth"}
 QPXD_WINDOW=${QPXD_WINDOW:-128}
+QPXD_QPS=${QPXD_QPS:-"1 2 4 8 16"}
 SERVER_CPUS=
 CLIENT_CPUS=
 
@@ -205,7 +206,7 @@ fi
 # QP>8 points put mtT+mcT+ext over 24 vCPU; kept deliberately, read as oversubscribed.
 if [[ " $PHASES " == *" qpxdepth "* ]]; then
     # Exp 1: QP*depth=$QPXD_WINDOW fixed in-flight window, split varies. mtT=8 mcT=8 pipe=8.
-    for ext in 1 2 4 8 16; do
+    for ext in $QPXD_QPS; do
         depth=$((QPXD_WINDOW / ext))
         run_point qpxdepth "qpxd-q$ext-d$depth" port 8 8 "$ext" 8 "$depth"
     done

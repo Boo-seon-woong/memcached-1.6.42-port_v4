@@ -239,6 +239,12 @@ depth=1 pipeline=48 재실험(§2b)은 별도 실행이다. 9 points, 전 point 
 /home/seonung/2026/rdma-results/qpd1-p48-20260727-085901/   # qpd1-q{1,2,4,...,256}
 ```
 
+depth=1 mtT=mcT=10 재실험(§2c)은 별도 실행이다. 16 points, 전 point `status=ok`.
+
+```text
+/home/seonung/2026/rdma-results/qpd1-t10-20260727-090621/   # qpd1-q{1..16}
+```
+
 ## CPU 실험 raw
 
 `md/CPU_COST_ACCOUNTING.md`와 `md/CPU_OPTIMIZATION_ROLLOUT.md`가 참조하는

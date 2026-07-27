@@ -22,6 +22,8 @@ QPXD_WINDOW=${QPXD_WINDOW:-128}
 QPXD_QPS=${QPXD_QPS:-"1 2 4 8 16"}
 QPD1_QPS=${QPD1_QPS:-"$(seq 1 16)"}
 QPD1_PIPELINE=${QPD1_PIPELINE:-8}
+QPD1_MT=${QPD1_MT:-8}
+QPD1_MC=${QPD1_MC:-8}
 SERVER_CPUS=
 CLIENT_CPUS=
 
@@ -215,9 +217,9 @@ if [[ " $PHASES " == *" qpxdepth "* ]]; then
 fi
 
 if [[ " $PHASES " == *" qpd1 "* ]]; then
-    # Exp 2: depth=1 (zero per-QP queueing), QP scaling. mtT=8 mcT=8 pipe=$QPD1_PIPELINE.
+    # Exp 2: depth=1 (zero per-QP queueing), QP scaling. pipe=$QPD1_PIPELINE, threads=$QPD1_MT/$QPD1_MC.
     for ext in $QPD1_QPS; do
-        run_point qpd1 "qpd1-q$ext" port 8 8 "$ext" "$QPD1_PIPELINE" 1
+        run_point qpd1 "qpd1-q$ext" port "$QPD1_MT" "$QPD1_MC" "$ext" "$QPD1_PIPELINE" 1
     done
 fi
 

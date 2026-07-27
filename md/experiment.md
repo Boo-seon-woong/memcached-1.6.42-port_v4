@@ -70,7 +70,7 @@ tools/config-matrix-10s.sh
 | `stock` | stock local-memory control 1점 | mtT=8, mcT=8, pipeline=4 |
 | `frontier` | Port 후보 4점 + stock pipeline 4/6/8 | 현재 운영점을 고른 실행 |
 | `sensitivity` | `$SENS_AXES`의 단일축 sweep | 기준점 mcT=8, pipeline=8, QP=8, depth=16 |
-| `qpxdepth` | `QP×depth=128` 고정 window 5점 | mtT=8, mcT=8, pipeline=8 |
+| `qpxdepth` | `QP×depth=$QPXD_WINDOW`(기본 128) 고정 window 5점 | mtT=8, mcT=8, pipeline=8 |
 | `qpd1` | depth=1, QP=1..16 | mtT=8, mcT=8, pipeline=8 |
 | `plateau` | pipeline 8..64 ladder 후 argmax pipeline에서 mtT=mcT=8..12 | QP=8, depth=16 |
 

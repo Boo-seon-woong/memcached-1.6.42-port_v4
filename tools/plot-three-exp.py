@@ -96,37 +96,42 @@ def main():
         rows = list(csv.DictReader(f))
 
     r = rows_for(rows, "qpxdepth")
-    labels = [f'{x["qp"]}x{x["depth"]}' for x in r]
-    figure(args.outdir / "qpxdepth.svg",
-           "QP x depth = 128 fixed window, pipeline=8 (2026-07-27)",
-           [(labels, {"throughput": col(r, "remote_get_s", 1e6)}, "remote GET M/s", None),
-            (labels, {"avg": col(r, "remote_avg_us"), "p50": col(r, "remote_p50_us"),
-                      "p99": col(r, "remote_p99_us")}, "remote span us", 30)])
+    if r:
+        window = int(r[0]["qp"]) * int(r[0]["depth"])
+        labels = [f'{x["qp"]}x{x["depth"]}' for x in r]
+        figure(args.outdir / f"qpxdepth-w{window}.svg",
+               f"QP x depth = {window} fixed window, pipeline=8 (2026-07-27)",
+               [(labels, {"throughput": col(r, "remote_get_s", 1e6)}, "remote GET M/s", None),
+                (labels, {"avg": col(r, "remote_avg_us"), "p50": col(r, "remote_p50_us"),
+                          "p99": col(r, "remote_p99_us")}, "remote span us", 30)])
 
     r = rows_for(rows, "qpd1")
-    labels = [x["qp"] for x in r]
-    figure(args.outdir / "qpd1.svg",
-           "depth=1 QP scaling, pipeline=8 (2026-07-27)",
-           [(labels, {"throughput": col(r, "remote_get_s", 1e6)}, "remote GET M/s", None),
-            (labels, {"avg": col(r, "remote_avg_us"), "p50": col(r, "remote_p50_us"),
-                      "p99": col(r, "remote_p99_us")}, "remote span us", 30)])
+    if r:
+        labels = [x["qp"] for x in r]
+        figure(args.outdir / "qpd1.svg",
+               "depth=1 QP scaling, pipeline=8 (2026-07-27)",
+               [(labels, {"throughput": col(r, "remote_get_s", 1e6)}, "remote GET M/s", None),
+                (labels, {"avg": col(r, "remote_avg_us"), "p50": col(r, "remote_p50_us"),
+                          "p99": col(r, "remote_p99_us")}, "remote span us", 30)])
 
     r = rows_for(rows, "plateau")
-    labels = [x["pipeline"] for x in r]
-    figure(args.outdir / "plateau.svg",
-           "Pipeline ladder at mcT=8 QP=8 depth=16 (2026-07-27)",
-           [(labels, {"throughput": col(r, "remote_get_s", 1e6)}, "remote GET M/s", None),
-            (labels, {"avg": col(r, "remote_avg_us"), "p50": col(r, "remote_p50_us"),
-                      "p99": col(r, "remote_p99_us")}, "remote span us", 30),
-            (labels, {"memtier avg": col(r, "memtier_avg_us")}, "memtier end-to-end avg us", None)])
+    if r:
+        labels = [x["pipeline"] for x in r]
+        figure(args.outdir / "plateau.svg",
+               "Pipeline ladder at mcT=8 QP=8 depth=16 (2026-07-27)",
+               [(labels, {"throughput": col(r, "remote_get_s", 1e6)}, "remote GET M/s", None),
+                (labels, {"avg": col(r, "remote_avg_us"), "p50": col(r, "remote_p50_us"),
+                          "p99": col(r, "remote_p99_us")}, "remote span us", 30),
+                (labels, {"memtier avg": col(r, "memtier_avg_us")}, "memtier end-to-end avg us", None)])
 
     r = rows_for(rows, "plateau_threads")
-    labels = [x["mt_threads"] for x in r]
-    figure(args.outdir / "plateau-threads.svg",
-           "mtT=mcT scaling at pipeline=48 depth=16 (2026-07-27)",
-           [(labels, {"throughput": col(r, "remote_get_s", 1e6)}, "remote GET M/s", None),
-            (labels, {"avg": col(r, "remote_avg_us"), "p50": col(r, "remote_p50_us"),
-                      "p99": col(r, "remote_p99_us")}, "remote span us", 30)])
+    if r:
+        labels = [x["mt_threads"] for x in r]
+        figure(args.outdir / "plateau-threads.svg",
+               "mtT=mcT scaling at pipeline=48 depth=16 (2026-07-27)",
+               [(labels, {"throughput": col(r, "remote_get_s", 1e6)}, "remote GET M/s", None),
+                (labels, {"avg": col(r, "remote_avg_us"), "p50": col(r, "remote_p50_us"),
+                          "p99": col(r, "remote_p99_us")}, "remote span us", 30)])
 
 
 if __name__ == "__main__":

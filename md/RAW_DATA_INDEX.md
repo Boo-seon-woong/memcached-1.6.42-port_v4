@@ -216,6 +216,13 @@ plat-p{8,12,16,24,32,48,64}/            # pipeline ladder, 7 points
 platt-t{8..12}-p48/                     # mtT=mcT scaling @ argmax pipeline, 5 points
 ```
 
+window=256 재실험(§1b)은 별도 실행이다. 5 points, 48 files, 전 point `status=ok`.
+
+```text
+/home/seonung/2026/rdma-results/qpxd256-20260727-084628/
+qpxd-q{1,2,4,8,16}-d{256,128,64,32,16}/
+```
+
 ## CPU 실험 raw
 
 `md/CPU_COST_ACCOUNTING.md`와 `md/CPU_OPTIMIZATION_ROLLOUT.md`가 참조하는

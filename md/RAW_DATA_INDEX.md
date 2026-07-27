@@ -233,6 +233,12 @@ qpxd-q{1,2,4,8,16}-d{256,128,64,32,16}/
 각 highqp 디렉터리의 `results-canonical.csv`는 해당 window의 기본 실행과
 확장 실행을 합친 표·그림 입력이다. raw 원문을 대체하지 않는다.
 
+depth=1 pipeline=48 재실험(§2b)은 별도 실행이다. 9 points, 전 point `status=ok`.
+
+```text
+/home/seonung/2026/rdma-results/qpd1-p48-20260727-085901/   # qpd1-q{1,2,4,...,256}
+```
+
 ## CPU 실험 raw
 
 `md/CPU_COST_ACCOUNTING.md`와 `md/CPU_OPTIMIZATION_ROLLOUT.md`가 참조하는

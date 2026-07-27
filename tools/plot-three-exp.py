@@ -107,9 +107,10 @@ def main():
 
     r = rows_for(rows, "qpd1")
     if r:
+        pipe = r[0]["pipeline"]
         labels = [x["qp"] for x in r]
-        figure(args.outdir / "qpd1.svg",
-               "depth=1 QP scaling, pipeline=8 (2026-07-27)",
+        figure(args.outdir / f"qpd1-p{pipe}.svg",
+               f"depth=1 QP scaling, pipeline={pipe} (2026-07-27)",
                [(labels, {"throughput": col(r, "remote_get_s", 1e6)}, "remote GET M/s", None),
                 (labels, {"avg": col(r, "remote_avg_us"), "p50": col(r, "remote_p50_us"),
                           "p99": col(r, "remote_p99_us")}, "remote span us", 30)])

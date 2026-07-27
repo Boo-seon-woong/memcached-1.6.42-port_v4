@@ -20,6 +20,8 @@ SENS_DEPTHS=${SENS_DEPTHS:-"1 2 4 8 16 32 64"}
 SENS_AXES=${SENS_AXES:-"mc_threads pipeline qp depth"}
 QPXD_WINDOW=${QPXD_WINDOW:-128}
 QPXD_QPS=${QPXD_QPS:-"1 2 4 8 16"}
+QPD1_QPS=${QPD1_QPS:-"$(seq 1 16)"}
+QPD1_PIPELINE=${QPD1_PIPELINE:-8}
 SERVER_CPUS=
 CLIENT_CPUS=
 
@@ -213,9 +215,9 @@ if [[ " $PHASES " == *" qpxdepth "* ]]; then
 fi
 
 if [[ " $PHASES " == *" qpd1 "* ]]; then
-    # Exp 2: depth=1 (zero per-QP queueing), QP scaling. mtT=8 mcT=8 pipe=8.
-    for ext in $(seq 1 16); do
-        run_point qpd1 "qpd1-q$ext" port 8 8 "$ext" 8 1
+    # Exp 2: depth=1 (zero per-QP queueing), QP scaling. mtT=8 mcT=8 pipe=$QPD1_PIPELINE.
+    for ext in $QPD1_QPS; do
+        run_point qpd1 "qpd1-q$ext" port 8 8 "$ext" "$QPD1_PIPELINE" 1
     done
 fi
 

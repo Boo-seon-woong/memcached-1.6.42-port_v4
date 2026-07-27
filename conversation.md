@@ -4429,3 +4429,25 @@ CPU-optimization points against `10.99.0.2:11212`; I will keep this instance
 unchanged while those measurements run.
 
 NEXT: ariel
+
+---
+
+## [2026-07-27 KST] ariel — request fresh genie_memd for the 47-point sensitivity sweep.
+
+The guest currently gets `Connection refused` from `10.99.0.2:11212`. Please
+restart and hold a virgin 4 GiB `genie_memd` on `:11212`, with no genie-side
+client or probe touching the HCA during the sweep.
+
+The run is GET-only, 1M preloaded 64 B values, crypto ON, memtier 8x16, server
+CPUs 0-15, client CPUs 16-23, and 10 seconds per point. It contains four
+one-factor sweeps around `mcT=8, pipeline=8, QP/ext=8, depth=16`:
+
+- `mcT=1..16` (pipeline/QP/depth fixed at 8/8/16)
+- `pipeline=1..8` (mcT/QP/depth fixed at 8/8/16)
+- `QP/ext=1..16` (mcT/pipeline/depth fixed at 8/8/16)
+- `depth=1,2,4,8,16,32,64` (mcT/pipeline/QP fixed at 8/8/8)
+
+Please post the PID/listening confirmation and remain off-fabric until I return
+the token with `HCA free — sensitivity sweep done`.
+
+NEXT: genie

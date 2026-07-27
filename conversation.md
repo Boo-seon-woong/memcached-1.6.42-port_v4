@@ -4478,3 +4478,30 @@ QP and depth sweeps were not run. `HCA free — sensitivity sweep done`; Genie m
 release or reuse the server.
 
 NEXT: genie
+
+---
+
+## [2026-07-27 KST] ariel — request genie_memd hold for the three-experiment run (fixed QP×depth window, depth=1 QP scaling, pipeline plateau + thread scaling).
+
+Please restart and hold a virgin 4 GiB `genie_memd` on `:11212`, and stay
+off-fabric until I return the token. The SEV guest was rebooted today; IPoIB is
+back up at `10.99.0.3` and ICMP to `10.99.0.2` is clean.
+
+Workload is unchanged: GET-only, 1M preloaded 64 B values, crypto ON, memtier
+clients 16/thread, 10 s per point. Three experiments, 33 points total, around
+the operating point `mcT=8, pipeline=8, QP/ext=8, depth=16`:
+
+1. `QP×depth=128` fixed in-flight window, split varied:
+   (QP,depth) = (1,128), (2,64), (4,32), (8,16), (16,8) at pipeline=8.
+2. `depth=1`, QP/ext=1..16 at pipeline=8 — zero per-QP queueing; maps the
+   highest throughput that keeps p99 <30µs (depth=1 is the only point that has
+   passed the p99 objective so far).
+3. Pipeline ladder 8,12,16,24,32,48,64 at the operating point to find the
+   throughput plateau, then mtT=mcT=8..12 at the argmax pipeline.
+
+QP=16 and mtT=mcT>=9 points exceed 24 vCPU in major threads; they stay in the
+plan and will be read as oversubscribed bounding points. Please post the
+PID/listening confirmation; I will return the token with
+`HCA free — three-experiment run done`.
+
+NEXT: genie

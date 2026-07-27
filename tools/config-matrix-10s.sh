@@ -11,6 +11,13 @@ TEST_SECONDS=${TEST_SECONDS:-10}
 KEYS=${KEYS:-1000000}
 MT_CLIENTS=16
 PHASES=${PHASES:-all}
+DEPTHS=${DEPTHS:-"16 32 64 128"}
+DEPTH_PIPELINE=${DEPTH_PIPELINE:-4}
+SENS_MC_THREADS=${SENS_MC_THREADS:-"$(seq 1 16)"}
+SENS_PIPELINES=${SENS_PIPELINES:-"$(seq 1 8)"}
+SENS_QPS=${SENS_QPS:-"$(seq 1 16)"}
+SENS_DEPTHS=${SENS_DEPTHS:-"1 2 4 8 16 32 64"}
+SENS_AXES=${SENS_AXES:-"mc_threads pipeline qp depth"}
 SERVER_CPUS=
 CLIENT_CPUS=
 
@@ -174,8 +181,8 @@ if [[ "$PHASES" == all || "$PHASES" == threads ]]; then
 fi
 
 if [[ "$PHASES" == all || "$PHASES" == depth ]]; then
-    for depth in 16 32 64 128; do
-        run_point depth "depth-$depth" port 8 8 8 4 "$depth"
+    for depth in $DEPTHS; do
+        run_point depth "depth-$depth" port 8 8 8 "$DEPTH_PIPELINE" "$depth"
     done
 fi
 
@@ -191,6 +198,61 @@ if [[ "$PHASES" == frontier ]]; then
     for pipe in 4 6 8; do
         run_point stock "stock-p$pipe" native 8 8 0 "$pipe" 0
     done
+fi
+
+# Three-experiment run, 2026-07-27. Combined: PHASES="qpxdepth qpd1 plateau".
+# QP>8 points put mtT+mcT+ext over 24 vCPU; kept deliberately, read as oversubscribed.
+if [[ " $PHASES " == *" qpxdepth "* ]]; then
+    # Exp 1: QP*depth=128 fixed in-flight window, split varies. mtT=8 mcT=8 pipe=8.
+    for pair in "1 128" "2 64" "4 32" "8 16" "16 8"; do
+        read -r ext depth <<< "$pair"
+        run_point qpxdepth "qpxd-q$ext-d$depth" port 8 8 "$ext" 8 "$depth"
+    done
+fi
+
+if [[ " $PHASES " == *" qpd1 "* ]]; then
+    # Exp 2: depth=1 (zero per-QP queueing), QP scaling. mtT=8 mcT=8 pipe=8.
+    for ext in $(seq 1 16); do
+        run_point qpd1 "qpd1-q$ext" port 8 8 "$ext" 8 1
+    done
+fi
+
+if [[ " $PHASES " == *" plateau "* ]]; then
+    # Exp 3a: pipeline ladder at the operating point until throughput flattens.
+    for pipe in 8 12 16 24 32 48 64; do
+        run_point plateau "plat-p$pipe" port 8 8 8 "$pipe" 16
+    done
+    # Exp 3b: at the argmax-throughput pipeline, scale mtT=mcT together.
+    best_pipe=$(awk -F, '$1 == "plateau" && $27 == "ok" && $11+0 > best \
+        { best = $11+0; bp = $9 } END { print bp }' "$CSV")
+    best_pipe=${best_pipe:-32}
+    echo "plateau argmax pipeline=$best_pipe"
+    for t in 8 9 10 11 12; do
+        run_point plateau_threads "platt-t$t-p$best_pipe" port "$t" "$t" 8 "$best_pipe" 16
+    done
+fi
+
+if [[ "$PHASES" == sensitivity ]]; then
+    if [[ " $SENS_AXES " == *" mc_threads "* ]]; then
+        for mc_threads in $SENS_MC_THREADS; do
+            run_point mc_threads "mc-thread-$mc_threads" port 8 "$mc_threads" 8 8 16
+        done
+    fi
+    if [[ " $SENS_AXES " == *" pipeline "* ]]; then
+        for pipe in $SENS_PIPELINES; do
+            run_point pipeline "pipeline-$pipe" port 8 8 8 "$pipe" 16
+        done
+    fi
+    if [[ " $SENS_AXES " == *" qp "* ]]; then
+        for ext in $SENS_QPS; do
+            run_point qp "qp-ext-$ext" port 8 8 "$ext" 8 16
+        done
+    fi
+    if [[ " $SENS_AXES " == *" depth "* ]]; then
+        for depth in $SENS_DEPTHS; do
+            run_point depth "depth-$depth" port 8 8 8 8 "$depth"
+        done
+    fi
 fi
 stop_server
 echo "RESULT_DIR=$OUT"

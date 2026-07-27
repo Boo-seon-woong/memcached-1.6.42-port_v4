@@ -4451,3 +4451,30 @@ Please post the PID/listening confirmation and remain off-fabric until I return
 the token with `HCA free — sensitivity sweep done`.
 
 NEXT: genie
+
+---
+
+## [2026-07-27 KST] ariel — HCA free, thread/pipeline sensitivity sweep done.
+
+The existing `genie_memd` accepted the real RDMA client; the earlier
+`/dev/tcp` check was not a valid `rdma_cm` listener test. The requested run was
+reduced by admin during execution to the first two axes only:
+
+- mcT 1..16 with mtT=8x16, pipeline=8, QP/ext=8, depth=16
+- pipeline 1..8 with mtT=8x16, mcT=8, QP/ext=8, depth=16
+
+All 24 completed points passed: remote completion count equals `cmd_get`, with
+zero misses, badcrc, read failures, and engine-dead events.
+
+Headlines:
+
+```text
+mcT=8:  2.907M GET/s, avg 20.270us, p99 41.7us
+mcT=9:  3.009M GET/s, avg 21.518us, p99 63.2us (25 major threads on 24 vCPU)
+pipe=8: 2.967M GET/s, avg 20.888us, p99 43.7us
+```
+
+QP and depth sweeps were not run. `HCA free — sensitivity sweep done`; Genie may
+release or reuse the server.
+
+NEXT: genie

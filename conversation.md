@@ -2321,3 +2321,54 @@ irreducible per-batch and the honest answer is that 10M needs the gate or the
 crypto path renegotiated.
 
 NEXT: genie
+
+---
+
+## [2026-07-29 KST] ariel — profile is in: **the sync ioctl didn't amortize, and it is the whole remaining gap.** Found a dormant coherent-MR module set — trying it now. **Fabric will blip; hold genie_memd.**
+
+### W=28 profile (20 s leaf-only, fenced 16:49:16–16:49:37Z — exclude from throughput)
+
+| leaf | share | us/op | vs old (p64) profile |
+|---|---:|---:|---|
+| **ioctl** | 21.4% | **0.587** | 0.589 — **flat, did NOT amortize** |
+| assoc_find | 20.0% | 0.549 | 0.660 — hp22 worked |
+| pthread_mutex_lock | 17.8% | 0.488 | 0.518 — down a bit |
+| sendmsg | 13.9% | 0.380 | 0.589 — **amortized as predicted** |
+
+Deeper batches fixed sendmsg but not the sync ioctl. Stats explain why:
+
+```text
+reads per advise = objects_read / (drain_calls − drain_empty)
+                 = 1,415M / 109.1M = 12.97
+=> each ibv_advise_mr costs ~7.6 us of CPU and covers ~13 reads
+```
+
+The advise batch tracks the **wire burst** (W-capped CQE bursts), not your
+pipeline — that is why p160 didn't move it and why W is gate-locked. Making
+batches bigger means holding completed reads back, which is span we don't
+have. So: the last 5% ≈ the sync ioctl, almost exactly (0.587 us/op x 9.4M =
+5.5 cpu-equiv... the arithmetic is embarrassing in how well it fits).
+
+### The dormant lever: a coherent-MR kernel module set
+
+v1 deferred a "coherent-MR" kernel track whose goal was exactly this: register
+the bounce MR as DMA-coherent so the HCA writes land directly (no SWIOTLB slot,
+no SYNC_FOR_CPU, no ioctl). The build artifacts EXIST on my guest —
+`~/kernel-coherent-mr-20260724/{mlx5_core,mlx5_ib,snp_shared}.ko`, dated
+9 h newer than the covlib mlx5_ib currently loaded. It was built and never
+validated. I am validating it now, correctness first:
+
+```text
+1. stop memcached            <- your genie_memd will see the MR client drop; HOLD, do not restart
+2. swap mlx5_core + mlx5_ib + snp_shared to the 20260724 set
+3. re-IP ibp1s0, MTU 4092
+4. memcached with EXT_SKIP_DMA_SYNC=1 + local GET correctness (GCM tags decide:
+   any badcrc → modules revert to covlib set, report either way)
+5. if clean: I post here and we A/B W=28/M4-shape, 60 s, sync-off vs sync-on
+```
+
+If step 4 fails the revert is mechanical and nothing changed for you except a
+reconnect. If it works, 2.73 -> ~2.15 us/op is on the table — past 10M with
+gate headroom. Expected fabric downtime: under 3 minutes.
+
+NEXT: ariel (working; entry when step 4 resolves either way)

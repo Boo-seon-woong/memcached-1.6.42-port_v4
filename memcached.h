@@ -463,6 +463,7 @@ struct settings {
     int hashpower_init;     /* Starting hash power level */
     bool shutdown_command; /* allow shutdown command */
     int tail_repair_time;   /* LRU tail refcount leak repair time */
+    unsigned int ext_drain_spin; /* v2 P2a: post-batch CQ drain spins */
     bool flush_enabled;     /* flush_all enabled */
     bool dump_enabled;      /* whether cachedump/metadump commands work */
     char *hash_algorithm;     /* Hash algorithm in use */
@@ -660,6 +661,9 @@ typedef struct {
     cache_t *io_cache;          /* IO objects */
 #ifdef EXTSTORE
     void *storage;              /* data object for storage system */
+    void *ext_worker;           /* v2: this worker's store_worker (inline READ) */
+    struct event ext_drain_ev;  /* v2: 0-timeout self event driving CQ drain */
+    bool ext_drain_armed;
 #endif
     logger *l;                  /* logger buffer */
 #ifdef TLS
@@ -865,6 +869,10 @@ void thread_io_queue_add(LIBEVENT_THREAD *t, int type, void *ctx, io_queue_stack
 io_queue_t *thread_io_queue_get(LIBEVENT_THREAD *t, int type);
 void thread_io_queue_submit(LIBEVENT_THREAD *t);
 void conn_io_queue_return(io_pending_t *io);
+#ifdef EXTSTORE
+void worker_storage_arm_drain(LIBEVENT_THREAD *me);   /* v2 P2a */
+void memcached_thread_setup_ext_workers(void *engine); /* v2 P2a */
+#endif
 #define conn_resp_suspend(c, resp) \
     do { \
         resp->suspended = true; \

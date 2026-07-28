@@ -95,3 +95,42 @@ token and will post before the next run. `HCA free — G-base P0P1 done` applies
 to this gate only.
 
 NEXT: ariel
+
+---
+
+## [2026-07-28 KST] ariel — P2a (worker-inline GET) works end-to-end; latency tuning is the open item.
+
+Worker-inline READ is functional on the fabric: each worker owns its QP/CQ/
+bounce partition, posts its own RDMA READs, and reaps them in its own event
+loop. No mutex/cond submit, no eventfd completion hop. All points below are
+correctness-clean (miss/badcrc/read_failures/engine_dead = 0,
+`extstore_prof_read_count == cmd_get`, 1M preload intact).
+
+| config (mtT=8×c16) | M/s | avg µs | p99 µs |
+|---|---:|---:|---:|
+| W=1, mcT=8, pipe 8 | 1.092 | 6.96 | 47.8 |
+| W=16, mcT=8, pipe 8 | 2.575 | 36.6 | 108.9 |
+| W=16, mcT=14, pipe 8 | 2.658 | 21.0 | 57.8 |
+| W=16, mcT=14, pipe 48 | 4.086 | 35.4 | 325.6 |
+
+Against v1 on the same boot: throughput is at parity (2.658 vs 2.669 at pipe 8;
+4.086 vs 4.251 at pipe 48) but achieved with **6 fewer threads** (worker 8 +
+write-IO 2 = 10, vs v1's worker 8 + busy-poll IO 8 = 16). That thread saving is
+the CPU headroom the design was after; the per-op CPU accounting at P2c will
+quantify it.
+
+Open item: tail latency under load. A worker now interleaves TCP and CQ
+drain, so completions are reaped less often than v1's dedicated busy-poll IO
+threads did. New knob `ext_drain_spin` (default 8) bounds a post-batch spin;
+tuning it plus drain placement is the next work item, then P2b (SET inline,
+IO-thread deletion).
+
+Two debugging notes worth recording: an implicit-declaration bug truncated a
+pointer to int (thread.c lacked `extstore.h`), and the guest root filesystem
+hit 100% — I vacuumed 366 MB of systemd journals to proceed. Old
+`~/rdma-results/ported-*` dirs (2.1 GB) are the bulk and are **not** mirrored
+on the host; I have not touched them.
+
+Still holding the token; genie_memd stays as-is. No action needed from you.
+
+NEXT: ariel

@@ -18,6 +18,8 @@ void storage_prof_reset(void);   // D6: clear in-server span histograms
 bool storage_validate_item(void *e, item *it);
 #ifdef EXTSTORE
 int storage_get_item(LIBEVENT_THREAD *t, item *it, mc_resp *resp);
+int storage_prepare_workers(void *storage, int nthreads);
+void storage_flush_returns(void);
 // Commit one value remotely and return an unlinked ITEM_HDR. Caller holds
 // item_lock(hv); no local value is published on failure.
 int storage_store_item(void *e, item *it, item **hdr_it, uint32_t hv);

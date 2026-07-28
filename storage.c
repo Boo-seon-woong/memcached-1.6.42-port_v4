@@ -20,6 +20,11 @@
 
 static bool g_crypto_on = false;
 static unsigned int g_read_retries = 3;   // integrity-read retry cap (EXT_READ_RETRIES)
+/* v2 (P2a): completions parked during a drain, flushed by the drain caller. */
+static _Thread_local iop_head_t g_ret_head;
+static _Thread_local bool g_ret_init = false;
+static unsigned int g_worker_window = 16; // v2 P2a (ext_worker_window)
+static unsigned int g_qp_per_worker = 1;  // v2 P2a (ext_qp_per_worker)
 static _Atomic uint64_t g_read_retry_ct = 0;
 static _Atomic uint64_t g_badcrc_log_ct = 0;      // rate-limit for the badcrc diagnostic
 static _Atomic uint64_t g_flush_log_ct = 0;       // rate-limit for the flush diagnostic
@@ -232,7 +237,12 @@ static void _storage_get_item_cb(void *e, obj_io *io, int ret) {
             if (io->retries++ < g_read_retries) {
                 atomic_fetch_add(&g_read_retry_ct, 1);
                 io->next = NULL;
-                extstore_submit(e, io);   // engine frees this bounce slot, re-posts
+                /* v2 (P2a): re-post on the worker whose drain is running. */
+                if (extstore_worker_current() != NULL) {
+                    extstore_worker_submit(extstore_worker_current(), io);
+                } else {
+                    extstore_submit(e, io);
+                }
                 return;
             }
             miss = true;
@@ -343,7 +353,13 @@ static void _storage_get_item_cb(void *e, obj_io *io, int ret) {
     p->active = false;
     //assert(c->io_wrapleft >= 0);
 
-    return_io_pending((io_pending_t *)p);
+    /* v2 (P2a): this cb runs on the owning worker thread inside the drain
+     * loop. Returning the conn here would re-enter the event loop (and this
+     * very worker's submit path) while the drain is still reconciling bounce
+     * slots and window accounting. Park it; the drain caller flushes after
+     * the loop, so re-entrancy depth stays 1 (spec §6 R6). */
+    if (!g_ret_init) { STAILQ_INIT(&g_ret_head); g_ret_init = true; }
+    STAILQ_INSERT_TAIL(&g_ret_head, (io_pending_t *)p, iop_next);
 }
 
 int storage_get_item(LIBEVENT_THREAD *t, item *it, mc_resp *resp) {
@@ -454,19 +470,26 @@ int storage_get_item(LIBEVENT_THREAD *t, item *it, mc_resp *resp) {
 }
 
 void storage_submit_cb(io_queue_t *q) {
-    // TODO: until we decide to port extstore's internal code to use
-    // io_pending objs we "port" the IOP's into an obj_io chain just before
-    // submission here.
+    // IOP's are converted into an obj_io chain just before submission.
     void *eio_head = NULL;
+    LIBEVENT_THREAD *t = NULL;
     while(!STAILQ_EMPTY(&q->stack)) {
         io_pending_t *p = STAILQ_FIRST(&q->stack);
         STAILQ_REMOVE_HEAD(&q->stack, iop_next);
-        // FIXME: re-evaluate this.
+        if (t == NULL) t = p->thread;
         obj_io *io_ctx = (obj_io *) ((char *)p + p->payload);
         io_ctx->next = eio_head;
         eio_head = io_ctx;
     }
-    extstore_submit(q->ctx, eio_head);
+    if (eio_head == NULL) return;
+    /* v2 (P2a): post READs inline on this worker's own QPs; the drain event
+     * reaps them on this same thread. IO threads only carry WRITEs now. */
+    if (t != NULL && t->ext_worker != NULL) {
+        extstore_worker_submit(t->ext_worker, eio_head);
+        worker_storage_arm_drain(t);
+    } else {
+        extstore_submit(q->ctx, eio_head);
+    }
 }
 
 // Runs locally in worker thread.
@@ -682,6 +705,8 @@ void *storage_init_config(struct settings *s) {
     g_plaintext_slot_size = cf->ext_cf.slot_size;
     cf->ext_cf.read_slots  = (v = getenv("EXT_READ_SLOTS"))  ? atoi(v) : 32;
     cf->ext_cf.write_slots = (v = getenv("EXT_WRITE_SLOTS")) ? atoi(v) : 256;
+    cf->ext_cf.worker_window = 16;   /* v2 P2a; ORD boundary for nqp=1 */
+    cf->ext_cf.qp_per_worker = 1;
     if ((v = getenv("EXT_READ_RETRIES"))) g_read_retries = atoi(v);
     if (getenv("EXT_TRACE_SEAL")) {
         g_seal_tab = calloc(SEAL_TRACE_MAX, sizeof(*g_seal_tab));
@@ -702,6 +727,9 @@ int storage_read_config(void *conf, char **subopt) {
         EXT_THREADS,
         EXT_IO_DEPTH,
         EXT_PATH,
+        EXT_WORKER_WINDOW,
+        EXT_QP_PER_WORKER,
+        EXT_DRAIN_SPIN,
     };
 
     char *const subopts_tokens[] = {
@@ -709,6 +737,9 @@ int storage_read_config(void *conf, char **subopt) {
         [EXT_THREADS] = "ext_threads",
         [EXT_IO_DEPTH] = "ext_io_depth",
         [EXT_PATH] = "ext_path",
+        [EXT_WORKER_WINDOW] = "ext_worker_window",
+        [EXT_QP_PER_WORKER] = "ext_qp_per_worker",
+        [EXT_DRAIN_SPIN] = "ext_drain_spin",
         NULL
     };
 
@@ -741,6 +772,30 @@ int storage_read_config(void *conf, char **subopt) {
             }
             if (!safe_strtoul(subopts_value, &ext_cf->io_depth)) {
                 fprintf(stderr, "could not parse argument to ext_io_depth\n");
+                return 1;
+            }
+            break;
+        case EXT_WORKER_WINDOW:
+            if (subopts_value == NULL ||
+                !safe_strtoul(subopts_value, &ext_cf->worker_window) ||
+                ext_cf->worker_window < 1 || ext_cf->worker_window > 64) {
+                fprintf(stderr, "ext_worker_window must be 1..64\n");
+                return 1;
+            }
+            break;
+        case EXT_DRAIN_SPIN:
+            if (subopts_value == NULL ||
+                !safe_strtoul(subopts_value, &settings.ext_drain_spin) ||
+                settings.ext_drain_spin > 4096) {
+                fprintf(stderr, "ext_drain_spin must be 0..4096\n");
+                return 1;
+            }
+            break;
+        case EXT_QP_PER_WORKER:
+            if (subopts_value == NULL ||
+                !safe_strtoul(subopts_value, &ext_cf->qp_per_worker) ||
+                ext_cf->qp_per_worker < 1 || ext_cf->qp_per_worker > EXT_QP_MAX) {
+                fprintf(stderr, "ext_qp_per_worker must be 1..%d\n", EXT_QP_MAX);
                 return 1;
             }
             break;
@@ -820,6 +875,8 @@ void *storage_init(void *conf) {
     ext_crypto_init(key);
     g_crypto_on = true;
 
+    g_worker_window = ext_cf->worker_window;
+    g_qp_per_worker = ext_cf->qp_per_worker;
     storage = extstore_init(cf->storage_file, ext_cf, &eres);
     if (storage == NULL) {
         fprintf(stderr, "Failed to initialize external storage: %s\n",
@@ -831,6 +888,22 @@ void *storage_init(void *conf) {
     }
 
     return storage;
+}
+
+/* v2 (P2a): resume conns whose READs completed in the drain that just ended. */
+void storage_flush_returns(void) {
+    if (!g_ret_init) { STAILQ_INIT(&g_ret_head); g_ret_init = true; return; }
+    while (!STAILQ_EMPTY(&g_ret_head)) {
+        io_pending_t *io = STAILQ_FIRST(&g_ret_head);
+        STAILQ_REMOVE_HEAD(&g_ret_head, iop_next);
+        conn_io_queue_return(io);
+    }
+}
+
+/* v2 (P2a): called from main after thread init, before conns are dispatched. */
+int storage_prepare_workers(void *storage, int nthreads) {
+    return extstore_workers_prepare(storage, nthreads,
+                                    g_qp_per_worker, g_worker_window);
 }
 
 #endif

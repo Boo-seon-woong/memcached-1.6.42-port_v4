@@ -144,7 +144,7 @@ memcached_debug-thread.o: thread.c /usr/include/stdc-predef.h memcached.h \
  /usr/include/x86_64-linux-gnu/bits/xopen_lim.h itoa_ljust.h \
  protocol_binary.h cache.h queue.h logger.h bipbuffer.h util.h crc32c.h \
  sasl_defs.h stats_prefix.h slabs.h assoc.h items.h trace.h hash.h \
- storage.h /usr/include/x86_64-linux-gnu/sys/eventfd.h \
+ storage.h extstore.h /usr/include/x86_64-linux-gnu/sys/eventfd.h \
  /usr/include/x86_64-linux-gnu/bits/eventfd.h /usr/include/stdlib.h \
  /usr/include/x86_64-linux-gnu/bits/waitflags.h \
  /usr/include/x86_64-linux-gnu/bits/waitstatus.h /usr/include/alloca.h \
@@ -340,6 +340,7 @@ items.h:
 trace.h:
 hash.h:
 storage.h:
+extstore.h:
 /usr/include/x86_64-linux-gnu/sys/eventfd.h:
 /usr/include/x86_64-linux-gnu/bits/eventfd.h:
 /usr/include/stdlib.h:

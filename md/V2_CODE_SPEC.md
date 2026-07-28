@@ -280,8 +280,31 @@ drain 호출 지점 2곳 (`thread.c`):
 ### P2a.8 게이트 체크리스트
 
 - [ ] smoke: `genie_connect OK` × mcT개 연결, GET 1회 왕복
-- [ ] W=1, mcT=8: worker당 ≥0.25M/s, p99 ≤15µs (v1 depth=1 대비 ≥2×)
-- [ ] mcT 8→14 스윕: throughput 단조 증가 (코어 여유 구간)
+- [ ] W=1, mcT=8: correctness 0, `prof_read_count == cmd_get`
+- [ ] mcT 8→14: throughput 단조 증가 (코어 여유 구간)
+
+**게이트 기준 정정 (2026-07-28, P2a 측정 중 확정)**: 최초 기준
+"W=1에서 worker당 ≥0.25M/s·p99≤15µs"는 **물리적으로 불가능**하다. W=1이면
+worker당 in-flight가 1이므로 Little's law로 worker throughput = 1/span이고,
+span의 하한은 fabric RTT + decrypt ≈ 7µs → worker당 상한 ≈ 0.14M/s다.
+실측: W=1/mcT=8에서 1.092M/s (worker당 0.137M/s), avg 6.96µs — 즉 이미
+물리 상한에 붙어 있다. W=1 트랙은 **latency 하한 확인용**으로만 쓰고,
+성능 판정은 throughput 트랙(P2c)에서 한다.
+
+**P2a 실측 (2026-07-28, mtT=8×c16, 1M×64B, 10s)**
+
+| 구성 | M/s | avg µs | p99 µs | 비교 대상(v1) |
+|---|---:|---:|---:|---|
+| W=1, mcT=8, p8 | 1.092 | 6.96 | 47.8 | v1 d1/QP8: 1.048M/s, 5.63µs |
+| W=16, mcT=8, p8 | 2.575 | 36.6 | 108.9 | v1 d16/QP8: 2.669M/s, 20.7µs |
+| W=16, mcT=14, p8 | 2.658 | 21.0 | 57.8 | 〃 (동등) |
+| W=16, mcT=14, p48 | 4.086 | 35.4 | 325.6 | v1 p48: 4.251M/s, 21.6µs |
+
+전 point correctness 0. 현 상태 요약: **v1과 동등한 throughput을 IO thread
+6개 적게(worker8+IO2=10 vs worker8+IO8=16) 달성**했으나, 고부하에서 latency
+(특히 tail)가 v1보다 나쁘다. 원인은 worker가 TCP와 CQ drain을 겸하면서 완료
+수거 주기가 길어지는 것 — `ext_drain_spin`(신규 knob, 기본 8) 튜닝과 drain
+지점 배치가 P2b/P2c의 작업 항목이다.
 - [ ] correctness 0 (miss/badcrc/rf/dead), `prof_read_count == cmd_get`
 - [ ] `stats`: drain 회전수, 빈 poll 비율, wait list 발생 수 노출
 

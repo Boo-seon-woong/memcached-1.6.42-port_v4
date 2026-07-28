@@ -50,6 +50,8 @@ struct extstore_conf {
     unsigned int slot_size;    // bounce/staging slot size (>= max remote object)
     unsigned int read_slots;   // bounce slots per IO thread (<= 64)
     unsigned int write_slots;  // total staging slots
+    unsigned int worker_window;   // v2: per-worker outstanding cap (<= 64)
+    unsigned int qp_per_worker;   // v2: QPs per worker (1..EXT_QP_MAX)
 };
 
 struct extstore_conf_file {

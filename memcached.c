@@ -249,6 +249,7 @@ static void settings_init(void) {
     settings.shutdown_command = false;
     settings.tail_repair_time = TAIL_REPAIR_TIME_DEFAULT;
     settings.flush_enabled = true;
+    settings.ext_drain_spin = 8;   /* v2 P2a */
     settings.dump_enabled = true;
     settings.crawls_persleep = 1000;
     settings.logger_watcher_buf_size = LOGGER_WATCHER_BUF_SIZE;
@@ -5775,6 +5776,14 @@ int main (int argc, char **argv) {
 #endif
 #ifdef EXTSTORE
     memcached_thread_init(settings.num_threads, storage);
+    /* v2 (P2a): per-worker QPs/CQ/bounce — created before conns exist. */
+    if (storage != NULL) {
+        if (storage_prepare_workers(storage, settings.num_threads) != 0) {
+            fprintf(stderr, "Failed to prepare storage workers\n");
+            exit(EXIT_FAILURE);
+        }
+        memcached_thread_setup_ext_workers(storage);
+    }
 #else
     memcached_thread_init(settings.num_threads, NULL);
 #endif

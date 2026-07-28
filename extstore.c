@@ -1040,6 +1040,16 @@ static void prof_summarize(store_engine *e, int read,
         sum   += read ? t->prof_r_sum_ns : t->prof_w_sum_ns;
         for (int b = 0; b < PROF_BUCKETS; b++) merged[b] += h[b];
     }
+    /* v2 (P2a): worker-inline READs record into per-worker blocks */
+    if (read && e->workers) {
+        for (unsigned int i = 0; i < e->worker_count; i++) {
+            store_worker *w = e->workers[i];
+            if (!w) continue;
+            total += w->prof_r_count;
+            sum   += w->prof_r_sum_ns;
+            for (int b = 0; b < PROF_BUCKETS; b++) merged[b] += w->prof_r_hist[b];
+        }
+    }
     *count = total; *avg = total ? sum / total : 0;
     *p50 = *p99 = 0;
     if (!total) return;
@@ -1071,6 +1081,14 @@ void extstore_get_stats(void *ptr, struct extstore_stats *st) {
             rs += t->prof_r_sync_ns; rx += t->prof_r_xfer_ns;
             ws += t->prof_w_sync_ns; wx += t->prof_w_xfer_ns;
         }
+        if (e->workers) {
+            for (unsigned int i = 0; i < e->worker_count; i++) {
+                store_worker *w = e->workers[i];
+                if (!w) continue;
+                rc += w->prof_r_crypto_ns;
+                rs += w->prof_r_sync_ns; rx += w->prof_r_xfer_ns;
+            }
+        }
         st->prof_read_crypto_avg_ns = st->prof_read_count ? rc / st->prof_read_count : 0;
         st->prof_write_crypto_avg_ns = st->prof_write_count ? wc / st->prof_write_count : 0;
         st->prof_read_sync_avg_ns  = st->prof_read_count  ? rs / st->prof_read_count  : 0;
@@ -1090,6 +1108,15 @@ void extstore_prof_reset(void *ptr) {
         memset(t->prof_r_hist, 0, sizeof(t->prof_r_hist));
         memset(t->prof_w_hist, 0, sizeof(t->prof_w_hist));
     }
+    if (e->workers) {
+        for (unsigned int i = 0; i < e->worker_count; i++) {
+            store_worker *w = e->workers[i];
+            if (!w) continue;
+            w->prof_r_count = w->prof_r_sum_ns = 0;
+            w->prof_r_crypto_ns = w->prof_r_sync_ns = w->prof_r_xfer_ns = 0;
+            memset(w->prof_r_hist, 0, sizeof(w->prof_r_hist));
+        }
+    }
 }
 
 uint64_t extstore_prof_stamp(void) {
@@ -1103,6 +1130,22 @@ void extstore_prof_read_done(void *ptr, obj_io *io,
         return;
     store_engine *e = ptr;
     uintptr_t buf = (uintptr_t)io->buf;
+    /* v2 (P2a): inline READs land in the calling worker's bounce partition. */
+    {
+        store_worker *w = g_drain_worker;
+        if (w) {
+            uintptr_t ws = (uintptr_t)w->bounce_base;
+            uintptr_t we = ws + (size_t)e->read_slots * e->slot_size;
+            if (buf >= ws && buf < we) {
+                prof_record(w->prof_r_hist, &w->prof_r_count, &w->prof_r_sum_ns,
+                            crypto_done - io->t_start);
+                w->prof_r_crypto_ns += (uint64_t)
+                        ((crypto_done - crypto_start) * g_ns_per_cycle);
+                io->t_start = io->t_end = 0;
+                return;
+            }
+        }
+    }
     for (unsigned int i = 0; i < e->io_threadcount; i++) {
         store_iothr *t = &e->io_threads[i];
         uintptr_t start = (uintptr_t)t->bounce_base;

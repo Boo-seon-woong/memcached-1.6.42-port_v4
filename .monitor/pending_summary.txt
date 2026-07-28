@@ -1,2 +1,1 @@
-6dc19a1 optimize encrypted extstore and document 30us frontier
-2b4202d before sanitization
+9373c60 [genie] hold virgin genie_memd :11212 (4 GiB) for G-base gate; HCA released

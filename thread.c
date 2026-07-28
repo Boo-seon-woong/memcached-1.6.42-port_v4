@@ -5,6 +5,7 @@
 #include "memcached.h"
 #ifdef EXTSTORE
 #include "storage.h"
+#include "extstore.h"   /* v2 P2a: worker-inline READ API */
 #endif
 #ifdef HAVE_EVENTFD
 #include <sys/eventfd.h>
@@ -499,6 +500,25 @@ static void *worker_libevent(void *arg) {
         // Run IO queues after the event loop to catch things like
         // re-submissions from proxy callbacks.
         thread_io_queue_submit(me);
+#ifdef EXTSTORE
+        /* v2 (P2a) drain point (a): reap this batch's completions without
+         * paying an event-loop round trip. RTT is ~3us, so a bounded spin
+         * right after posting usually collects them here; whatever is left
+         * is picked up by the 0-timeout drain event (point (b)).
+         * Spin only while this worker has READs in flight. */
+        if (me->ext_worker != NULL) {
+            unsigned int out = extstore_worker_outstanding(me->ext_worker);
+            if (out) {
+                unsigned int spins = 0;
+                do {
+                    if (extstore_worker_drain(me->ext_worker, 32) > 0)
+                        storage_flush_returns();
+                    out = extstore_worker_outstanding(me->ext_worker);
+                } while (out && ++spins < settings.ext_drain_spin);
+                if (out) worker_storage_arm_drain(me);
+            }
+        }
+#endif
 #ifdef PROXY
         if (me->proxy_ctx) {
             proxy_gc_poke(me);
@@ -820,6 +840,43 @@ void return_io_pending(io_pending_t *io) {
 #endif
     }
 }
+
+#ifdef EXTSTORE
+/* v2 (P2a): worker-inline CQ drain. Runs as a 0-timeout self event so libevent
+ * interleaves it with socket events (fairness invariant §3-2). Re-arms itself
+ * while READs are outstanding; sleeps otherwise. */
+static void ext_drain_handler(evutil_socket_t fd, short which, void *arg) {
+    LIBEVENT_THREAD *me = arg;
+    me->ext_drain_armed = false;
+    if (me->ext_worker == NULL) return;
+    extstore_worker_drain(me->ext_worker, 32);
+    storage_flush_returns();   /* resume conns outside the drain loop (R6) */
+    if (extstore_worker_outstanding(me->ext_worker) > 0) {
+        me->ext_drain_armed = true;
+        event_active(&me->ext_drain_ev, 0, 0);
+    }
+}
+
+void worker_storage_arm_drain(LIBEVENT_THREAD *me) {
+    if (!me->ext_drain_armed && me->ext_worker != NULL) {
+        me->ext_drain_armed = true;
+        event_active(&me->ext_drain_ev, 0, 0);
+    }
+}
+
+/* main thread, after memcached_thread_init and before conns are dispatched */
+void memcached_thread_setup_ext_workers(void *engine) {
+    for (int i = 0; i < settings.num_threads; i++) {
+        LIBEVENT_THREAD *t = &threads[i];
+        t->ext_worker = extstore_worker_create(engine, i);
+        if (t->ext_worker == NULL) {
+            fprintf(stderr, "Failed to create storage worker %d\n", i);
+            exit(EXIT_FAILURE);
+        }
+        event_assign(&t->ext_drain_ev, t->base, -1, 0, ext_drain_handler, t);
+    }
+}
+#endif
 
 /* This misses the allow_new_conns flag :( */
 void sidethread_conn_close(conn *c) {

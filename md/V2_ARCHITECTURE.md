@@ -51,8 +51,8 @@ window로 바뀐 것**이다.
 
 | v1 | v2 | 성격 |
 |---|---|---|
-| `ext_io_depth` (= QP depth) | **`ext_worker_window` (W)** | **대체**. 아래 §2.1 |
-| `ext_threads` (= IO thread 수 = QP 수, 1:1) | **삭제** | QP 수는 이제 `-t × ext_qp_per_worker`로 파생된다 |
+| `ext_io_depth` (= QP depth) | **`ext_worker_window` (W)** + `EXT_ORD_LIMIT`(16) | **둘로 분리**. §2.2 |
+| `ext_threads` (= IO thread 수 = QP 수, 1:1) | **삭제** | QP 수는 `-t × ext_qp_per_worker`로 파생. §2.1 |
 | — | **`ext_qp_per_worker`** | 신규. worker당 QP 개수 (1..4, 기본 1) |
 | — | **`ext_drain_spin`** | 신규. batch 처리 후 CQ를 몇 번까지 더 훑을지 (기본 1024) |
 | `-t N` (worker 수) | `-t N` — **의미가 늘었다** | 기존 knob이지만 이제 QP 수·RDMA 병렬도·bounce/staging 파티션 수까지 결정한다 |
@@ -62,25 +62,60 @@ window로 바뀐 것**이다.
 `ext_threads`와 `ext_io_depth`는 파싱조차 하지 않는다. 실행 명령이나 결과
 CSV에 이 축을 되살리지 않는다.
 
-### 2.1 depth와 window가 왜 다른가
+### 2.1 QP 수는 어디로 갔나
 
-둘 다 "미완료 요청 상한"이지만 **누구에게 걸리는 상한인지가 다르다.**
+v1의 `ext_threads`는 **한 숫자가 세 가지를 동시에** 뜻했다 — QP 수, IO
+thread 수, busy-poll이 태우는 CPU. `genie_connect()`가 `io_threadcount`번
+루프를 돌며 IO thread마다 QP를 정확히 하나씩 열었기 때문이다
+(v1 `extstore.c:249`).
+
+v2는 이 결합을 끊었다. IO thread라는 항목이 아예 없어졌고, **QP 수를 직접
+지정하는 knob도 없다.** 파생될 뿐이다:
 
 ```text
-v1:  depth = IO thread 하나의 QP에 걸린 미완료 상한
-     총 in-flight = ext_threads × ext_io_depth
-     (IO thread 수를 늘리면 CPU 소비도 같이 늘어난다 — 두 축이 묶여 있었다)
-
-v2:  window = worker 하나의 미완료 상한 (READ + WRITE 합산)
-     총 in-flight = mcT × W
-     (worker 수는 원래 있던 축이고, W는 그 위에 독립적으로 얹힌다)
+v1:  QP 수 = ext_threads              (= IO thread 수, 1:1)
+v2:  QP 수 = -t × ext_qp_per_worker   (worker 수에서 파생)
 ```
 
-v1은 "큐를 깊게 하려면 busy-poll thread를 늘려야" 했다. v2는 그 결합이
-끊겨서, CPU를 더 쓰지 않고 window만 조절할 수 있다.
+### 2.2 depth는 둘로 쪼개졌다
 
-**window에 걸리는 진짜 천장은 따로 있다.** wire 위의 동시 RDMA READ는 QP당
-ORD로 16개가 한계다(`EXT_ORD_LIMIT`, `extstore.h:68`). 그래서:
+`ext_io_depth`는 하나의 knob이 아니라 **두 개의 서로 다른 상한**으로
+분리됐다. 둘 다 `worker_post()`의 같은 조건식에 나란히 있다
+(`extstore.c:596-598`).
+
+| v1 `ext_io_depth`의 역할 | v2 대응 | 걸리는 단위 | 코드 |
+|---|---|---|---|
+| 미완료 개수 소프트 상한 | `ext_worker_window` (W) | **worker** | `w->outstanding < w->window` |
+| (암묵적) wire 동시성 한계 | `EXT_ORD_LIMIT` = 16 | **QP** | `w->read_out[qi] < EXT_ORD_LIMIT` |
+
+왜 쪼개졌나: v1은 IO thread ↔ QP가 1:1이라 "thread당 depth"와 "QP당 depth"가
+같은 말이었다. v2는 worker 하나가 QP를 여러 개 가질 수 있어(CQ는 공유) 그 두
+층이 분리됐고, 각자 다른 상한을 받는다.
+
+**ORD 16은 v1에도 있었다** — 코드가 추적하지 않아 보이지 않았을 뿐이다.
+v1에서 `depth=64`를 줘도 wire에 나가는 READ는 16개가 한계였고 나머지는 SQ에서
+대기했다. depth를 16 너머로 올려도 throughput이 늘지 않던 v1 실측이 정확히
+이것이다. v2는 `read_out[]`으로 이를 명시 추적해 초과 post를 하지 않는다.
+
+실제 숫자:
+
+```text
+v1 최적점:  ext_threads=8, ext_io_depth=16
+            → QP 8, IO thread 8, 총 in-flight 8 × 16 = 128
+
+v2 운영점:  -t 12, ext_qp_per_worker=1, ext_worker_window=16
+            → QP 12, IO thread 0, 총 in-flight 12 × 16 = 192
+```
+
+`ext_qp_per_worker=1`인 지금은 worker당 QP가 1개라 W와 ORD가 같은 대상에
+걸려 **v1 depth와 사실상 같은 의미**다. 2 이상으로 올리는 순간 갈라진다 —
+W는 worker 전체 예산이 되고, QP별로는 여전히 16이 각각 걸린다.
+
+### 2.3 상한 전체
+
+CPU 결합이 끊긴 것도 함께 보면, v1은 "큐를 깊게 하려면 busy-poll thread를
+늘려야" 했고 v2는 CPU를 더 쓰지 않고 W만 조절할 수 있다. 동시에 유효한
+상한은 다음과 같다:
 
 ```text
 worker 총 outstanding      <= W

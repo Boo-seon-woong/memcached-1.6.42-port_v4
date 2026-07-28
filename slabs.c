@@ -74,15 +74,20 @@ static void slabs_preallocate (const unsigned int maxslabs);
  * 0 means error: can't store such a large object
  */
 
-unsigned int slabs_clsid(const size_t size) {
-    int res = POWER_SMALLEST;
+#define V2_CLS_STUB      1
+#define V2_CLS_TRANSIENT 2
 
-    if (size == 0 || size > settings.item_size_max)
+/* v2 (P1): exactly two classes. Class 1 holds ITEM_HDR stubs, class 2 holds
+ * the transient full item an inbound SET is read into before it is sealed to
+ * the remote slot. Anything larger cannot reach remote memory either. */
+unsigned int slabs_clsid(const size_t size) {
+    if (size == 0)
         return 0;
-    while (size > slabclass[res].size)
-        if (res++ == power_largest)     /* won't fit in the biggest slab */
-            return power_largest;
-    return res;
+    if (size <= slabclass[V2_CLS_STUB].size)
+        return V2_CLS_STUB;
+    if (size <= slabclass[V2_CLS_TRANSIENT].size)
+        return V2_CLS_TRANSIENT;
+    return 0;
 }
 
 bool slabs_class_check(const int id) {
@@ -240,34 +245,38 @@ void slabs_init(const size_t limit, const double factor, const bool prealloc, co
 
     memset(slabclass, 0, sizeof(slabclass));
 
-    while (++i < MAX_NUMBER_OF_SLAB_CLASSES-1) {
-        if (slab_sizes != NULL) {
-            if (slab_sizes[i-1] == 0)
-                break;
-            size = slab_sizes[i-1];
-        } else if (size >= settings.slab_chunk_size_max / factor) {
-            break;
-        }
-        /* Make sure items are always n-byte aligned */
-        if (size % CHUNK_ALIGN_BYTES)
-            size += CHUNK_ALIGN_BYTES - (size % CHUNK_ALIGN_BYTES);
-
-        slabclass[i].size = size;
-        slabclass[i].perslab = settings.slab_page_size / slabclass[i].size;
-        if (slab_sizes == NULL)
-            size *= factor;
-        if (settings.verbose > 1) {
-            fprintf(stderr, "slab class %3d: chunk size %9u perslab %7u\n",
-                    i, slabclass[i].size, slabclass[i].perslab);
-        }
+    /* v2 (P1): fixed two-class layout (see md/V2_CODE_SPEC.md P1).
+     * slot_size mirrors the engine's EXT_SLOT_SIZE env (default 256); the
+     * transient class must hold any item whose sealed form fits one remote
+     * slot, crypto on or off. factor/slab_sizes are ignored. */
+    if (slab_sizes != NULL || factor != 1.25) {
+        fprintf(stderr, "v2: slab growth factor/slab_sizes are ignored (two fixed classes)\n");
     }
+    {
+        unsigned int slot_size = 256;
+        const char *env = getenv("EXT_SLOT_SIZE");
+        if (env != NULL && atoi(env) > 0)
+            slot_size = atoi(env);
+        unsigned int stub_sz = sizeof(item) + KEY_MAX_LENGTH + 1
+            + sizeof(uint64_t) + sizeof(item_hdr);
+        unsigned int trans_sz = sizeof(item) + KEY_MAX_LENGTH + 1
+            + sizeof(uint64_t) + slot_size;
+        if (stub_sz % CHUNK_ALIGN_BYTES)
+            stub_sz += CHUNK_ALIGN_BYTES - (stub_sz % CHUNK_ALIGN_BYTES);
+        if (trans_sz % CHUNK_ALIGN_BYTES)
+            trans_sz += CHUNK_ALIGN_BYTES - (trans_sz % CHUNK_ALIGN_BYTES);
 
-    power_largest = i;
-    slabclass[power_largest].size = settings.slab_chunk_size_max;
-    slabclass[power_largest].perslab = settings.slab_page_size / settings.slab_chunk_size_max;
-    if (settings.verbose > 1) {
-        fprintf(stderr, "slab class %3d: chunk size %9u perslab %7u\n",
-                i, slabclass[i].size, slabclass[i].perslab);
+        slabclass[V2_CLS_STUB].size = stub_sz;
+        slabclass[V2_CLS_STUB].perslab = settings.slab_page_size / stub_sz;
+        slabclass[V2_CLS_TRANSIENT].size = trans_sz;
+        slabclass[V2_CLS_TRANSIENT].perslab = settings.slab_page_size / trans_sz;
+        power_largest = V2_CLS_TRANSIENT;
+        if (settings.verbose > 1) {
+            fprintf(stderr, "slab class %d (stub): chunk %u perslab %u\n",
+                    V2_CLS_STUB, stub_sz, slabclass[V2_CLS_STUB].perslab);
+            fprintf(stderr, "slab class %d (transient): chunk %u perslab %u\n",
+                    V2_CLS_TRANSIENT, trans_sz, slabclass[V2_CLS_TRANSIENT].perslab);
+        }
     }
 
     /* for the test suite:  faking of how much we've already malloc'd */

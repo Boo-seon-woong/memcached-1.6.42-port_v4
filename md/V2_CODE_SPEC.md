@@ -59,6 +59,15 @@ item_stats의 per-LRU 구간, stats_sizes의 LRU 참조
   stub당 16B 낭비 감수). 제거는 P4 후보. 이유: ITEM_ntotal/매크로 파급을
   P0 게이트 안에서 늘리지 않기 위함.
 - `item_is_flushed()` (flush_all 판정): **유지** — epoch 비교라 LRU 불요.
+- **flush_all semantics 수정 (P0 구현 중 확정, 2026-07-28)**: stock의
+  `item_flush_expired()` eager walk는 "flush와 같은 초에 생성된 pre-flush
+  item"(`time >= oldest_live`)을 즉시 제거하는 역할이었다. LRU가 없는 v2는
+  걸을 큐가 없으므로 이 함수는 no-op이고, **flush_all의 경계는 초 단위**가
+  된다: flush와 같은 초에 저장된 item은 다음 접근까지 살아남을 수 있다.
+  지연 flush(`flush_all <delay>`)와 초 경계를 넘은 immediate flush는 stock과
+  동일하게 동작한다. 우리 workload는 flush_all을 쓰지 않는다. testapp의
+  flush 테스트 2곳에 `sleep(1)` 경계 대기를 넣어 이 semantics에 맞췄고,
+  `t/` flush 계열 테스트도 같은 사유로 조정 대상이다.
 
 ### P0.2 파일 삭제
 

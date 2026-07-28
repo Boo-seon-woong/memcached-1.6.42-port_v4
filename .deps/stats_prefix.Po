@@ -142,10 +142,9 @@ stats_prefix.o: stats_prefix.c /usr/include/stdc-predef.h memcached.h \
  /usr/include/linux/limits.h \
  /usr/include/x86_64-linux-gnu/bits/posix2_lim.h \
  /usr/include/x86_64-linux-gnu/bits/xopen_lim.h itoa_ljust.h \
- slabs_mover.h protocol_binary.h cache.h queue.h logger.h bipbuffer.h \
- util.h crc32c.h sasl_defs.h stats_prefix.h slabs.h assoc.h items.h \
- crawler.h trace.h hash.h /usr/include/stdlib.h \
- /usr/include/x86_64-linux-gnu/bits/waitflags.h \
+ protocol_binary.h cache.h queue.h logger.h bipbuffer.h util.h crc32c.h \
+ sasl_defs.h stats_prefix.h slabs.h assoc.h items.h trace.h hash.h \
+ /usr/include/stdlib.h /usr/include/x86_64-linux-gnu/bits/waitflags.h \
  /usr/include/x86_64-linux-gnu/bits/waitstatus.h /usr/include/alloca.h \
  /usr/include/x86_64-linux-gnu/bits/stdlib-bsearch.h \
  /usr/include/x86_64-linux-gnu/bits/stdlib-float.h \
@@ -324,7 +323,6 @@ config.h:
 /usr/include/x86_64-linux-gnu/bits/posix2_lim.h:
 /usr/include/x86_64-linux-gnu/bits/xopen_lim.h:
 itoa_ljust.h:
-slabs_mover.h:
 protocol_binary.h:
 cache.h:
 queue.h:
@@ -337,7 +335,6 @@ stats_prefix.h:
 slabs.h:
 assoc.h:
 items.h:
-crawler.h:
 trace.h:
 hash.h:
 /usr/include/stdlib.h:

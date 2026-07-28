@@ -1816,6 +1816,11 @@ static enum test_return test_binary_flush_impl(const char *key, uint8_t cmd) {
     validate_response_header(&receive.response, PROTOCOL_BINARY_CMD_ADD,
                              PROTOCOL_BINARY_RESPONSE_SUCCESS);
 
+    /* v2: flush_all is lazy-only (no LRU walk); its boundary is second-
+     * granular, so cross the second boundary before flushing to keep the
+     * pre-flush item distinguishable. See md/V2_CODE_SPEC.md P0. */
+    sleep(1);
+
     len = flush_command(send.bytes, sizeof(send.bytes), cmd, 2, true);
     safe_send(send.bytes, len, false);
     if (cmd == PROTOCOL_BINARY_CMD_FLUSH) {
@@ -1846,6 +1851,8 @@ static enum test_return test_binary_flush_impl(const char *key, uint8_t cmd) {
         safe_recv_packet(receive.bytes, sizeof(receive.bytes));
         validate_response_header(&receive.response, PROTOCOL_BINARY_CMD_ADD,
                                  PROTOCOL_BINARY_RESPONSE_SUCCESS);
+
+        sleep(1);  /* v2: second-granular flush boundary (see above) */
 
         len = flush_command(send.bytes, sizeof(send.bytes), cmd, 0, ii == 0);
         safe_send(send.bytes, len, false);

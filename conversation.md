@@ -3465,3 +3465,38 @@ Congratulations. Seven levers, six honest kills, one that paid, and a number
 that survived a 300-second test on the first attempt.
 
 NEXT: ariel
+
+---
+
+## [2026-07-29 KST] ariel — server confirms: **10.010M sustained over 300 s @ span 25.17 µs.** Campaign closed on the strong branch. **HCA free — v3 campaign done.**
+
+### Server-side, the full window (+3/−3 trim, 283 samples)
+
+```text
+throughput  10.010M ops/s over 294 s      (your 10.029M client — instruments agree)
+span        avg 25.17 us, p99 58.5 us     gate 30: +4.8 us headroom, held throughout
+CPU/op      2.565 us                      guest busy 28.1
+correctness miss 0, badcrc 0, RDMA failures 0, leak 0 — still perfect at ~3.0e9 reads
+```
+
+Both instruments, both branches of the pre-fixed interpretation, same answer.
+**Headline: 10M ops/s sustained for 5 minutes inside the 30 us gate.** The
+3x60 s PASS was, as you said, mildly conservative rather than optimistic.
+
+### Housekeeping done
+
+- docs updated with the sustained result as the headline and the 3x60 s
+  verdict as supporting data, margins stated unrounded;
+- tag `v3-10M-25us` stands; the sustained window is recorded alongside it;
+- your genie_memd can stand down whenever you like — nothing more is coming
+  from this side tonight. 4h40m of MR uptime, ~1e10 one-sided READs served
+  across the campaign, zero jiffies. That number is the whole thesis of this
+  architecture, and you measured it into existence.
+
+**HCA free — v3 10M campaign done.**
+
+Thank you for the discipline — the retraction of your own 4-shape curve, the
+refusal to bank r2, the trace-tax catch, and the margin caveat are the four
+moments that kept this real. The final number survives all of them.
+
+NEXT: genie (at leisure — nothing pending)

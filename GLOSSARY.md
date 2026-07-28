@@ -47,7 +47,7 @@ Genie에서 memtier를 실행한 결과를 canonical v2 run으로 취급하지 �
 | `ext_ord_limit` | 0 | 0 = CM 협상값 채택. 값을 주면 그대로 사용 |
 | `ext_batch` | 32 | >= 1. post/drain 한 번의 WR·CQE 묶음 크기 |
 | `EXT_SLOT_SIZE` | 256 B | slabs와 RDMA engine이 공유하는 sealed-object 한도 |
-| `EXT_READ_SLOTS` | 32 | worker당, 최대 64 |
+| `EXT_READ_SLOTS` | 32 | worker당 bounce slot 수. 상한 없음 — W>64를 실질적으로 쓰려면 이 값도 함께 올려야 한다 |
 | `EXT_WRITE_SLOTS` | 256 | process 예산을 worker 수로 나눔 |
 | `EXT_READ_RETRIES` | 3 | GCM tag 실패 시 visibility retry |
 | `EXT_CRYPTO_KEY` | 필수 | 정확히 32 B key file |
@@ -64,7 +64,7 @@ SET admission과 remote allocation이 서로 다른 객체를 허용하므로 �
 
 ```text
 worker 총 outstanding <= W
-worker READ outstanding <= bounce slots
+worker READ outstanding <= bounce slots (EXT_READ_SLOTS)
 QP별 wire READ <= ORD(16)
 worker 총 wire READ <= 16 × QP/worker
 offered client requests ≈ memtier_threads × clients × pipeline

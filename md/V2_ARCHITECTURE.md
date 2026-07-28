@@ -122,7 +122,7 @@ CPU 결합이 끊긴 것도 함께 보면, v1은 "큐를 깊게 하려면 busy-p
 
 ```text
 worker 총 outstanding      <= W
-worker READ outstanding    <= bounce slot 수 (EXT_READ_SLOTS, 최대 64)
+worker READ outstanding    <= bounce slot 수 (EXT_READ_SLOTS, 상한 없음)
 QP 하나의 wire READ        <= 16
 worker 전체 wire READ      <= 16 × ext_qp_per_worker
 ```
@@ -130,6 +130,11 @@ worker 전체 wire READ      <= 16 × ext_qp_per_worker
 즉 **QP가 1개면 W를 ORD 너머로 키워도 wire 병렬도는 안 늘어난다** — 초과분은
 SQ에서 기다릴 뿐이다. `W>ORD` 실험은 `ext_qp_per_worker`를 함께 올릴 때만
 의미가 있다. 기본값 W=16은 이 HCA의 ORD 경계에 맞춘 값이다.
+
+**W를 키우려면 `EXT_READ_SLOTS`도 같이 키워야 한다.** bounce slot이 없으면
+post가 멈추므로, slot이 64인 채 W만 128로 올리면 실제 READ 동시성은 64에
+묶인다. 실측으로도 W=128에서 slot 64 → avg 43.8µs, slot 128 → avg 86.4µs로
+그때서야 in-flight가 실제로 두 배가 된다.
 
 **이 축들에는 상한이 없다.** 성능이 나쁜 설정도 유효한 측정 결과이므로 엔진이
 대신 거부하지 않는다. 검사하는 것은 동작에 필요한 하한(>=1)뿐이고, 자원 배열과

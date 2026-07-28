@@ -850,7 +850,7 @@ int storage_check_config(void *conf) {
     if (cf->storage_file) {
         if (cf->ext_cf.slot_size <= EXT_CRYPTO_OVERHEAD ||
                 cf->ext_cf.slot_size > settings.item_size_max ||
-                cf->ext_cf.read_slots < 1 || cf->ext_cf.read_slots > 64 ||
+                cf->ext_cf.read_slots < 1 ||
                 cf->ext_cf.write_slots < 1) {
             fprintf(stderr, "invalid EXT_SLOT_SIZE/EXT_READ_SLOTS/EXT_WRITE_SLOTS\n");
             return 1;

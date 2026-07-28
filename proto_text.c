@@ -389,6 +389,25 @@ int try_read_command_ascii(conn *c) {
 
     assert(cont <= (c->rcurr + c->rbytes));
 
+    /* cross-request prefetch: 다음 명령이 이미 rbuf에 와 있으면 그 키의 hash
+     * bucket 라인을 지금 요청한다. 현재 명령을 처리하는 동안(응답 구성,
+     * 전송 준비 — 수백 ns) 다음 명령의 bucket이 DRAM에서 도착해, item_get의
+     * 단일-요청 prefetch보다 훨씬 긴 리드타임을 얻는다. GET 전용 최적화. */
+    {
+        size_t rem = c->rbytes - (size_t)(cont - c->rcurr);
+        if (rem > 6 && memcmp(cont, "get ", 4) == 0) {
+            const char *k = cont + 4;
+            size_t scan = rem - 4 < 260 ? rem - 4 : 260;
+            const char *kend = memchr(k, '\r', scan);
+            if (kend && kend > k) {
+                const char *sp = memchr(k, ' ', (size_t)(kend - k));
+                if (sp) kend = sp;   /* multi-key면 첫 key만 */
+                if (kend - k <= KEY_MAX_LENGTH)
+                    assoc_prefetch(hash(k, (size_t)(kend - k)));
+            }
+        }
+    }
+
     c->last_cmd_time = current_time;
     process_command_ascii(c, c->rcurr, cont - c->rcurr);
 

@@ -20,9 +20,7 @@ i=0
 for B in $BINS; do
   i=$((i+1)); TAGN="r$i-$B"
   tmux kill-session -t ob 2>/dev/null
-  for nm in memcached memcached.base memcached.pad; do
-    for p in $(pgrep -x "$nm"); do kill -9 "$p" 2>/dev/null; done
-  done
+  for p in $(pgrep -x "memcached[.a-z]*"); do kill -9 "$p" 2>/dev/null; done
   sleep 1
   tmux new-session -d -s ob "cd $HOME/kvs-port && exec taskset -c 0-$((MC-1)) env \
 LD_LIBRARY_PATH=$HOME/covlib:$HOME/kvs-port MLX5_COHERENT_QP=1 MLX5_COHERENT_CQ=1 \

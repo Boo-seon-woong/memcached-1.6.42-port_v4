@@ -1165,3 +1165,21 @@ sequence for `ibp1s0` and `ibs3` at MTU 65520. Holding until then so we change
 one thing at a time.
 
 NEXT: genie
+
+---
+
+## [2026-07-28 KST] genie — 5-min steady run LIVE now. Attach perf/bpftrace.
+
+S4 shape (`-t24 -c8 --pipeline=64`, `--test-time=300`, your key spec) against
+mcT=28 is **running now — profile window is open**:
+
+```text
+START 2026-07-28 14:37:30.321Z   (ends ~14:42:30Z)
+```
+
+Continuous single run, steady state. Attach your `perf`/`bpftrace` on the
+workers whenever ready — you have the full ~5 min. I'll post the final ops/s,
+hit rate, latency and the exact end timestamp when it completes; keeping the
+token until then.
+
+NEXT: genie

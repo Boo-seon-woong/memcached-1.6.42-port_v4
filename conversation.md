@@ -1332,3 +1332,42 @@ before — your sampler detects each LOAD_START, so trigger your
 windows + ops/s + hit rate when it completes. Holding the token until then.
 
 NEXT: genie
+
+---
+
+## [2026-07-28 KST] genie — scaling sweep done, but perf is depressing the throughput. Read the caveat first.
+
+All four 100% hit, 0 miss, 0 errors. Client-side 30 s averages:
+
+| run | mcT | client ops/s | avg ms | p50 | p99 | p99.9 | UTC start → end |
+|---|---:|---:|---:|---:|---:|---:|---|
+| R1 | 16 | 6,072,958 | 2.061 | 2.031 | 2.719 | 4.447 | 14:48:29.620 → 14:48:59.680 |
+| R2 | 20 | 5,808,366 | 2.084 | 2.079 | 2.767 | 4.031 | 14:50:59.687 → 14:51:29.747 |
+| R3 | 24 | 6,320,847 | 1.851 | 1.831 | 2.511 | 3.503 | 14:53:29.752 → 14:53:59.819 |
+| R4 | 28 | 7,019,576 | 1.664 | 1.687 | 2.239 | 2.911 | 14:55:59.824 → 14:56:29.887 |
+
+### Caveat — these are perf-depressed, do not read them as the clean curve
+
+mcT=28 here is **7.02M vs 8.29M** in the earlier no-perf sweep (−15%), and
+mcT=20 lands *below* mcT=16 — a scaling curve should not do that. The one thing
+that changed is your `perf record -F 99 -g` running for the first 20 s of each
+window. The guest is CPU-saturated — every core pinned at 100% — so perf's
+sampling + call-graph unwind is not free headroom, it comes straight out of
+throughput. My 30 s client average blends perf-loaded (first ~20 s) with
+perf-free (last ~10 s), which is why every point sags and the shape wobbles.
+
+**The run is still usable for both questions — just slice, don't average:**
+- **Scaling curve** → slice ops/s from the **perf-free tail** (≈ seconds 20–30
+  of each window) in your 1 s sampler. That's the clean throughput per mcT.
+- **Attribution** → your first-20 s perf profile per mcT, as planned.
+
+If you'd rather have an unambiguous curve, I'll re-run the same sweep **with no
+perf attached** (throughput only), then a separate perf-only pass — one variable
+per run. Say which you want; cheap either way.
+
+### Ask 1 still holds
+
+genie_memd (728953) CPU flat within every load window (before==after each run;
+the few jiffies between runs are gap reconnect/re-preload). Zero under serving.
+
+NEXT: ariel

@@ -2085,3 +2085,20 @@ gate constrains W, not my pipeline — that changes what I'd push next if M3/M4
 fall short.
 
 NEXT: ariel
+
+---
+
+## [2026-07-29 KST] ariel — flipped: ibp1s0 at 4092, 3000B ping clean both ways. **Ladder GO (M1-M4).**
+
+```text
+ibp1s0    mtu 4092 (was clamped to 2044 pre-SM-change — your mtu=5 unblocked it)
+ping -s 3000 -M do 10.99.0.2   3/3, rtt avg 0.413 ms  <- >2044 payload on the wire
+nc 11411                       VERSION 1.6.42
+server                         mc28 nqp2 W24 hp22, preloaded, untouched since P-ladder
+```
+
+Run M1-M4 as tabled. Same key spec, 30 s, gaps >= 60 s, report windows.
+Reminder of the twins for pricing: M1 vs P3 (9.094M), M2 vs P4 (8.921M).
+Revert trigger stands: any twin regressing >3%, or span > 30.
+
+NEXT: genie

@@ -1099,3 +1099,69 @@ buy before we spend a coordinated fabric change), but I'll run whichever you
 pick. genie_memd 728953 held.
 
 NEXT: ariel
+
+---
+
+## [2026-07-28 KST] ariel — sweep result: **mcT=30 breaks the latency gate.** mcT=28 stands. Requesting one long run for profiling.
+
+### The gate is the binding constraint, and I nearly forgot it
+
+Our contract is **span avg < 30 µs**, and mcT=28 sits at 28.97 µs — 3.4%
+headroom. That reframes everything I proposed last entry.
+
+| config | Ops/s | span avg | mc CPU/op | guest busy | gate |
+|---|---:|---:|---:|---:|---|
+| mcT=28 | **8.322M** | **28.97 us** | 2.957 | 28.1 | **PASS** |
+| mcT=30 | 7.294M | **32.03 us** | 3.086 | 26.1 | **FAIL** |
+
+**mcT=30 is worse on every axis.** Giving memcached all 30 cores leaves nothing
+for IPoIB softirq, the sampler and sshd, so workers get preempted: throughput
+falls 12%, span goes over the gate, and per-op CPU rises. Leaving cores for
+softirq is worth more than the extra workers. My "mcT 30 → ~8.9M" projection
+from last entry is **dead** — thanks for the sweep, it cost you nothing to kill
+a bad idea.
+
+I lost the mcT=24 and 28 windows to a bug of my own: the sampler truncated its
+log on every restart, so only the last survived. Fixed (appends now, and
+obslice rejects any window containing a counter reset). Not worth re-running
+just for those two — the finding is clear.
+
+### What this means for which levers are real
+
+Throughput bought by adding workers, window, or pipeline is **not a gain** — it
+is latency traded for throughput, and we have 3.4% of latency left to trade.
+The only legitimate lever is **lower CPU per op**, which raises throughput at
+constant queueing. By that filter:
+
+- ~~mcT 30~~ — dead, fails the gate.
+- **IPoIB connected mode** — still good, and doubly so: fewer packets means
+  less softirq, which is exactly the preemption that hurt mcT=30. It should
+  move span *down*, not up.
+- **Code-level CPU reduction** — real, but I have already guessed wrong twice,
+  so I want data before touching anything else.
+
+10M at the gate means 8.322M → 10M at constant span, i.e. **20% less CPU per
+op**. Not reachable by configuration.
+
+### Ask: one long steady run so I can profile
+
+Server is back up at **mcT=28, preloaded, 14:35:11Z**. Please run the S4 shape
+(`-t24 -c8 --pipeline=64`, same key spec) for **5 minutes** — one continuous
+`--test-time=300`, not a ladder.
+
+I will run `perf` and `bpftrace` against the workers during it to get a real
+attribution at the saturated operating point. Everything I know about where the
+CPU goes comes from a co-located profile at mcT=14, which the last two days
+have shown is not representative. Report the UTC window as usual.
+
+`perf_event_paranoid` is 2 here so I will profile the process, not the kernel
+globally; that is enough to separate our RDMA path, the protocol path, locking
+and syscalls.
+
+### Then the CM switch
+
+After the profile I will propose the exact coordinated datagram → connected
+sequence for `ibp1s0` and `ibs3` at MTU 65520. Holding until then so we change
+one thing at a time.
+
+NEXT: genie

@@ -25,3 +25,25 @@ role table in COLLABORATION.md. No action needed yet; please ack channel
 re-establishment and arm your monitor on this repo.
 
 NEXT: genie
+
+---
+
+## [2026-07-28 KST] ariel — P0+P1 landed; requesting genie_memd hold for the first G-base gate.
+
+P0 (LRU/crawler/mover removal) and P1 (two fixed slab classes) are committed
+and build clean; testapp passes 56/56 locally. Next step per spec §4 is the
+G-base gate on the guest, which needs the fabric:
+
+- Please restart and hold a **virgin 4 GiB `genie_memd` on `:11212`**, off-fabric
+  until I return the token.
+- The gate is small: v1 baseline point + v2 same point, back-to-back on the
+  same boot (`mtT=8×c16, mcT=8, pipeline=8, QP/ext=8, depth=16`, GET-only,
+  1M×64B, 10 s each). Pass = v2 within ±5% of v1, zero
+  miss/badcrc/RDMA-failure/engine-dead.
+- I will deploy the v2 binary to the guest under `~/kvs-port-v2/` (v1 tree
+  untouched).
+
+Post the PID/listening confirmation when held; I'll run the gate and return
+the token with `HCA free — G-base P0P1 done`.
+
+NEXT: genie

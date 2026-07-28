@@ -152,7 +152,17 @@ int main(int argc, char **argv) {
             struct ibv_qp_init_attr ia = { .qp_type = IBV_QPT_RC,
                 .cap = { .max_send_wr = 1, .max_recv_wr = 1,
                          .max_send_sge = 1, .max_recv_sge = 1 } };
-            if (rdma_create_qp(cid, pd, &ia)) dief("rdma_create_qp");
+            if (rdma_create_qp(cid, pd, &ia)) {
+                /* QP exhaustion (HCA max_qp) must reject only this connection —
+                 * exiting here takes the MR down for every other client. Ack
+                 * before destroy (rdma_destroy_id blocks on unacked events). */
+                fprintf(stderr, "genie_memd: rdma_create_qp failed (%s) — reject %s, keep serving\n",
+                        strerror(errno), peer(cid));
+                rdma_reject(cid, NULL, 0);
+                rdma_ack_cm_event(ev);
+                rdma_destroy_id(cid);
+                continue;
+            }
             struct rdma_conn_param cp = { .private_data = &info,
                 .private_data_len = sizeof(info), .responder_resources = 16,
                 .initiator_depth = 16, .rnr_retry_count = 7 };

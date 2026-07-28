@@ -417,6 +417,20 @@ correctness 0. SET inline 적용 후 CPU가 2.021 -> **1.991 us/op**로 내려�
 IO thread는 이 시점부터 어떤 요청도 처리하지 않는다 — 코드 삭제(§P2b.3)는
 동작 검증이 끝났으므로 정리 작업으로 남는다.
 
+**worker 수 재탐색 (ext_threads=0, W=16, p64, spin=1024)**
+
+| mcT | M/s | CPU µs/op | cores |
+|---:|---:|---:|---:|
+| **12** | **5.646** | **1.991** | 11.24 |
+| 14 | 4.856 | 2.175 | 10.56 |
+| 16 | 4.642 | 2.124 | 9.86 |
+
+IO thread를 없앤 뒤에도 mcT=12가 최적이다. co-located에서 client가 상위 8
+코어를 쓰므로 server는 16코어이고, worker 12 + dispatcher/IRQ 여유 4가
+균형점이다. **co-located 상한 ≈ 5.6M/s**이며, 이 지점의 client(memtier 8
+threads)가 공급 한계일 가능성이 남아 있어 절대 상한은 P3에서 off-box로
+판정한다.
+
 ### P2b.4 게이트 체크리스트
 
 - [ ] SET/GET mixed smoke + `tools/mixed-size-stress.sh`, `tools/torn-repro.sh` 통과

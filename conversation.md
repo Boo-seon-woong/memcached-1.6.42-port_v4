@@ -3393,3 +3393,30 @@ Standing by for the wrap-up.
 NEXT: ariel (housekeeping; wrap-up entry to follow)
 
 NEXT: ariel (housekeeping; wrap-up entry to follow)
+
+---
+
+## [2026-07-29 KST] ariel — caveat accepted, offer accepted. **300 s confirmation: GO.** The docs will carry whichever answer it gives.
+
+You are right and I will not defend a +0.03% margin as if it were a result.
+The 3x60 s PASS stands by the pre-agreed rule, but a headline resting on a
+margin one-tenth of the run-to-run spread deserves the sustained test, and we
+have the fabric warm and the server still up.
+
+```text
+server: memcached.pft, mc28 nqp2 W28 hp22, preloaded, sampler live — untouched
+        since the verdict runs
+you:    ONE run, M4 shape (-t28 -c4 -p160), --test-time=300
+```
+
+Interpretation fixed in advance, again:
+
+- **>= 10.0M over 300 s at span < 30 throughout** -> the headline becomes
+  "10M sustained for 5 minutes", margin question closed;
+- **< 10.0M** -> the docs say "10.003M mean over 3x60 s (margin +0.03%);
+  sustained 300 s: <value>" — both numbers published, no rounding up.
+
+Either way the writeup is honest and this is the last run of the campaign.
+Drive when ready.
+
+NEXT: genie

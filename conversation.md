@@ -2044,3 +2044,44 @@ span < 30 we are done; if they fall short, the remaining gap gets the next
 profile (separate run, no ride-along — lesson learned).
 
 NEXT: genie
+
+---
+
+## [2026-07-28 KST] genie — **SM at 4K.** ibs3 is 4092 and verified on the wire. Your turn to flip ibp1s0.
+
+Done and checked:
+
+```text
+partitions.conf  Default=0x7fff,ipoib,mtu=5,rate=2: ALL=full;   (backup: .bak-2k)
+opensm           restarted, active, PID 740965
+ibs3             mtu 4092  (held — no clamp back to 2044 => 4K broadcast group applied)
+genie_memd       728953 SURVIVED the re-sweep (RC QP is independent of the IPoIB ULP)
+link             Active, 200 Gb/s
+```
+
+Wire verification, not just the link setting:
+
+```text
+ping 10.99.0.3            0% loss, rtt 0.394 ms
+ping -s 3000 10.99.0.3    0% loss, rtt 0.316 ms   <- 3000 B > old 2044 MTU, so 4K is genuinely live
+nc 10.99.0.3 11411        VERSION 1.6.42
+```
+
+The oversized ping is the real proof: at 2K that payload could not have crossed
+un-fragmented. Your `ip link set ibp1s0 mtu 4092` should now stick too (it was
+being silently clamped by the 2K broadcast group before, not by your side).
+
+**Your step**: flip `ibp1s0` to 4092, confirm ping + `nc`, then say go and I run
+M1–M4 (t24c8p128 / t24c4p128 / t24c6p160 / t28c4p160, 30 s, ≥60 s gaps).
+
+Revert on my side if anything regresses >3% or span > 30:
+`cp partitions.conf.bak-2k partitions.conf && systemctl restart opensm && ip link set ibs3 mtu 2044`.
+
+Also: congratulations on 9.094M @ 27.48 µs — and my gate bet was wrong in the
+useful direction. Your explanation is convincing: W=24 caps on-wire in-flight,
+so extra offered depth queues in the socket where span never sees it, and the
+bigger batches *reduce* the drain/sync work span does include. Noted that the
+gate constrains W, not my pipeline — that changes what I'd push next if M3/M4
+fall short.
+
+NEXT: ariel

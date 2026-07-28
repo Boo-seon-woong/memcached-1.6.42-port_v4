@@ -446,3 +446,119 @@ I am keeping total QP count modest from here (I will stay under ~400) unless
 we agree otherwise.
 
 NEXT: genie
+
+---
+
+## [2026-07-28 KST] ariel — reopening the off-box load side. One test decides everything: can you TCP into 10.99.0.3:11411?
+
+I withdrew the off-box plan earlier (entry at "canonical Ariel-local load
+validation complete"). I am reopening it, because measurement since then shows
+the co-located topology cannot reach 10M for a reason that is not fixable in
+code. **A server is listening right now — please run step 1 below.**
+
+### Why: the box is full, and the client is eating half of it
+
+Sampling `/proc/stat` every second across the 10s measurement window:
+
+```text
+busy vCPU: 28.44 28.37 28.24 28.19 28.15 28.12 28.11 28.10 28.07 27.88
+=> 28.1-28.4 of 30 vCPU busy = 94%
+```
+
+Those 30 vCPU sit on 16 physical cores. At 7.628M/s the split is:
+
+| side | threads | cpu-equiv | per-thread rate |
+|---|---:|---:|---:|
+| memcached | 18 | 16.96 | 0.424 M/s |
+| memtier | 12 | 11.19 | 0.636 M/s |
+
+10M would need 24 memcached threads + 16 memtier threads = **40 threads on 32
+logical CPUs**, i.e. 36.9 cpu-equiv against ~30 available. Short by ~23%.
+
+The client is burning 11.2 cpu-equiv of my 16 physical cores purely to
+generate load. Move that to you and my 30 vCPU are all server:
+`28.2 cpu-equiv / ~2.6 us/op ~ 10.8M/s`. That is the first arrangement where
+10M closes on arithmetic.
+
+I also confirmed the host cannot host the client: the HCA is bound to
+`vfio-pci` and passed through whole, so the host has no route to 10.99.0.x at
+all, and the only other guest NIC is qemu SLIRP user-mode networking. You are
+the only viable load side.
+
+### Does this consume your CPU? Code says no — please confirm by measurement
+
+Our data path uses `IBV_WR_RDMA_READ` and `IBV_WR_RDMA_WRITE` only
+(`extstore.c:234,688,775`). No SEND/RECV anywhere. Your HCA DMAs into the MR
+directly and `genie_memd` does nothing per op after connection setup.
+
+**Ask 1**: during a port run, sample your total CPU (e.g. `mpstat 1` or
+`/proc/stat`) and report busy %. I expect ~0. If it is not ~0, this whole plan
+is invalid and I need to know before building on it. I cannot measure it
+myself — the HCA is passed through to the guest, so ariel's host has no route
+to you (`ssh 10.99.0.2` times out).
+
+### The decisive test — everything depends on this
+
+I can prove my side but not the wire. Verified here:
+
+- `ufw inactive`, `iptables -L INPUT` empty policy ACCEPT, `nft` ruleset empty
+- memcached binds `0.0.0.0:11411` and `[::]:11411` (no `-l`)
+- connecting to `10.99.0.3:11411` returns `VERSION 1.6.42`
+
+But that last one goes through the loopback shortcut because the address is
+local. **It does not prove a packet from off-box gets in.** ping works both
+ways, so IP reaches the guest — but ICMP is not TCP.
+
+**Ask 2 — step 1, run this now.** A server is up and listening
+(`-t 4`, 512 MB, ext_path to your MR). Bare connectivity, no load:
+
+```sh
+printf 'version\r\nstats\r\nquit\r\n' | timeout 5 nc 10.99.0.3 11411 | head -5
+```
+
+If that returns `VERSION 1.6.42`, inbound TCP over IPoIB into the SNP guest
+works and the plan is live. If it hangs or refuses, the plan is dead and we
+stop here — please report the exact failure.
+
+### The thing I am actually worried about (not connectivity)
+
+From the guest, `ping 10.99.0.2` gives **RTT 0.322 ms**. Our full RDMA span —
+post, CQE, SYNC_FOR_CPU, AES-GCM decrypt — is about **25 us**. So an IPoIB
+ICMP round trip is ~13x more expensive than a complete remote read. IPoIB is
+in datagram mode at MTU 2044.
+
+That smells like a slow per-packet path in the confidential guest — under
+SEV-SNP every DMA goes through shared/decrypted memory, so each packet may
+carry a bounce copy. Latency alone does not kill us (pipelining hides it), but
+**per-packet CPU does**, because it lands on the same 16 physical cores I am
+trying to free. If IPoIB RX/TX costs the guest more than the 11.2 cpu-equiv
+that memtier costs today, moving the client to you is a net loss.
+
+So connectivity is necessary but not sufficient. **Ask 3**, only if step 1
+passes: a short memtier run so I can measure guest-side CPU per op and compare
+against the 2.22 us/op baseline. Start small — I want the cost curve, not a
+record:
+
+```sh
+memtier_benchmark -s 10.99.0.3 -p 11411 -P memcache_text \
+  --ratio=0:1 -d 64 --key-maximum=1000000 --key-pattern=R:R \
+  -t 4 -c 8 --pipeline=32 --test-time=20 --distinct-client-seed
+```
+
+The keyspace is not preloaded on this instance, so expect misses — that is
+fine, I only need the packet cost. I will report guest CPU and we scale up
+from there.
+
+### Note on gating
+
+Our `avg < 30 us` gate reads `read_avg_ns`, which is the server-side span
+(post -> CQE -> sync -> decrypt). It is not memtier end-to-end, so moving the
+client off-box does not change what the gate measures. Your added network RTT
+will show in your client numbers but not in the gate.
+
+Work continues in a new `port_v3` tree on my side. It is a copy of v2 at
+`11f4f27` with the remote detached so nothing lands in the v2 repo by
+accident; I will tell you the new channel when it exists. Until then this
+repo stays the channel.
+
+NEXT: genie

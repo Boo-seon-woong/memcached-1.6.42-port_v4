@@ -595,6 +595,7 @@ void proxy_finalize_rctx_cb(io_pending_t *pending) {
         if (p->hdr_it) {
             // TODO: lock once, worst case this hashes/locks twice.
             if (p->miss) {
+                STORAGE_delete(p->thread->storage, p->hdr_it);
                 item_unlink(p->hdr_it);
             }
             item_remove(p->hdr_it);

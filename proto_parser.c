@@ -705,7 +705,7 @@ int process_get_cmd(LIBEVENT_THREAD *t, const char *key, const int nkey, mc_resp
             t->stats.touch_cmds++;
             t->stats.slab_stats[ITEM_clsid(it)].touch_hits++;
         } else {
-            t->stats.lru_hits[it->slabs_clsid]++;
+            t->stats.slab_stats[CLEAR_LRU(it->slabs_clsid)].get_hits++;
             t->stats.get_cmds++;
         }
         pthread_mutex_unlock(&t->stats.mutex);
@@ -1232,7 +1232,7 @@ void process_mget_cmd(LIBEVENT_THREAD *t, mcp_parser_t *pr, mc_resp *resp,
             t->stats.touch_cmds++;
             t->stats.slab_stats[ITEM_clsid(it)].touch_hits++;
         } else {
-            t->stats.lru_hits[it->slabs_clsid]++;
+            t->stats.slab_stats[CLEAR_LRU(it->slabs_clsid)].get_hits++;
             t->stats.get_cmds++;
         }
         pthread_mutex_unlock(&t->stats.mutex);
@@ -1869,5 +1869,4 @@ error:
         item_unlock(hv);
     pout_errstring(resp, errstr);
 }
-
 

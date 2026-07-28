@@ -56,11 +56,15 @@ test "$(delta extstore_objects_read "$tmp/after-overwrite.txt" "$tmp/after-get.t
 test "$(stat_value badcrc_from_extstore "$tmp/after-get.txt")" -eq 0
 test "$(stat_value extstore_engine_dead "$tmp/after-get.txt")" -eq 0
 test "$(stat_value extstore_read_failures "$tmp/after-get.txt")" -eq 0
+test "$(stat_value ext_slot_acct_leak "$tmp/after-get.txt")" -eq 0
 
 {
     for i in $(seq 1 "$COUNT"); do printf 'delete %s-%s\r\n' "$PREFIX" "$i"; done
     printf 'quit\r\n'
 } | request >"$tmp/delete.txt"
 test "$(grep -c '^DELETED' "$tmp/delete.txt")" -eq "$COUNT"
+stats >"$tmp/after-delete.txt"
+test "$(delta extstore_objects_used "$tmp/after-get.txt" "$tmp/after-delete.txt")" -eq "-$COUNT"
+test "$(stat_value ext_slot_acct_leak "$tmp/after-delete.txt")" -eq 0
 
-echo "PASS: SET/overwrite/GET used remote storage only; no local backend or cache controls"
+echo "PASS: SET/overwrite/GET/delete kept remote slot accounting exact"

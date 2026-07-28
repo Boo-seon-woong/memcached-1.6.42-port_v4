@@ -11,9 +11,9 @@
 #
 # PASS = badcrc_from_extstore stays 0 across the mixed phase.
 # Any nonzero delta is a read that was silently answered as a miss.
-set -u
+set -euo pipefail
 H=${1:-127.0.0.1}; P=${2:-11311}
-KEYS=${KEYS:-20000}; N=${N:-20000}; D=${D:-400}
+KEYS=${KEYS:-20000}; N=${N:-20000}; D=${D:-64}
 
 stat() { printf 'stats\r\nquit\r\n' | nc -q1 "$H" "$P" | awk -v k="$1" '$2==k{print $3}' | tr -d '\r'; }
 
@@ -47,4 +47,5 @@ else
   echo "RESULT: FAIL — $((b1-b0)) reads answered as misses for data that exists"
   [ "$((m1-m0))" -lt "$((b1-b0))" ] && \
     echo "        (and only $((m1-m0)) of them show up in get_misses)"
+  exit 1
 fi

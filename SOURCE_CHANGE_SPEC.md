@@ -1,13 +1,17 @@
-# memcached 1.6.42 → RDMA remote-memory port 소스 변경 명세
+# memcached 1.6.42 → RDMA remote-memory port v1 소스 기록
+
+> **역사 문서:** 아래 call path와 `ext_threads`/`ext_io_depth` 설명은
+> 2026-07-27의 v1 구현 기록이다. 현재 v2 구현과 실행 계약은
+> [`md/V2_CODE_SPEC.md`](md/V2_CODE_SPEC.md), 변경 계획과 완료 상태는
+> [`md/V2_REMODIFICATION_SPEC.md`](md/V2_REMODIFICATION_SPEC.md)를 따른다.
 
 기준일: 2026-07-27
 기준 commit: `597fc83`
 stock tree: `../memcached-1.6.42/`
 port tree: 이 디렉터리
 
-이 문서는 구현 전 설계안을 보존하지 않고 현재 source가 실제로 수행하는 동작만
-기록한다. 변수와 knob의 정의는 [`GLOSSARY.md`](GLOSSARY.md)에 있고 여기서
-반복하지 않는다.
+이 문서는 v1 당시 source가 실제로 수행하던 동작을 보존한다. 현재 변수와
+knob의 정의는 [`GLOSSARY.md`](GLOSSARY.md)에 있고 여기서 반복하지 않는다.
 
 ## 1. 변경 범위
 

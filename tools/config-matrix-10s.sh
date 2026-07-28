@@ -1,264 +1,173 @@
-#!/bin/bash
-# 10-second GET matrix. In this port ext_threads == QP count == IO thread count.
-set -uo pipefail
+#!/usr/bin/env bash
+# v2 co-located matrix. Genie must already be listening.
+set -euo pipefail
 
-REPO=${REPO:-"$HOME/kvs-port"}
-PORT_BIN=${PORT_BIN:-"$REPO/spanv2-pool-crypto-qpaff-iolock/memcached"}
-STOCK_BIN=${STOCK_BIN:-"$REPO/memcached.stock"}
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+PORT_BIN=${PORT_BIN:-"$ROOT/memcached"}
+STOCK_BIN=${STOCK_BIN:-"$ROOT/memcached.stock"}
 MT=${MT:-"$HOME/memtier/memtier_benchmark"}
-OUT=${OUT:-"$HOME/rdma-results/config-matrix-10s-$(date +%Y%m%d-%H%M%S)"}
+GENIE=${GENIE:-10.99.0.2:11212}
+OUT=${OUT:-"$HOME/rdma-results/v2-matrix-$(date +%Y%m%d-%H%M%S)"}
+PHASES=${PHASES:-"threads pipeline window nqp stock"}
 TEST_SECONDS=${TEST_SECONDS:-10}
 KEYS=${KEYS:-1000000}
-MT_CLIENTS=16
-PHASES=${PHASES:-all}
-DEPTHS=${DEPTHS:-"16 32 64 128"}
-DEPTH_PIPELINE=${DEPTH_PIPELINE:-4}
-SENS_MC_THREADS=${SENS_MC_THREADS:-"$(seq 1 16)"}
-SENS_PIPELINES=${SENS_PIPELINES:-"$(seq 1 8)"}
-SENS_QPS=${SENS_QPS:-"$(seq 1 16)"}
-SENS_DEPTHS=${SENS_DEPTHS:-"1 2 4 8 16 32 64"}
-SENS_AXES=${SENS_AXES:-"mc_threads pipeline qp depth"}
-QPXD_WINDOW=${QPXD_WINDOW:-128}
-QPXD_QPS=${QPXD_QPS:-"1 2 4 8 16"}
-QPD1_QPS=${QPD1_QPS:-"$(seq 1 16)"}
-QPD1_PIPELINE=${QPD1_PIPELINE:-8}
-QPD1_MT=${QPD1_MT:-8}
-QPD1_MC=${QPD1_MC:-8}
-SERVER_CPUS=
-CLIENT_CPUS=
+VALUE_SIZE=${VALUE_SIZE:-64}
+MT_THREADS=${MT_THREADS:-8}
+MT_CLIENTS=${MT_CLIENTS:-16}
+SERVER_CPUS=${SERVER_CPUS:-0-15}
+CLIENT_CPUS=${CLIENT_CPUS:-16-23}
+MC_THREADS=${MC_THREADS:-12}
+PIPELINE=${PIPELINE:-64}
+WORKER_WINDOW=${WORKER_WINDOW:-16}
+QP_PER_WORKER=${QP_PER_WORKER:-1}
+DRAIN_SPIN=${DRAIN_SPIN:-1024}
+MEM_MB=${MEM_MB:-2048}
+KEY_FILE=${KEY_FILE:-"$ROOT/ext.key"}
 
 mkdir -p "$OUT"
 CSV="$OUT/results.csv"
-printf '%s\n' \
-    'phase,label,mode,mt_threads,mt_clients,mc_threads,qp,ext_threads,pipeline,depth,remote_get_s,remote_avg_us,remote_p50_us,remote_p99_us,xfer_us,sync_us,crypto_us,memtier_get_s,memtier_avg_us,memtier_p50_us,memtier_p99_us,cmd_get,misses,badcrc,read_failures,engine_dead,status' \
-    > "$CSV"
+printf '%s\n' 'phase,label,mode,mc_threads,mt_threads,mt_clients,pipeline,worker_window,qp_per_worker,cmd_get,remote_reads,server_get_s,remote_get_s,remote_avg_us,remote_p50_us,remote_p99_us,misses,badcrc,read_failures,write_failures,engine_dead,slot_acct_leak,drain_calls,drain_empty,wait_enq,write_spins,status' > "$CSV"
+
+MCPID=
+cleanup() {
+    if [[ -n "${MCPID:-}" ]]; then
+        kill "$MCPID" 2>/dev/null || true
+        wait "$MCPID" 2>/dev/null || true
+    fi
+}
+trap cleanup EXIT INT TERM
 
 stats() {
     exec 9<>/dev/tcp/127.0.0.1/11211 || return 1
     printf 'stats\r\nquit\r\n' >&9
-    timeout 5 cat <&9 | tr -d '\r'
+    timeout 5 tr -d '\r' <&9
     exec 9<&- 9>&-
 }
 
-value() {
-    awk -v key="$2" '$1 == "STAT" && $2 == key { print $3; exit }' "$1"
+statv() {
+    awk -v key="$2" '$1 == "STAT" && $2 == key { print $3; found=1; exit }
+        END { if (!found) print 0 }' "$1"
 }
 
-stop_server() {
-    tmux kill-session -t matrix-mc 2>/dev/null || true
-    pkill -f "^$PORT_BIN " 2>/dev/null || true
-    pkill -f "^$STOCK_BIN " 2>/dev/null || true
-    sleep 1
+start_server() {
+    local mode=$1 mct=$2 window=$3 nqp=$4 dir=$5
+    local -a cmd
+    cleanup
+    MCPID=
+    if [[ "$mode" == port ]]; then
+        [[ -x "$PORT_BIN" && -r "$KEY_FILE" ]] ||
+            { echo "missing PORT_BIN or 32-byte KEY_FILE" >&2; return 1; }
+        cmd=(taskset -c "$SERVER_CPUS" env
+            "LD_LIBRARY_PATH=$HOME/covlib:$ROOT"
+            MLX5_COHERENT_QP=1 MLX5_COHERENT_CQ=1
+            "EXT_CRYPTO_KEY=$KEY_FILE" EXT_SELFTEST=1
+            EXT_SLOT_SIZE=256 EXT_READ_SLOTS=64 EXT_RDMA_PROF=1
+            "$PORT_BIN" -p 11211 -U 0 -t "$mct" -m "$MEM_MB" -c 8192 -R 1024
+            -o "ext_path=$GENIE:4g,ext_worker_window=$window,ext_qp_per_worker=$nqp,ext_drain_spin=$DRAIN_SPIN")
+    else
+        [[ -x "$STOCK_BIN" ]] || { echo "missing STOCK_BIN" >&2; return 1; }
+        cmd=(taskset -c "$SERVER_CPUS" "$STOCK_BIN"
+            -p 11211 -U 0 -t "$mct" -m "$MEM_MB" -c 8192 -R 1024)
+    fi
+    printf '%q ' "${cmd[@]}" > "$dir/server-command.txt"
+    printf '\n' >> "$dir/server-command.txt"
+    "${cmd[@]}" >"$dir/server.txt" 2>&1 &
+    MCPID=$!
+
+    for _ in $(seq 1 60); do
+        if ! kill -0 "$MCPID" 2>/dev/null; then return 1; fi
+        if stats >"$dir/stats-start.txt" 2>/dev/null; then
+            if [[ "$mode" != port ]] ||
+               { grep -q 'genie_connect OK' "$dir/server.txt" &&
+                 grep -q 'extstore selftest: OK' "$dir/server.txt"; }; then
+                sha256sum "/proc/$MCPID/exe" >"$dir/server-sha256.txt"
+                return 0
+            fi
+        fi
+        sleep 1
+    done
+    return 1
 }
 
-run_memtier() {
-    local mt_threads=$1 pipeline=$2 seconds=$3 pattern=$4 ratio=$5 out=$6
-    shift 6
-    taskset -c "$CLIENT_CPUS" env LD_LIBRARY_PATH="$HOME/memtier:$REPO" "$MT" \
-        -s 127.0.0.1 -p 11211 -P memcache_text \
-        --threads="$mt_threads" --clients="$MT_CLIENTS" --pipeline="$pipeline" \
-        -d 64 --key-prefix=m- --key-minimum=1 --key-maximum="$KEYS" \
-        --key-pattern="$pattern" --ratio="$ratio" "$@" \
-        --hide-histogram > "$out" 2>&1
+memtier() {
+    local pipeline=$1 pattern=$2 ratio=$3 out=$4
+    shift 4
+    taskset -c "$CLIENT_CPUS" env "LD_LIBRARY_PATH=$HOME/memtier:$ROOT" "$MT"         -s 127.0.0.1 -p 11211 -P memcache_text         --threads="$MT_THREADS" --clients="$MT_CLIENTS" --pipeline="$pipeline"         -d "$VALUE_SIZE" --key-prefix=m- --key-minimum=1 --key-maximum="$KEYS"         --key-pattern="$pattern" --ratio="$ratio" --hide-histogram "$@"         >"$out" 2>&1
 }
 
 run_point() {
-    local phase=$1 label=$2 mode=$3 mt_threads=$4 mc_threads=$5 ext=$6 pipe=$7 depth=$8
-    local dir="$OUT/$label" bin command pid preload_n curr warm stats_out
-    local mt_line mt_ops mt_avg mt_p50 mt_p99
-    local remote_count remote_s ravg rp50 rp99 xfer sync crypto cmd misses badcrc rf dead
-    local status=ok
-
-    CLIENT_CPUS="$((24 - mt_threads))-23"
-    SERVER_CPUS="0-$((23 - mt_threads))"
+    local phase=$1 label=$2 mode=$3 mct=$4 pipeline=$5 window=$6 nqp=$7
+    local dir="$OUT/$label" status=ok
     mkdir -p "$dir"
-    stop_server
-    if [[ "$mode" == port ]]; then
-        bin=$PORT_BIN
-        command="cd $REPO && exec taskset -c $SERVER_CPUS env LD_LIBRARY_PATH=$HOME/covlib:$REPO MLX5_COHERENT_QP=1 MLX5_COHERENT_CQ=1 EXT_RDMA_PROF=1 EXT_CRYPTO_KEY=$REPO/ext.key EXT_SLOT_SIZE=256 EXT_READ_SLOTS=64 $bin -p 11211 -U 0 -t $mc_threads -m 2048 -c 8192 -R 1024 -o ext_path=10.99.0.2:11212:4g,ext_threads=$ext,ext_io_depth=$depth"
-    else
-        bin=$STOCK_BIN
-        command="cd $REPO && exec taskset -c $SERVER_CPUS env LD_LIBRARY_PATH=$REPO $bin -p 11211 -U 0 -t $mc_threads -m 2048 -c 8192 -R 1024"
-    fi
-    printf '%s\n' "$command" > "$dir/server-command.txt"
-    tmux new-session -d -s matrix-mc "$command >$dir/server.txt 2>&1"
-
-    pid=
-    for _ in $(seq 1 30); do
-        pid=$(pgrep -f "^$bin " | head -1)
-        [[ -n "$pid" ]] && stats > "$dir/stats-start.txt" 2>/dev/null && break
-        sleep 1
-    done
-    if [[ -z "$pid" ]]; then
-        printf '%s\n' "$phase,$label,$mode,$mt_threads,$MT_CLIENTS,$mc_threads,$ext,$ext,$pipe,$depth,,,,,,,,,,,,,,,,,server_failed" >> "$CSV"
-        echo "FAILED server: $label"
-        return
-    fi
-    sha256sum "/proc/$pid/exe" > "$dir/server-sha256.txt"
-
-    preload_n=$(( (KEYS + mt_threads * MT_CLIENTS - 1) /
-        (mt_threads * MT_CLIENTS) ))
-    run_memtier "$mt_threads" 8 0 P:P 1:0 "$dir/preload.txt" -n "$preload_n"
-    stats > "$dir/stats-after-preload.txt"
-    curr=$(value "$dir/stats-after-preload.txt" curr_items)
-    if [[ "$curr" != "$KEYS" ]]; then
-        printf '%s\n' "$phase,$label,$mode,$mt_threads,$MT_CLIENTS,$mc_threads,$ext,$ext,$pipe,$depth,,,,,,,,,,,,,,,,,preload_$curr" >> "$CSV"
-        echo "FAILED preload: $label curr_items=$curr"
-        stop_server
+    echo "RUN $label"
+    if ! start_server "$mode" "$mct" "$window" "$nqp" "$dir"; then
+        printf '%s\n' "$phase,$label,$mode,$mct,$MT_THREADS,$MT_CLIENTS,$pipeline,$window,$nqp,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,server_failed" >>"$CSV"
+        cleanup; MCPID=
         return
     fi
 
-    run_memtier "$mt_threads" "$pipe" 2 R:R 0:1 "$dir/warmup.txt" --test-time=2
-    exec 9<>/dev/tcp/127.0.0.1/11211
-    printf 'stats reset\r\nquit\r\n' >&9
-    timeout 5 cat <&9 > /dev/null || true
-    exec 9<&- 9>&-
+    local per_client=$(( (KEYS + MT_THREADS * MT_CLIENTS - 1) /
+        (MT_THREADS * MT_CLIENTS) ))
+    memtier 8 P:P 1:0 "$dir/preload.txt" -n "$per_client"
+    stats >"$dir/stats-after-preload.txt"
+    [[ $(statv "$dir/stats-after-preload.txt" curr_items) == "$KEYS" ]] ||
+        status=preload_failed
 
-    run_memtier "$mt_threads" "$pipe" "$TEST_SECONDS" R:R 0:1 \
-        "$dir/load.txt" --test-time="$TEST_SECONDS"
-    stats_out="$dir/stats-final.txt"
-    stats > "$stats_out"
+    if [[ "$status" == ok ]]; then
+        memtier "$pipeline" R:R 0:1 "$dir/warmup.txt" --test-time=2
+        exec 9<>/dev/tcp/127.0.0.1/11211
+        printf 'stats reset\r\nquit\r\n' >&9
+        timeout 5 tr -d '\r' <&9 >"$dir/stats-reset.txt" || true
+        exec 9<&- 9>&-
+        memtier "$pipeline" R:R 0:1 "$dir/load.txt" --test-time="$TEST_SECONDS"
+    fi
+    stats >"$dir/stats-final.txt"
 
-    mt_line=$(awk '$1 == "Gets" { line=$0 } END { print line }' "$dir/load.txt")
-    read -r _ mt_ops _ _ mt_avg mt_p50 mt_p99 _ _ <<< "$mt_line"
-    mt_avg=$(awk -v n="${mt_avg:-0}" 'BEGIN { printf "%.3f", n * 1000 }')
-    mt_p50=$(awk -v n="${mt_p50:-0}" 'BEGIN { printf "%.3f", n * 1000 }')
-    mt_p99=$(awk -v n="${mt_p99:-0}" 'BEGIN { printf "%.3f", n * 1000 }')
-
-    cmd=$(value "$stats_out" cmd_get); misses=$(value "$stats_out" get_misses)
+    local st="$dir/stats-final.txt"
+    local cmd=$(statv "$st" cmd_get) remote=$(statv "$st" extstore_prof_read_count)
+    local misses=$(statv "$st" get_misses) badcrc=$(statv "$st" badcrc_from_extstore)
+    local rf=$(statv "$st" extstore_read_failures) wf=$(statv "$st" extstore_write_failures)
+    local dead=$(statv "$st" extstore_engine_dead) leak=$(statv "$st" ext_slot_acct_leak)
     if [[ "$mode" == port ]]; then
-        remote_count=$(value "$stats_out" extstore_prof_read_count)
-        remote_s=$(awk -v n="$remote_count" -v s="$TEST_SECONDS" \
-            'BEGIN { printf "%.2f", n / s }')
-        ravg=$(awk -v n="$(value "$stats_out" extstore_prof_read_avg_ns)" 'BEGIN { printf "%.3f", n/1000 }')
-        rp50=$(awk -v n="$(value "$stats_out" extstore_prof_read_p50_ns)" 'BEGIN { printf "%.3f", n/1000 }')
-        rp99=$(awk -v n="$(value "$stats_out" extstore_prof_read_p99_ns)" 'BEGIN { printf "%.3f", n/1000 }')
-        xfer=$(awk -v n="$(value "$stats_out" extstore_prof_read_xfer_avg_ns)" 'BEGIN { printf "%.3f", n/1000 }')
-        sync=$(awk -v n="$(value "$stats_out" extstore_prof_read_sync_avg_ns)" 'BEGIN { printf "%.3f", n/1000 }')
-        crypto=$(awk -v n="$(value "$stats_out" extstore_prof_read_crypto_avg_ns)" 'BEGIN { printf "%.3f", n/1000 }')
-        badcrc=$(value "$stats_out" badcrc_from_extstore)
-        rf=$(value "$stats_out" extstore_read_failures)
-        dead=$(value "$stats_out" extstore_engine_dead)
-        [[ "$misses" == 0 && "$badcrc" == 0 && "$rf" == 0 &&
-           "$dead" == 0 && "$remote_count" == "$cmd" ]] ||
+        [[ "$misses" == 0 && "$badcrc" == 0 && "$rf" == 0 && "$wf" == 0 &&
+           "$dead" == 0 && "$leak" == 0 && "$remote" == "$cmd" ]] ||
             status=correctness_failed
     else
-        remote_s= ravg= rp50= rp99= xfer= sync= crypto=
-        badcrc= rf= dead=0
-        ext=0
+        remote=0
         [[ "$misses" == 0 ]] || status=correctness_failed
     fi
-    printf '%s\n' "$phase,$label,$mode,$mt_threads,$MT_CLIENTS,$mc_threads,$ext,$ext,$pipe,$depth,$remote_s,$ravg,$rp50,$rp99,$xfer,$sync,$crypto,${mt_ops:-0},$mt_avg,$mt_p50,$mt_p99,$cmd,$misses,$badcrc,$rf,$dead,$status" >> "$CSV"
-    echo "DONE $label remote=${remote_s:-na} avg=${ravg:-na} p99=${rp99:-na} memtier=${mt_ops:-0}"
-    stop_server
+    local server_rps=$(awk -v n="$cmd" -v s="$TEST_SECONDS" 'BEGIN{printf "%.2f",n/s}')
+    local remote_rps=$(awk -v n="$remote" -v s="$TEST_SECONDS" 'BEGIN{printf "%.2f",n/s}')
+    local avg=$(awk -v n="$(statv "$st" extstore_prof_read_avg_ns)" 'BEGIN{printf "%.3f",n/1000}')
+    local p50=$(awk -v n="$(statv "$st" extstore_prof_read_p50_ns)" 'BEGIN{printf "%.3f",n/1000}')
+    local p99=$(awk -v n="$(statv "$st" extstore_prof_read_p99_ns)" 'BEGIN{printf "%.3f",n/1000}')
+    printf '%s\n' "$phase,$label,$mode,$mct,$MT_THREADS,$MT_CLIENTS,$pipeline,$window,$nqp,$cmd,$remote,$server_rps,$remote_rps,$avg,$p50,$p99,$misses,$badcrc,$rf,$wf,$dead,$leak,$(statv "$st" ext_worker_drain_calls),$(statv "$st" ext_worker_drain_empty),$(statv "$st" ext_worker_wait_enq),$(statv "$st" ext_worker_write_spins),$status" >>"$CSV"
+    cleanup; MCPID=
 }
 
-sha256sum "$PORT_BIN" "$STOCK_BIN" "$MT" > "$OUT/binaries.sha256"
-{
-    echo "QP and ext_threads are one 1:1 knob in this implementation."
-    echo "Port latency is span-v2 READ post through CQE/SYNC and decrypt completion."
-    echo "Stock latency is memtier end-to-end only."
-    echo "CPU split is dynamic: client gets the top mt_threads CPUs; server gets the rest of CPUs 0-23."
-    echo "Canonical throughput is cmd_get/TEST_SECONDS; memtier_get_s preserves memtier's reported auxiliary value."
-} > "$OUT/README.txt"
-
-if [[ "$PHASES" == all || "$PHASES" == qp ]]; then
-    for ext in 1 2 4 8 16; do
-        run_point qp "qp-ext$ext" port 8 8 "$ext" 4 64
+if [[ " $PHASES " == *" threads "* ]]; then
+    for n in ${MC_THREAD_VALUES:-8 10 12 14 16}; do
+        run_point threads "threads-$n" port "$n" "$PIPELINE" "$WORKER_WINDOW" "$QP_PER_WORKER"
     done
 fi
-
-if [[ "$PHASES" == all || "$PHASES" == pipeline ]]; then
-    for pipe in 1 2 4 8 16 32; do
-        run_point pipeline "pipeline-$pipe" port 8 8 8 "$pipe" 64
+if [[ " $PHASES " == *" pipeline "* ]]; then
+    for n in ${PIPELINE_VALUES:-1 8 32 64 96}; do
+        run_point pipeline "pipeline-$n" port "$MC_THREADS" "$n" "$WORKER_WINDOW" "$QP_PER_WORKER"
     done
 fi
-
-if [[ "$PHASES" == all || "$PHASES" == threads ]]; then
-    for mt_threads in 4 8 16; do
-        for mc_threads in 4 8 16; do
-            for ext in 4 8 16; do
-                ((mt_threads + mc_threads + ext <= 24)) || continue
-                run_point threads "threads-mt${mt_threads}-mc${mc_threads}-ext${ext}" \
-                    port "$mt_threads" "$mc_threads" "$ext" 4 64
-            done
-        done
+if [[ " $PHASES " == *" window "* ]]; then
+    for n in ${WINDOW_VALUES:-1 4 8 16 32 64}; do
+        run_point window "window-$n" port "$MC_THREADS" "$PIPELINE" "$n" "$QP_PER_WORKER"
     done
 fi
-
-if [[ "$PHASES" == all || "$PHASES" == depth ]]; then
-    for depth in $DEPTHS; do
-        run_point depth "depth-$depth" port 8 8 8 "$DEPTH_PIPELINE" "$depth"
+if [[ " $PHASES " == *" nqp "* ]]; then
+    for n in ${NQP_VALUES:-1 2 4}; do
+        w=$((16 * n))
+        run_point nqp "nqp-$n-w$w" port "$MC_THREADS" "$PIPELINE" "$w" "$n"
     done
 fi
-
-if [[ "$PHASES" == all || "$PHASES" == stock ]]; then
-    run_point stock stock-local native 8 8 0 4 0
+if [[ " $PHASES " == *" stock "* ]]; then
+    run_point stock stock-local stock "$MC_THREADS" "$PIPELINE" 0 0
 fi
 
-if [[ "$PHASES" == frontier ]]; then
-    run_point frontier candidate-q4-d32-p4 port 8 8 4 4 32
-    run_point frontier candidate-q8-d16-p8 port 8 8 8 8 16
-    run_point frontier candidate-q8-d16-p6 port 8 8 8 6 16
-    run_point frontier candidate-q6-d16-p4 port 8 8 6 4 16
-    for pipe in 4 6 8; do
-        run_point stock "stock-p$pipe" native 8 8 0 "$pipe" 0
-    done
-fi
-
-# Three-experiment run, 2026-07-27. Combined: PHASES="qpxdepth qpd1 plateau".
-# QP>8 points put mtT+mcT+ext over 24 vCPU; kept deliberately, read as oversubscribed.
-if [[ " $PHASES " == *" qpxdepth "* ]]; then
-    # Exp 1: QP*depth=$QPXD_WINDOW fixed in-flight window, split varies. mtT=8 mcT=8 pipe=8.
-    for ext in $QPXD_QPS; do
-        depth=$((QPXD_WINDOW / ext))
-        run_point qpxdepth "qpxd-q$ext-d$depth" port 8 8 "$ext" 8 "$depth"
-    done
-fi
-
-if [[ " $PHASES " == *" qpd1 "* ]]; then
-    # Exp 2: depth=1 (zero per-QP queueing), QP scaling. pipe=$QPD1_PIPELINE, threads=$QPD1_MT/$QPD1_MC.
-    for ext in $QPD1_QPS; do
-        run_point qpd1 "qpd1-q$ext" port "$QPD1_MT" "$QPD1_MC" "$ext" "$QPD1_PIPELINE" 1
-    done
-fi
-
-if [[ " $PHASES " == *" plateau "* ]]; then
-    # Exp 3a: pipeline ladder at the operating point until throughput flattens.
-    for pipe in 8 12 16 24 32 48 64; do
-        run_point plateau "plat-p$pipe" port 8 8 8 "$pipe" 16
-    done
-    # Exp 3b: at the argmax-throughput pipeline, scale mtT=mcT together.
-    best_pipe=$(awk -F, '$1 == "plateau" && $27 == "ok" && $11+0 > best \
-        { best = $11+0; bp = $9 } END { print bp }' "$CSV")
-    best_pipe=${best_pipe:-32}
-    echo "plateau argmax pipeline=$best_pipe"
-    for t in 8 9 10 11 12; do
-        run_point plateau_threads "platt-t$t-p$best_pipe" port "$t" "$t" 8 "$best_pipe" 16
-    done
-fi
-
-if [[ "$PHASES" == sensitivity ]]; then
-    if [[ " $SENS_AXES " == *" mc_threads "* ]]; then
-        for mc_threads in $SENS_MC_THREADS; do
-            run_point mc_threads "mc-thread-$mc_threads" port 8 "$mc_threads" 8 8 16
-        done
-    fi
-    if [[ " $SENS_AXES " == *" pipeline "* ]]; then
-        for pipe in $SENS_PIPELINES; do
-            run_point pipeline "pipeline-$pipe" port 8 8 8 "$pipe" 16
-        done
-    fi
-    if [[ " $SENS_AXES " == *" qp "* ]]; then
-        for ext in $SENS_QPS; do
-            run_point qp "qp-ext-$ext" port 8 8 "$ext" 8 16
-        done
-    fi
-    if [[ " $SENS_AXES " == *" depth "* ]]; then
-        for depth in $SENS_DEPTHS; do
-            run_point depth "depth-$depth" port 8 8 8 8 "$depth"
-        done
-    fi
-fi
-stop_server
-echo "RESULT_DIR=$OUT"
+printf '%s\n' "RESULT_DIR=$OUT"

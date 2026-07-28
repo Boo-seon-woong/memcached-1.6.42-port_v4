@@ -493,7 +493,7 @@ static void process_bin_get_or_touch(conn *c, char *extbuf) {
             c->thread->stats.slab_stats[ITEM_clsid(it)].touch_hits++;
         } else {
             c->thread->stats.get_cmds++;
-            c->thread->stats.lru_hits[it->slabs_clsid]++;
+            c->thread->stats.slab_stats[CLEAR_LRU(it->slabs_clsid)].get_hits++;
         }
         pthread_mutex_unlock(&c->thread->stats.mutex);
 
@@ -1337,5 +1337,4 @@ static void process_bin_delete(conn *c) {
     }
     item_unlock(hv);
 }
-
 

@@ -34,6 +34,9 @@ struct extstore_stats {
     uint64_t prof_read_crypto_avg_ns, prof_write_crypto_avg_ns;
     uint64_t prof_read_sync_avg_ns,  prof_read_xfer_avg_ns;
     uint64_t prof_write_sync_avg_ns, prof_write_xfer_avg_ns;
+    uint64_t worker_drain_calls, worker_drain_empty, worker_wait_enq;
+    uint64_t slot_acct_leak;
+    uint64_t worker_window;
     struct extstore_page_data *page_data;
 };
 
@@ -44,12 +47,10 @@ struct extstore_conf {
     unsigned int page_size; // ideally 64-256M in size
     unsigned int page_count;
     unsigned int page_buckets; // number of size-class buckets for remote slots
-    unsigned int io_threadcount; // = number of RDMA QPs
-    unsigned int io_depth;     // max outstanding RDMA ops per IO thread
     // RDMA port additions:
     unsigned int slot_size;    // bounce/staging slot size (>= max remote object)
-    unsigned int read_slots;   // bounce slots per IO thread (<= 64)
-    unsigned int write_slots;  // total staging slots
+    unsigned int read_slots;   // bounce slots per worker (<= 64)
+    unsigned int write_slots;  // total worker staging slots
     unsigned int worker_window;   // v2: per-worker outstanding cap (<= 64)
     unsigned int qp_per_worker;   // v2: QPs per worker (1..EXT_QP_MAX)
 };
@@ -65,6 +66,9 @@ struct extstore_conf_file {
 /* v2 (P2a): worker-inline READ path. */
 #define EXT_QP_MAX 4          /* ext_qp_per_worker upper bound */
 #define EXT_ORD_LIMIT 16      /* HCA max_qp_rd_atom; matches initiator_depth */
+#ifndef EXT_SLOT_SIZE_DEFAULT
+#define EXT_SLOT_SIZE_DEFAULT 256
+#endif
 
 enum obj_io_mode {
     OBJ_IO_READ = 0,
@@ -75,7 +79,7 @@ typedef struct _obj_io obj_io;
 typedef void (*obj_io_cb)(void *e, obj_io *io, int ret);
 
 /* An object for both reads and writes to the storage engine.
- * Once an IO is submitted, ->next may be changed by the IO thread. It is not
+ * Once an IO is submitted, ->next may be changed by the owning worker. It is not
  * safe to further modify the IO stack until the entire request is completed.
  */
 struct _obj_io {
@@ -106,7 +110,6 @@ struct ext_loc {
 enum extstore_res {
     EXTSTORE_INIT_OOM = 1,
     EXTSTORE_INIT_OPEN_FAIL,
-    EXTSTORE_INIT_THREAD_FAIL,
     EXTSTORE_INIT_SELFTEST_FAIL
 };
 
@@ -115,10 +118,9 @@ void *extstore_init(struct extstore_conf_file *fh, struct extstore_conf *cf, enu
 /* Allocate a remote slot of `len` bytes in size-class `bucket`. 0 on success. */
 int extstore_alloc(void *ptr, unsigned int len, unsigned int bucket, struct ext_loc *out);
 void extstore_free_loc(void *ptr, const struct ext_loc *loc);
-int extstore_submit(void *ptr, obj_io *io);
 
-/* v2 (P2a) worker-inline READ API. All *_worker functions touch only the
- * calling worker's resources (shared-nothing; see md/V2_CODE_SPEC.md P2a).
+/* v2 worker-inline READ/WRITE API. All *_worker functions touch only the
+ * calling worker's resources (shared-nothing; see md/V2_CODE_SPEC.md P2).
  * prepare/create run in the MAIN thread before conns are dispatched. */
 int extstore_workers_prepare(void *ptr, unsigned int nworkers,
                              unsigned int nqp, unsigned int window);
@@ -130,11 +132,7 @@ int extstore_worker_post_write(void *worker, obj_io *io);
 int extstore_worker_drain(void *worker, int budget);
 unsigned int extstore_worker_outstanding(void *worker);
 void *extstore_worker_current(void); /* set during drain; for retry re-post */
-/* Staging slots for the write path (ciphertext source for RDMA WRITE). */
-char *extstore_staging_get(void *ptr);
-void extstore_staging_put(void *ptr, char *slot);
 int extstore_check(void *ptr, unsigned int page_id, uint64_t page_version);
-int extstore_delete(void *ptr, unsigned int page_id, uint64_t page_version, unsigned int count, unsigned int bytes);
 void extstore_get_stats(void *ptr, struct extstore_stats *st);
 uint64_t extstore_prof_stamp(void);
 void extstore_prof_read_done(void *ptr, obj_io *io,

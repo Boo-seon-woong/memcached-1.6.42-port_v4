@@ -376,7 +376,6 @@ struct thread_stats {
 #endif
 #undef X
     struct slab_stats slab_stats[MAX_NUMBER_OF_SLAB_CLASSES];
-    uint64_t lru_hits[POWER_LARGEST];
     uint64_t read_buf_count;
     uint64_t read_buf_bytes;
     uint64_t read_buf_bytes_free;

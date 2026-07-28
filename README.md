@@ -1,82 +1,63 @@
-# memcached-1.6.42 RDMA remote-memory port
+# memcached-1.6.42 remote-memory port v2
 
-memcached의 extstore backend를 flash에서 **암호화된 원격 메모리**로 교체한 port다.
-client↔memcached TCP protocol은 그대로 두고, 성공한 SET value는 AES-256-GCM으로
-seal한 뒤 one-sided RDMA WRITE가 완료돼야 `STORED`가 되며, local RAM에는
-`ITEM_HDR` stub만 남는다. local value cache도 fallback도 없다.
+memcached extstore를 AES-256-GCM 보호 one-sided RDMA remote memory로 바꾼
+remote-only port다. client protocol은 TCP 그대로이며 local hash에는
+`ITEM_HDR` stub만 남는다.
 
 ## 현재 상태
 
-| 항목 | 값 |
-|---|---|
-| 상태 | 구현 완료, 성능 측정 단계 |
-| 기준 commit | `597fc83` |
-| 성능 binary SHA-256 | `564505f442dce8cf0695df4391dae529de33102083f54011ffa8a660a957cf33` (tree의 `./memcached`와 동일) |
-| guest | SEV-SNP, 24 vCPU, 48 GB configured RAM |
-| 운영점 | `mtT=8 × c16`, `mcT=8`, `pipeline=8`, `QP/ext=8`, `depth=16`, `-R 1024` |
-| workload | GET-only, 64 B value, 1,000,000 preloaded keys, crypto ON |
+P0~P2b source 구현은 완료됐다. GET과 SET은 모두 memcached worker가 자기
+QP/CQ/bounce/staging으로 처리하며 extstore IO thread와 구형 submit queue는
+삭제됐다. clean build와 `testapp` 56/56은 통과했다.
 
-같은 binary·같은 운영점의 remote GET throughput 실측:
+기존 P2b 동작 실측은 `mcT=12, window=16, pipeline=64, drain_spin=1024`에서
+5.646M GET/s, 1.991 server CPU µs/op, correctness 0이었다. 그 측정 당시에도
+요청은 전부 inline이었지만 unused bootstrap QP와 dead code가 남아 있었다.
+이번 완전 삭제 tree의 Ariel↔Genie smoke와 off-box 성능은 아직 재실행하지
+않았으므로 기존 수치를 새 binary의 결과로 간주하면 안 된다.
 
-| 측정일 | remote GET/s | avg | p50 | p99 | 문서 |
-|---|---:|---:|---:|---:|---|
-| 2026-07-24 | 2.445M | 22.252µs | 20.300µs | 59.600µs | [FRONTIER](md/FRONTIER_7POINT_20260724.md) |
-| 2026-07-27 | 2.967M | 20.888µs | 20.400µs | 43.700µs | [SENSITIVITY](md/SENSITIVITY_THREAD_PIPELINE_20260727.md) |
+## 문서 읽기 순서
 
-두 값은 같은 binary와 같은 shape인데 21% 차이가 난다. **날짜가 다른 절대값을
-섞어 최적점을 고르지 않는다.** 각 결론은 같은 실행 안의 상대 비교로만 내린다.
-avg `<30µs`는 두 실행 모두 충족하고 p99 `<30µs`는 어느 point도 충족하지 못했다.
+1. [GLOSSARY.md](GLOSSARY.md) — v2 변수, 단위, correctness 계약
+2. [md/V2_REMODIFICATION_SPEC.md](md/V2_REMODIFICATION_SPEC.md) — 계획과 현재 단계
+3. [md/V2_CODE_SPEC.md](md/V2_CODE_SPEC.md) — 실제 call path와 검증 게이트
+4. [SOURCE_CHANGE_SPEC.md](SOURCE_CHANGE_SPEC.md) — v1 source history
+5. [EXTSTORE_RDMA_PORTING.md](EXTSTORE_RDMA_PORTING.md) — v1 설계/실측 history
 
-## 읽기 순서
+4~5의 `ext_threads/ext_io_depth` 설명은 v1 기록이며 v2 실행 계약이 아니다.
 
-이 순서대로 읽으면 용어 → 구조 → 결정 → 재현 → 결과 → 원자료로 이어진다.
-
-| # | 문서 | 내용 |
-|---|---|---|
-| 1 | [`GLOSSARY.md`](GLOSSARY.md) | thread, QP, depth, pipeline, slot 등 **모든 변수의 정의**. 다른 문서는 여기 이름만 쓴다. |
-| 2 | [`SOURCE_CHANGE_SPEC.md`](SOURCE_CHANGE_SPEC.md) | 현재 source가 실제로 하는 일. 파일별 변경 범위와 불변식. |
-| 3 | [`EXTSTORE_RDMA_PORTING.md`](EXTSTORE_RDMA_PORTING.md) | 채택·폐기·보류된 설계 결정과 그 근거. |
-| 4 | [`md/experiment.md`](md/experiment.md) | 재현 절차와 측정 계약. |
-| 5 | [`md/FRONTIER_7POINT_20260724.md`](md/FRONTIER_7POINT_20260724.md) | 현재 운영점을 고른 실험과 stock 동일-shape control. |
-| 6 | [`md/SENSITIVITY_THREAD_PIPELINE_20260727.md`](md/SENSITIVITY_THREAD_PIPELINE_20260727.md) | worker thread / pipeline 단일축 민감도(최신 실행). |
-| 7 | [`md/CPU_COST_ACCOUNTING.md`](md/CPU_COST_ACCOUNTING.md) | CPU-µs/op 회계. 최적화 우선순위의 근거. |
-| 8 | [`md/CPU_OPTIMIZATION_ROLLOUT.md`](md/CPU_OPTIMIZATION_ROLLOUT.md) | 패치를 하나씩 적용한 당시 측정 기록. |
-| 9 | [`md/CONFIG_MATRIX_10S_20260724.md`](md/CONFIG_MATRIX_10S_20260724.md) | 최초 전체 matrix. 5–6의 전 단계 기록. |
-| 10 | [`md/RAW_DATA_INDEX.md`](md/RAW_DATA_INDEX.md) | 모든 실험 raw 파일의 위치. |
-
-stock 1.6.42를 이해하기 위한 자료는 별도이며 port 동작을 설명하지 않는다.
-
-- [`ARCHITECTURE.md`](ARCHITECTURE.md) — stock memcached 전체 구조
-- [`ARCHITECTURE_STUDY.md`](ARCHITECTURE_STUDY.md) — stock의 데이터부/통신부 분리
-- [`EXTSTORE_READING.md`](EXTSTORE_READING.md) — stock extstore(flash) 독해 노트
-
-[`conversation.md`](conversation.md)는 ariel(guest)과 genie(remote host) 사이의
-fabric 예약·장애 대응 채널 로그다. 문서가 아니라 append-only 기록이다.
-
-## 빌드와 실행
+## 빌드
 
 ```bash
-./configure && make                # extstore는 기본 on, RDMA/OpenSSL link는 Makefile.am에 있음
-
-LD_LIBRARY_PATH=$HOME/covlib MLX5_COHERENT_QP=1 MLX5_COHERENT_CQ=1 \
-EXT_CRYPTO_KEY=./ext.key EXT_SLOT_SIZE=256 EXT_READ_SLOTS=64 EXT_RDMA_PROF=1 \
-./memcached -p 11211 -U 0 -t 8 -m 2048 -c 8192 -R 1024 \
-    -o ext_path=10.99.0.2:11212:4g,ext_threads=8,ext_io_depth=16
+./configure
+make -j"$(nproc)"
+./testapp
+./tools/test-v2.sh
 ```
 
-covlib(patched libibverbs/libmlx5)와 `MLX5_COHERENT_*`가 없으면 `rdma_cm`이
-hang한다. remote 쪽은 `genie-server/genie_memd <port> <size> --prefill`이다.
-자세한 조건은 [`GLOSSARY.md`](GLOSSARY.md) §7에 있다.
+upstream 전체 `make test`에는 v2가 의도적으로 제거한 eviction, chunked
+remote object, flash extstore 옵션 테스트가 포함된다. v2 호환 suite와 skip
+사유는 `tools/test-v2.sh`, `t/SKIPPED_V2.list`가 authority다.
 
-**빌드 함정**: 이 tree는 automake 1.17로 생성됐는데 시스템 automake는 1.16.5다.
-`Makefile.am`을 건드리면 `make`가 regen을 시도하다 실패한다. 편집한 뒤에는
-timestamp를 생성물이 더 새것이 되도록 정렬한다.
+## v2 실행 예
 
 ```bash
-touch configure.ac && sleep 1 && touch aclocal.m4 Makefile.am && sleep 1 && \
-touch configure config.h.in Makefile.in && sleep 1 && \
-touch config.status config.h Makefile stamp-h1
+LD_LIBRARY_PATH="$HOME/covlib:$PWD" \
+MLX5_COHERENT_QP=1 MLX5_COHERENT_CQ=1 \
+EXT_CRYPTO_KEY="$PWD/ext.key" EXT_SELFTEST=1 \
+EXT_SLOT_SIZE=256 EXT_READ_SLOTS=64 EXT_RDMA_PROF=1 \
+./memcached -p 11211 -U 0 -t 12 -m 2048 -c 8192 -R 1024 \
+  -o ext_path=10.99.0.2:11212:4g,ext_worker_window=16,\
+ext_qp_per_worker=1,ext_drain_spin=1024
 ```
+
+정상 시작은 server log의 `genie_connect OK`와
+`extstore selftest: OK`로 확인한다. `ext_threads`, `ext_io_depth`는
+삭제된 v1 옵션이다.
+
+canonical 실행 도구는 `tools/config-matrix-10s.sh`와
+`tools/cpu-stage-detail.sh`다. 결과는 binary hash, 정확한 command,
+server/memtier raw text, stats 시작/종료, CSV를 함께 보존한다.
 
 ---
 

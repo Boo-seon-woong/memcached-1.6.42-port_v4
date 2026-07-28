@@ -26,14 +26,11 @@
 #include "extstore.h"
 #include <time.h>
 
-/* EXT_RDMA_PROF (D6): runtime-gated in-server span profiling. EXT_WRITE_BATCH
- * caps the posting round so each SYNC advise is attributable to one op. */
+/* EXT_RDMA_PROF (D6): runtime-gated in-server span profiling. */
 #define PROF_BUCKETS 32768     /* x100ns => 0..3.27ms, captures the contention tail */
 #define PROF_BUCKET_NS 100
 static int g_prof_on = 0;
-static unsigned int g_batch_limit = 32;      /* posting-round cap (<= wrs[] size) */
 static double g_ns_per_cycle = 0.0;          /* rdtsc cycle -> ns */
-static _Thread_local unsigned int g_submit_io_idx = UINT_MAX;
 
 static inline uint64_t prof_rdtsc(void) { return __builtin_ia32_rdtsc(); }
 
@@ -120,31 +117,31 @@ struct loc_stack { struct ext_loc *arr; int top, cap; };
 
 typedef struct store_engine store_engine;
 
-typedef struct {
-    pthread_mutex_t mutex;
-    pthread_cond_t cond;
-    obj_io *queue, *queue_tail;
-    struct rdma_cm_id *cm_id;     /* owns the QP after rdma_connect */
-    struct ibv_qp *qp;
-    struct ibv_cq *cq;
-    char *bounce_base;            /* read_slots * slot_size */
-    uint64_t bounce_free;         /* IO-thread owned; bit=1 -> slot free */
-    unsigned int outstanding;     /* IO-thread owned */
+typedef struct store_worker {
     store_engine *e;
-    pthread_t tid;
-    /* EXT_RDMA_PROF: per-thread span histogram (lock-free; aggregated on read).
-     * PROF_BUCKETS x PROF_BUCKET_NS covers 0..~102us; bucket = ns/100 clamped. */
-    uint64_t prof_r_count, prof_w_count, prof_r_sum_ns, prof_w_sum_ns;
-    uint32_t prof_r_hist[32768], prof_w_hist[32768];
-    /* Span v2 breakout, ns sums. */
-    uint64_t prof_r_crypto_ns, prof_w_crypto_ns;
-    uint64_t prof_r_sync_ns, prof_r_xfer_ns, prof_w_sync_ns, prof_w_xfer_ns;
-} store_iothr;
+    struct rdma_cm_id *cm_id[EXT_QP_MAX];
+    struct ibv_qp *qp[EXT_QP_MAX];
+    struct ibv_cq *cq;
+    unsigned int nqp, rr;
+    unsigned int read_out[EXT_QP_MAX];
+    unsigned int outstanding, window;
+    char *bounce_base;
+    uint64_t bounce_free;
+    char *staging_base;
+    uint64_t staging_free;
+    unsigned int staging_slots;
+    obj_io *wait_head, *wait_tail;
+    atomic_uint_fast64_t drain_calls, drain_empty, wait_enq;
+    uint64_t prof_r_count, prof_r_sum_ns;
+    uint64_t prof_r_crypto_ns, prof_r_sync_ns, prof_r_xfer_ns;
+    uint32_t prof_r_hist[PROF_BUCKETS];
+    uint64_t prof_w_count, prof_w_sum_ns;
+    uint64_t prof_w_crypto_ns, prof_w_sync_ns, prof_w_xfer_ns;
+    uint32_t prof_w_hist[PROF_BUCKETS];
+} store_worker;
 
 struct store_engine {
-    struct ibv_context *ctx;
     struct ibv_pd *pd;
-    struct ibv_mr *bounce_mr, *staging_mr;
     uint64_t raddr; uint32_t rkey;       /* genie MR */
     store_page *pages;
     store_page **page_buckets;           /* active page per bucket */
@@ -153,24 +150,14 @@ struct store_engine {
     size_t page_size;
     unsigned int page_count, page_bucketcount;
     unsigned int slot_size, read_slots;
-    store_iothr *io_threads;
-    unsigned int io_threadcount, io_depth;
-    unsigned int last_io_thread;
-    /* v2 (P2a): worker-inline READ path */
-    struct store_worker **workers;
+    store_worker **workers;
     unsigned int worker_count, w_nqp, w_window;
-    bool io_thread_spawn;
     char *wbounce_base;
     struct ibv_mr *wbounce_mr;
     char *wstaging_base;                 /* P2b */
     struct ibv_mr *wstaging_mr;
-    unsigned int w_staging_slots;
-    struct sockaddr_in peer;             /* genie addr, for worker connects */
-    /* staging pool (write path) */
-    char *staging_base;
-    char **staging_free; int staging_top; unsigned int staging_count;
-    pthread_mutex_t staging_mutex;
-    pthread_cond_t staging_cond;
+    unsigned int w_staging_slots, write_slots;
+    struct sockaddr_in peer;
     atomic_uint_fast64_t dead;           /* QP error -> fail-fast */
     pthread_mutex_t mutex;               /* pages / buckets / freeloc */
     struct extstore_stats stats;
@@ -182,7 +169,6 @@ const char *extstore_err(enum extstore_res res) {
     switch (res) {
         case EXTSTORE_INIT_OOM: rv = "failed to allocate engine"; break;
         case EXTSTORE_INIT_OPEN_FAIL: rv = "failed to open RDMA device / connect genie"; break;
-        case EXTSTORE_INIT_THREAD_FAIL: rv = "failed to spawn IO thread"; break;
         case EXTSTORE_INIT_SELFTEST_FAIL:
             rv = "remote memory self-test failed (see extstore selftest lines above)"; break;
         default: break;
@@ -190,10 +176,8 @@ const char *extstore_err(enum extstore_res res) {
     return rv;
 }
 
-/* ---- RDMA connection via rdma_cm (IP-based; CM resolves GID/route/MTU) ----
- * One RC connection per IO thread. Synchronous CM (one-shot at init). The genie
- * server hands back the remote MR (addr,rkey,size) in the accept private_data.
- */
+/* RDMA CM is synchronous during worker setup. Genie returns the remote MR
+ * (addr, rkey, size) in the first connection's accept private_data. */
 static int cm_wait(struct rdma_event_channel *ch, enum rdma_cm_event_type want,
                    struct rdma_cm_event **out) {
     struct rdma_cm_event *ev;
@@ -207,247 +191,6 @@ static int cm_wait(struct rdma_event_channel *ch, enum rdma_cm_event_type want,
     return 0;
 }
 
-/* Connect one QP for thread `ti`. On the first connection, learns the remote MR.
- * Uses/sets e->pd (shared across all QPs, from the resolved device context). */
-static int cm_connect_one(store_engine *e, struct sockaddr *dst, unsigned int ti,
-                          bool first, uint64_t *size_out) {
-    store_iothr *t = &e->io_threads[ti];
-#define CM_FAIL(step) do { fprintf(stderr, "extstore rdma_cm: %s failed (thread %u): %s\n", \
-        step, ti, strerror(errno)); return -1; } while (0)
-    struct rdma_event_channel *ch = rdma_create_event_channel();
-    if (!ch) CM_FAIL("create_event_channel");
-    if (rdma_create_id(ch, &t->cm_id, NULL, RDMA_PS_TCP)) CM_FAIL("create_id");
-    if (rdma_resolve_addr(t->cm_id, NULL, dst, CM_TIMEOUT_MS)) CM_FAIL("resolve_addr");
-    if (cm_wait(ch, RDMA_CM_EVENT_ADDR_RESOLVED, NULL)) CM_FAIL("ADDR_RESOLVED event");
-    if (rdma_resolve_route(t->cm_id, CM_TIMEOUT_MS)) CM_FAIL("resolve_route");
-    if (cm_wait(ch, RDMA_CM_EVENT_ROUTE_RESOLVED, NULL)) CM_FAIL("ROUTE_RESOLVED event");
-
-    if (first) {
-        e->pd = ibv_alloc_pd(t->cm_id->verbs);
-        if (!e->pd) CM_FAIL("alloc_pd");
-    }
-    t->cq = ibv_create_cq(t->cm_id->verbs, e->io_depth * 2, NULL, NULL, 0);
-    if (!t->cq) CM_FAIL("create_cq");
-    struct ibv_qp_init_attr ia = { .send_cq = t->cq, .recv_cq = t->cq,
-        .qp_type = IBV_QPT_RC, .cap = { .max_send_wr = e->io_depth + 1,
-            .max_recv_wr = 1, .max_send_sge = 1, .max_recv_sge = 1 } };
-    if (rdma_create_qp(t->cm_id, e->pd, &ia)) CM_FAIL("create_qp");
-    t->qp = t->cm_id->qp;
-
-    struct rdma_conn_param cp = { .responder_resources = 16, .initiator_depth = 16,
-        .retry_count = 7, .rnr_retry_count = 7 };
-    struct rdma_cm_event *ev;
-    if (rdma_connect(t->cm_id, &cp)) CM_FAIL("connect");
-    if (cm_wait(ch, RDMA_CM_EVENT_ESTABLISHED, &ev)) CM_FAIL("ESTABLISHED event");
-    if (first) {
-        if (ev->param.conn.private_data_len < sizeof(struct xrd_mr_info)) {
-            rdma_ack_cm_event(ev); return -1;
-        }
-        struct xrd_mr_info mi;
-        memcpy(&mi, ev->param.conn.private_data, sizeof(mi));
-        e->raddr = mi.raddr; e->rkey = mi.rkey; *size_out = mi.size;
-    }
-    rdma_ack_cm_event(ev);
-    /* keep the event channel; not polled after connect */
-    return 0;
-}
-
-static int genie_connect(store_engine *e, const char *host, int port,
-                         uint64_t *size_out) {
-    struct sockaddr_in sa = { .sin_family = AF_INET, .sin_port = htons(port) };
-    if (inet_pton(AF_INET, host, &sa.sin_addr) != 1) return -1;
-    e->peer = sa;
-    for (unsigned int i = 0; i < e->io_threadcount; i++)
-        if (cm_connect_one(e, (struct sockaddr *)&sa, i, i == 0, size_out))
-            return -1;
-    return 0;
-}
-
-/* ---- IO thread: post batch -> poll -> batched sync -> cb (SPEC §6) ---- */
-
-static void *extstore_io_thread(void *arg) {
-    store_iothr *t = arg;
-    store_engine *e = t->e;
-    unsigned int depth = e->io_depth;
-    struct ibv_wc wc[32];
-    struct ibv_send_wr wrs[32], *bad;
-    struct ibv_sge sg[32], sync_sg[32], dev_sg[32];
-
-    while (1) {
-        pthread_mutex_lock(&t->mutex);
-        while (!t->queue && !t->outstanding)
-            pthread_cond_wait(&t->cond, &t->mutex);
-
-        int n = 0;
-        while (t->queue && t->outstanding + n < depth && n < (int)g_batch_limit) {
-            obj_io *io = t->queue;
-            int slot = -1;
-            if (io->mode == OBJ_IO_READ) {
-                if (t->bounce_free == 0) break;         /* no bounce slot: backpressure */
-                slot = __builtin_ffsll((long long)t->bounce_free) - 1;
-            }
-            t->queue = io->next;
-            if (!t->queue) t->queue_tail = NULL;
-            if (io->mode == OBJ_IO_READ) {
-                t->bounce_free &= ~(1ULL << slot);
-                io->buf = t->bounce_base + (size_t)slot * e->slot_size;
-            }
-            sg[n] = (struct ibv_sge){ .addr = (uintptr_t)io->buf, .length = io->len,
-                .lkey = (io->mode == OBJ_IO_READ) ? e->bounce_mr->lkey
-                                                  : e->staging_mr->lkey };
-            wrs[n] = (struct ibv_send_wr){ .wr_id = (uintptr_t)io, .sg_list = &sg[n],
-                .num_sge = 1, .send_flags = IBV_SEND_SIGNALED,
-                .opcode = (io->mode == OBJ_IO_READ) ? IBV_WR_RDMA_READ
-                                                    : IBV_WR_RDMA_WRITE };
-            wrs[n].wr.rdma.remote_addr = e->raddr +
-                    e->pages[io->page_id].remote_off + io->offset;
-            wrs[n].wr.rdma.rkey = e->rkey;
-            wrs[n].next = NULL;
-            if (n) wrs[n-1].next = &wrs[n];
-            n++;
-        }
-        pthread_mutex_unlock(&t->mutex);
-
-        if (n) {
-            /* push staging to the device before the NIC reads it (mirror of the
-             * SYNC_FOR_CPU on the read side). Only the WRITE sges need it. */
-            int nd = 0;
-            for (int i = 0; i < n; i++)
-                if (wrs[i].opcode == IBV_WR_RDMA_WRITE) dev_sg[nd++] = sg[i];
-            uint64_t t_sync_start = g_prof_on && nd ? prof_rdtsc() : 0;
-            if (t_sync_start)
-                for (int i = 0; i < n; i++)
-                    if (wrs[i].opcode == IBV_WR_RDMA_WRITE) {
-                        obj_io *io = (obj_io *)(uintptr_t)wrs[i].wr_id;
-                        if (io->t_start && io->t_end >= io->t_start)
-                            t->prof_w_crypto_ns += (uint64_t)
-                                    ((io->t_end - io->t_start) * g_ns_per_cycle);
-                    }
-            if (nd) {
-                int adv = ibv_advise_mr(e->pd, IBV_ADVISE_MR_ADVICE_SYNC_FOR_DEVICE,
-                                        IBV_ADVISE_MR_FLAG_FLUSH, dev_sg, nd);
-                static _Atomic int dev_warned;
-                if (adv && !atomic_exchange(&dev_warned, 1))
-                    fprintf(stderr, "extstore: ibv_advise_mr(SYNC_FOR_DEVICE) failed: %s"
-                            " — writes may transmit pre-DMA contents\n", strerror(adv));
-            }
-            /* WRITE t_end advances from post-encrypt to post-sync. */
-            if (g_prof_on && nd) {
-                uint64_t ts = prof_rdtsc();
-                for (int i = 0; i < n; i++)
-                    if (wrs[i].opcode == IBV_WR_RDMA_WRITE) {
-                        ((obj_io *)(uintptr_t)wrs[i].wr_id)->t_end = ts;
-                        t->prof_w_sync_ns += (uint64_t)
-                                ((ts - t_sync_start) * g_ns_per_cycle);
-                    }
-            }
-            /* READ span v2 opens immediately before post and closes after open. */
-            if (g_prof_on) {
-                uint64_t ts = prof_rdtsc();
-                for (int i = 0; i < n; i++)
-                    if (wrs[i].opcode == IBV_WR_RDMA_READ) {
-                        obj_io *io = (obj_io *)(uintptr_t)wrs[i].wr_id;
-                        io->t_start = ts;
-                        io->t_end = 0;
-                    }
-            }
-            if (ibv_post_send(t->qp, &wrs[0], &bad)) {
-                atomic_store(&e->dead, 1);
-                pthread_mutex_lock(&e->staging_mutex);
-                pthread_cond_broadcast(&e->staging_cond);
-                pthread_mutex_unlock(&e->staging_mutex);
-                STAT_L(e); e->stats.engine_dead = 1; STAT_UL(e);
-                for (int i = 0; i < n; i++) {
-                    obj_io *io = (obj_io *)(uintptr_t)wrs[i].wr_id;
-                    STAT_L(e);
-                    if (io->mode == OBJ_IO_READ) e->stats.read_failures++;
-                    else e->stats.write_failures++;
-                    STAT_UL(e);
-                    if (io->mode == OBJ_IO_READ)
-                        t->bounce_free |= 1ULL << ((io->buf - t->bounce_base) / e->slot_size);
-                    io->cb(e, io, -1);
-                }
-            } else {
-                t->outstanding += n;
-            }
-        }
-
-        int c = ibv_poll_cq(t->cq, 32, wc);
-        if (c <= 0) { if (t->outstanding) sched_yield(); continue; }
-        /* WRITE span closes at the CQE reap; READ span closes after SYNC_FOR_CPU. */
-        uint64_t t_poll = g_prof_on ? prof_rdtsc() : 0;
-
-        /* batched SWIOTLB->private sync for READs in this batch */
-        int nsync = 0;
-        for (int i = 0; i < c; i++) {
-            obj_io *io = (obj_io *)(uintptr_t)wc[i].wr_id;
-            if (io->mode == OBJ_IO_READ && wc[i].status == IBV_WC_SUCCESS)
-                sync_sg[nsync++] = (struct ibv_sge){ .addr = (uintptr_t)io->buf,
-                    .length = io->len, .lkey = e->bounce_mr->lkey };
-        }
-        if (nsync) {
-            /* Return was ignored: if the driver does not implement ADVISE (some
-             * do return EOPNOTSUPP), reads see whatever is in the bounce buffer
-             * and the failure only shows up later as GCM tag mismatches. Warn
-             * once so that is diagnosable instead of silent. */
-            int adv = ibv_advise_mr(e->pd, IBV_ADVISE_MR_ADVICE_SYNC_FOR_CPU,
-                                    IBV_ADVISE_MR_FLAG_FLUSH, sync_sg, nsync);
-            static _Atomic int advise_warned;
-            if (adv && !atomic_exchange(&advise_warned, 1))
-                fprintf(stderr, "extstore: ibv_advise_mr(SYNC_FOR_CPU) failed: %s"
-                        " — bounce reads are not being synced\n", strerror(adv));
-        }
-        uint64_t t_sync_done = g_prof_on ? prof_rdtsc() : 0;
-
-        for (int i = 0; i < c; i++) {
-            obj_io *io = (obj_io *)(uintptr_t)wc[i].wr_id;
-            if (g_prof_on && wc[i].status == IBV_WC_SUCCESS && io->t_start) {
-                if (io->mode == OBJ_IO_READ) {
-                    t->prof_r_xfer_ns += (uint64_t)((t_poll - io->t_start) * g_ns_per_cycle);
-                    t->prof_r_sync_ns += (uint64_t)((t_sync_done - t_poll) * g_ns_per_cycle);
-                    io->t_end = t_sync_done;
-                } else {
-                    prof_record(t->prof_w_hist, &t->prof_w_count, &t->prof_w_sum_ns,
-                                t_poll - io->t_start);
-                    t->prof_w_xfer_ns += (uint64_t)((t_poll - io->t_end) * g_ns_per_cycle);
-                }
-            }
-            int ok = (wc[i].status == IBV_WC_SUCCESS);
-            /* The callback owns io and may free it (storage_write_done_cb frees
-             * the enclosing flush_ctx), so snapshot everything we still need. */
-            int is_read = (io->mode == OBJ_IO_READ);
-            unsigned int len = io->len;
-            char *buf = io->buf;
-            if (!ok) {
-                atomic_store(&e->dead, 1);
-                pthread_mutex_lock(&e->staging_mutex);
-                pthread_cond_broadcast(&e->staging_cond);
-                pthread_mutex_unlock(&e->staging_mutex);
-                STAT_L(e);
-                e->stats.engine_dead = 1;
-                if (is_read) e->stats.read_failures++;
-                else e->stats.write_failures++;
-                STAT_UL(e);
-            }
-            io->cb(e, io, ok ? (int)len : -1);
-            if (is_read) {
-                int s = (buf - t->bounce_base) / e->slot_size;
-                t->bounce_free |= 1ULL << s;
-            } else if (ok) {
-                STAT_L(e);
-                e->stats.objects_written++; e->stats.bytes_written += len;
-                STAT_UL(e);
-            }
-        }
-        t->outstanding -= c;
-        STAT_L(e);
-        e->stats.objects_read += nsync;
-        for (int i = 0; i < nsync; i++) e->stats.bytes_read += sync_sg[i].length;
-        STAT_UL(e);
-    }
-    return NULL;
-}
-
 /* ---- init ---- */
 
 /* EXT_SELFTEST=1: write a known pattern to remote memory and RDMA READ it back
@@ -458,18 +201,17 @@ static void *extstore_io_thread(void *arg) {
  * only discovered to be garbage on read-back, long after the benchmark ran.
  * Opt-in, so the client can still be brought up for connect/latency work while
  * the kernel-side sync is missing. */
-static int selftest(store_engine *e) {
-    store_iothr *t = &e->io_threads[0];
+static int selftest(store_engine *e, store_worker *w) {
     unsigned int len = e->slot_size < 256 ? e->slot_size : 256;
-    unsigned char *src = (unsigned char *)e->staging_base;
-    unsigned char *dst = (unsigned char *)t->bounce_base;
+    unsigned char *src = (unsigned char *)w->staging_base;
+    unsigned char *dst = (unsigned char *)w->bounce_base;
     for (unsigned int i = 0; i < len; i++) src[i] = (unsigned char)(0x5A ^ (i * 31));
     memset(dst, 0, len);
 
     /* page 0 offset 0: no object lives there yet (pages are handed out top-down) */
     for (int pass = 0; pass < 2; pass++) {          /* 0 = WRITE out, 1 = READ back */
         struct ibv_sge sg = { .addr = (uintptr_t)(pass ? dst : src), .length = len,
-            .lkey = pass ? e->bounce_mr->lkey : e->staging_mr->lkey };
+            .lkey = pass ? e->wbounce_mr->lkey : e->wstaging_mr->lkey };
         struct ibv_send_wr *bad, wr = { .wr_id = (uint64_t)pass, .sg_list = &sg,
             .num_sge = 1, .send_flags = IBV_SEND_SIGNALED,
             .opcode = pass ? IBV_WR_RDMA_READ : IBV_WR_RDMA_WRITE };
@@ -484,7 +226,7 @@ static int selftest(store_engine *e) {
                 fprintf(stderr, "extstore selftest: SYNC_FOR_DEVICE advise failed: %s\n",
                         strerror(adv));
         }
-        if (ibv_post_send(t->qp, &wr, &bad)) {
+        if (ibv_post_send(w->qp[0], &wr, &bad)) {
             fprintf(stderr, "extstore selftest: post_send(%s) failed: %s\n",
                     pass ? "READ" : "WRITE", strerror(errno));
             return -1;
@@ -492,7 +234,7 @@ static int selftest(store_engine *e) {
         struct ibv_wc wc;
         int c = 0;
         for (long spin = 0; spin < 500000000L && c == 0; spin++)
-            c = ibv_poll_cq(t->cq, 1, &wc);
+            c = ibv_poll_cq(w->cq, 1, &wc);
         if (c <= 0) {
             fprintf(stderr, "extstore selftest: no completion for %s\n",
                     pass ? "READ" : "WRITE");
@@ -534,97 +276,24 @@ void *extstore_init(struct extstore_conf_file *fh, struct extstore_conf *cf,
         enum extstore_res *res) {
     store_engine *e = calloc(1, sizeof(*e));
     if (!e) { *res = EXTSTORE_INIT_OOM; return NULL; }
+
     e->page_size = cf->page_size;
+    e->page_bucketcount = cf->page_buckets ? cf->page_buckets : 1;
     e->slot_size = cf->slot_size;
     e->read_slots = cf->read_slots > 64 ? 64 : cf->read_slots;
-    /* v2 (P2b): ext_threads=0 means "no IO threads at all" — READ and WRITE
-     * are both worker-inline now. One QP is still connected so the engine can
-     * learn pd/raddr/rkey; it is simply never polled. */
-    e->io_thread_spawn = (cf->io_threadcount > 0);
-    e->io_threadcount = cf->io_threadcount ? cf->io_threadcount : 1;
-    e->io_depth = cf->io_depth ? cf->io_depth : 64;
+    e->write_slots = cf->write_slots ? cf->write_slots : 256;
+    e->peer = (struct sockaddr_in){ .sin_family = AF_INET,
+        .sin_port = htons(fh->cport) };
+    if (inet_pton(AF_INET, fh->file, &e->peer.sin_addr) != 1) {
+        *res = EXTSTORE_INIT_OPEN_FAIL;
+        free(e);
+        return NULL;
+    }
     pthread_mutex_init(&e->mutex, NULL);
     pthread_mutex_init(&e->stats_mutex, NULL);
-    pthread_mutex_init(&e->staging_mutex, NULL);
-    pthread_cond_init(&e->staging_cond, NULL);
     atomic_store(&e->dead, 0);
-
     if (getenv("EXT_RDMA_PROF")) { g_prof_on = 1; prof_calibrate(); }
-    { const char *b = getenv("EXT_WRITE_BATCH");
-      if (b) { unsigned v = (unsigned)strtoul(b, NULL, 10);
-               if (v >= 1 && v <= 32) g_batch_limit = v; } }
-
-    /* read-bounce + write-staging pools (SEV: shared memory; §9). Registration
-     * happens after we have a pd from the connection. */
-    size_t bsz = (size_t)e->io_threadcount * e->read_slots * e->slot_size;
-    char *bbase = dma_alloc(bsz);
-    if (!bbase) { *res = EXTSTORE_INIT_OOM; goto fail; }
-
-    e->staging_count = cf->write_slots ? cf->write_slots : 256;
-    size_t ssz = (size_t)e->staging_count * e->slot_size;
-    e->staging_base = dma_alloc(ssz);
-    if (!e->staging_base) { *res = EXTSTORE_INIT_OOM; goto fail; }
-
-    /* per-thread state, then connect all QPs via rdma_cm (sets e->pd, e->raddr) */
-    e->io_threads = calloc(e->io_threadcount, sizeof(store_iothr));
-    for (unsigned int i = 0; i < e->io_threadcount; i++) {
-        store_iothr *t = &e->io_threads[i];
-        t->e = e;
-        pthread_mutex_init(&t->mutex, NULL);
-        pthread_cond_init(&t->cond, NULL);
-        t->bounce_base = bbase + (size_t)i * e->read_slots * e->slot_size;
-        t->bounce_free = (e->read_slots >= 64) ? ~0ULL : ((1ULL << e->read_slots) - 1);
-    }
-    uint64_t rsize = 0;
-    if (genie_connect(e, fh->file, fh->cport, &rsize)) { *res = EXTSTORE_INIT_OPEN_FAIL; goto fail; }
-    fprintf(stderr, "extstore: genie_connect OK (raddr=0x%lx rkey=0x%x size=%lu)\n",
-            (unsigned long)e->raddr, e->rkey, (unsigned long)rsize);
-
-    /* register MRs on the connection's pd */
-    e->bounce_mr = ibv_reg_mr(e->pd, bbase, bsz, IBV_ACCESS_LOCAL_WRITE);
-    if (!e->bounce_mr) fprintf(stderr, "extstore: reg_mr(bounce %zuB) failed: %s\n", bsz, strerror(errno));
-    e->staging_mr = ibv_reg_mr(e->pd, e->staging_base, ssz, IBV_ACCESS_LOCAL_WRITE);
-    if (!e->staging_mr) fprintf(stderr, "extstore: reg_mr(staging %zuB) failed: %s\n", ssz, strerror(errno));
-    if (!e->bounce_mr || !e->staging_mr) { *res = EXTSTORE_INIT_OPEN_FAIL; goto fail; }
-    e->staging_free = malloc(sizeof(char *) * e->staging_count);
-    for (unsigned int i = 0; i < e->staging_count; i++)
-        e->staging_free[i] = e->staging_base + (size_t)i * e->slot_size;
-    e->staging_top = e->staging_count;
-
-    if (getenv("EXT_SELFTEST") && selftest(e) != 0) {
-        *res = EXTSTORE_INIT_SELFTEST_FAIL; goto fail;
-    }
-
-    /* pages carve the remote MR */
-    e->page_count = rsize / e->page_size;
-    if (e->page_count == 0) { *res = EXTSTORE_INIT_OPEN_FAIL; goto fail; }
-    e->page_bucketcount = cf->page_buckets ? cf->page_buckets : 1;
-    e->pages = calloc(e->page_count, sizeof(store_page));
-    for (unsigned int i = 0; i < e->page_count; i++) {
-        store_page *p = &e->pages[i];
-        pthread_mutex_init(&p->mutex, NULL);
-        p->id = i; p->version = 1; p->remote_off = (uint64_t)i * e->page_size;
-        p->free = true; p->next = e->free_pages; e->free_pages = p;
-    }
-    e->page_buckets = calloc(e->page_bucketcount, sizeof(store_page *));
-    e->freeloc = calloc(e->page_bucketcount, sizeof(struct loc_stack));
-
-    e->stats.page_count = e->page_count;
-    e->stats.page_size = e->page_size;
-    e->stats.pages_free = e->page_count;
-
-    if (e->io_thread_spawn) {
-        for (unsigned int i = 0; i < e->io_threadcount; i++) {
-            if (pthread_create(&e->io_threads[i].tid, NULL, extstore_io_thread,
-                    &e->io_threads[i])) { *res = EXTSTORE_INIT_THREAD_FAIL; goto fail; }
-        }
-    } else {
-        fprintf(stderr, "extstore: no IO threads (worker-inline READ/WRITE)\n");
-    }
     return e;
-fail:
-    /* leak on init failure; process exits anyway (stock behaviour) */
-    return NULL;
 }
 
 /* ---- allocation (SPEC §2.4 / P-1) ---- */
@@ -637,7 +306,9 @@ static store_page *grab_active(store_engine *e, unsigned int bucket, unsigned in
     p = e->free_pages; e->free_pages = p->next;
     p->free = false; p->active = true; p->bucket = bucket; p->allocated = 0;
     e->page_buckets[bucket] = p;
+    STAT_L(e);
     e->stats.pages_free--; e->stats.pages_used++; e->stats.page_allocs++;
+    STAT_UL(e);
     return p;
 }
 
@@ -665,8 +336,10 @@ int extstore_alloc(void *ptr, unsigned int len, unsigned int bucket, struct ext_
         p->obj_count++;
         p->bytes_used += len;
         pthread_mutex_unlock(&p->mutex);
+        STAT_L(e);
         e->stats.bytes_used += len;
         e->stats.objects_used++;
+        STAT_UL(e);
         pthread_mutex_unlock(&e->mutex);
         return 0;
     }
@@ -675,80 +348,59 @@ int extstore_alloc(void *ptr, unsigned int len, unsigned int bucket, struct ext_
     out->page_id = p->id; out->page_version = p->version;
     out->offset = p->allocated; out->len = len;
     p->allocated += len; p->obj_count++; p->bytes_used += len;
+    STAT_L(e);
     e->stats.bytes_used += len; e->stats.objects_used++;
+    STAT_UL(e);
     pthread_mutex_unlock(&e->mutex);
     return 0;
 }
 
 void extstore_free_loc(void *ptr, const struct ext_loc *loc) {
     store_engine *e = ptr;
-    if (loc->page_id >= e->page_count) return;
-    unsigned int bucket = e->pages[loc->page_id].bucket;
     pthread_mutex_lock(&e->mutex);
+    if (loc->page_id >= e->page_count || loc->len == 0 ||
+            loc->offset + loc->len > e->page_size) {
+        STAT_L(e); e->stats.slot_acct_leak++; STAT_UL(e);
+        pthread_mutex_unlock(&e->mutex);
+        return;
+    }
+    store_page *p = &e->pages[loc->page_id];
+    STAT_L(e);
+    bool bad = p->version != loc->page_version ||
+        p->bucket >= e->page_bucketcount || p->obj_count == 0 ||
+        p->bytes_used < loc->len || e->stats.objects_used == 0 ||
+        e->stats.bytes_used < loc->len;
+    if (bad) {
+        e->stats.slot_acct_leak++;
+        STAT_UL(e);
+        pthread_mutex_unlock(&e->mutex);
+        return;
+    }
+    STAT_UL(e);
+    unsigned int bucket = p->bucket;
     struct loc_stack *fs = &e->freeloc[bucket];
     if (fs->top == fs->cap) {
-        fs->cap = fs->cap ? fs->cap * 2 : 64;
-        fs->arr = realloc(fs->arr, fs->cap * sizeof(struct ext_loc));
+        int cap = fs->cap ? fs->cap * 2 : 64;
+        struct ext_loc *arr = realloc(fs->arr, cap * sizeof(*arr));
+        if (!arr) {
+            STAT_L(e); e->stats.slot_acct_leak++; STAT_UL(e);
+            pthread_mutex_unlock(&e->mutex);
+            return;
+        }
+        fs->arr = arr;
+        fs->cap = cap;
     }
     fs->arr[fs->top++] = *loc;
-    if (e->stats.bytes_used >= loc->len) e->stats.bytes_used -= loc->len;
-    if (e->stats.objects_used) e->stats.objects_used--;
+    p->obj_count--;
+    p->bytes_used -= loc->len;
+    STAT_L(e);
+    e->stats.bytes_used -= loc->len;
+    e->stats.objects_used--;
+    STAT_UL(e);
     pthread_mutex_unlock(&e->mutex);
 }
 
-/* ---- submit ---- */
-
-int extstore_submit(void *ptr, obj_io *io) {
-    store_engine *e = ptr;
-    if (atomic_load(&e->dead)) {          /* fail-fast (P-5) */
-        obj_io *nx; for (obj_io *p = io; p; p = nx) { nx = p->next; p->cb(e, p, -1); }
-        return 0;
-    }
-    if (g_submit_io_idx >= e->io_threadcount)
-        g_submit_io_idx = __atomic_fetch_add(&e->last_io_thread, 1,
-                __ATOMIC_RELAXED) % e->io_threadcount;
-    unsigned int idx = g_submit_io_idx;
-    store_iothr *t = &e->io_threads[idx];
-    obj_io *tail = io; while (tail->next) tail = tail->next;
-    pthread_mutex_lock(&t->mutex);
-    if (!t->queue) t->queue = io; else t->queue_tail->next = io;
-    t->queue_tail = tail;
-    pthread_cond_signal(&t->cond);
-    pthread_mutex_unlock(&t->mutex);
-    return 0;
-}
-
-
-/* ---- v2 (P2a): worker-inline READ path (md/V2_CODE_SPEC.md P2a) ----
- * Each memcached worker owns nqp RC QPs sharing one CQ, a bounce partition,
- * and a wait list. Only the owning worker touches these; no locks. WRITEs
- * still ride the IO threads in P2a. */
-typedef struct store_worker {
-    store_engine *e;
-    struct rdma_cm_id *cm_id[EXT_QP_MAX];
-    struct ibv_qp *qp[EXT_QP_MAX];
-    struct ibv_cq *cq;
-    unsigned int nqp;
-    unsigned int rr;
-    unsigned int read_out[EXT_QP_MAX];   /* per-QP wire READs, <= EXT_ORD_LIMIT */
-    unsigned int outstanding;            /* total posted, <= window */
-    unsigned int window;
-    char *bounce_base;
-    uint64_t bounce_free;
-    char *staging_base;                  /* P2b: WRITE source partition */
-    uint64_t staging_free;
-    unsigned int staging_slots;
-    obj_io *wait_head, *wait_tail;       /* window/ORD/slot backpressure FIFO */
-    /* stats (spec: observability contract) */
-    uint64_t drain_calls, drain_empty, wait_enq;
-    /* prof block: field-compatible with store_iothr's (aggregated together) */
-    uint64_t prof_r_count, prof_r_sum_ns;
-    uint64_t prof_r_crypto_ns, prof_r_sync_ns, prof_r_xfer_ns;
-    uint32_t prof_r_hist[32768];
-    uint64_t prof_w_count, prof_w_sum_ns;
-    uint64_t prof_w_crypto_ns, prof_w_sync_ns, prof_w_xfer_ns;
-    uint32_t prof_w_hist[32768];
-} store_worker;
+/* ---- v2 worker-inline READ/WRITE path ---- */
 
 static _Thread_local store_worker *g_drain_worker = NULL;
 
@@ -758,95 +410,167 @@ unsigned int extstore_worker_outstanding(void *worker) {
     return worker ? ((store_worker *)worker)->outstanding : 0;
 }
 
-int extstore_workers_prepare(void *ptr, unsigned int nworkers,
-                             unsigned int nqp, unsigned int window) {
-    store_engine *e = ptr;
-    if (nqp < 1) nqp = 1;
-    if (nqp > EXT_QP_MAX) nqp = EXT_QP_MAX;
-    if (window < 1) window = 1;
-    if (window > 64) window = 64;        /* bounce bitmap is 64-wide */
-    e->w_nqp = nqp;
-    e->w_window = window;
-    e->worker_count = nworkers;
-    e->workers = calloc(nworkers, sizeof(store_worker *));
-    size_t bsz = (size_t)nworkers * e->read_slots * e->slot_size;
-    e->wbounce_base = dma_alloc(bsz);
-    if (!e->wbounce_base || !e->workers) return -1;
-    e->wbounce_mr = ibv_reg_mr(e->pd, e->wbounce_base, bsz, IBV_ACCESS_LOCAL_WRITE);
-    if (!e->wbounce_mr) {
-        fprintf(stderr, "extstore: reg_mr(worker bounce %zuB) failed: %s\n",
-                bsz, strerror(errno));
-        return -1;
-    }
-    /* P2b: per-worker staging partition (WRITE source), 64-slot bitmap cap. */
-    e->w_staging_slots = e->staging_count / nworkers;
-    if (e->w_staging_slots > 64) e->w_staging_slots = 64;
-    if (e->w_staging_slots < 1) e->w_staging_slots = 1;
-    size_t ssz = (size_t)nworkers * e->w_staging_slots * e->slot_size;
-    e->wstaging_base = dma_alloc(ssz);
-    if (!e->wstaging_base) return -1;
-    e->wstaging_mr = ibv_reg_mr(e->pd, e->wstaging_base, ssz, IBV_ACCESS_LOCAL_WRITE);
-    if (!e->wstaging_mr) {
-        fprintf(stderr, "extstore: reg_mr(worker staging %zuB) failed: %s\n",
-                ssz, strerror(errno));
-        return -1;
-    }
-    return 0;
-}
-
-/* cm connect for one worker QP. e->pd/raddr already learned at engine init. */
-static int cm_connect_worker_qp(store_engine *e, store_worker *w, unsigned int qi) {
-#define WCM_FAIL(step) do { fprintf(stderr, \
-        "extstore rdma_cm: %s failed (worker qp %u): %s\n", \
-        step, qi, strerror(errno)); return -1; } while (0)
+static int cm_connect_worker_qp(store_engine *e, store_worker *w,
+        unsigned int worker_id, unsigned int qi, bool first,
+        uint64_t *size_out) {
+#define WCM_FAIL(step) do { fprintf(stderr,         "extstore rdma_cm: %s failed (worker %u qp %u): %s\n",         step, worker_id, qi, strerror(errno)); return -1; } while (0)
     struct rdma_event_channel *ch = rdma_create_event_channel();
     if (!ch) WCM_FAIL("create_event_channel");
-    if (rdma_create_id(ch, &w->cm_id[qi], NULL, RDMA_PS_TCP)) WCM_FAIL("create_id");
+    if (rdma_create_id(ch, &w->cm_id[qi], NULL, RDMA_PS_TCP))
+        WCM_FAIL("create_id");
     if (rdma_resolve_addr(w->cm_id[qi], NULL, (struct sockaddr *)&e->peer,
-                          CM_TIMEOUT_MS)) WCM_FAIL("resolve_addr");
-    if (cm_wait(ch, RDMA_CM_EVENT_ADDR_RESOLVED, NULL)) WCM_FAIL("ADDR_RESOLVED event");
-    if (rdma_resolve_route(w->cm_id[qi], CM_TIMEOUT_MS)) WCM_FAIL("resolve_route");
-    if (cm_wait(ch, RDMA_CM_EVENT_ROUTE_RESOLVED, NULL)) WCM_FAIL("ROUTE_RESOLVED event");
+                          CM_TIMEOUT_MS))
+        WCM_FAIL("resolve_addr");
+    if (cm_wait(ch, RDMA_CM_EVENT_ADDR_RESOLVED, NULL))
+        WCM_FAIL("ADDR_RESOLVED event");
+    if (rdma_resolve_route(w->cm_id[qi], CM_TIMEOUT_MS))
+        WCM_FAIL("resolve_route");
+    if (cm_wait(ch, RDMA_CM_EVENT_ROUTE_RESOLVED, NULL))
+        WCM_FAIL("ROUTE_RESOLVED event");
+
+    if (first) {
+        e->pd = ibv_alloc_pd(w->cm_id[qi]->verbs);
+        if (!e->pd) WCM_FAIL("alloc_pd");
+    }
+    if (!w->cq) {
+        w->cq = ibv_create_cq(w->cm_id[qi]->verbs,
+                2 * w->window * w->nqp, NULL, NULL, 0);
+        if (!w->cq) WCM_FAIL("create_cq");
+    }
     struct ibv_qp_init_attr ia = { .send_cq = w->cq, .recv_cq = w->cq,
         .qp_type = IBV_QPT_RC, .cap = { .max_send_wr = w->window + 1,
             .max_recv_wr = 1, .max_send_sge = 1, .max_recv_sge = 1 } };
     if (rdma_create_qp(w->cm_id[qi], e->pd, &ia)) WCM_FAIL("create_qp");
     w->qp[qi] = w->cm_id[qi]->qp;
-    struct rdma_conn_param cp = { .responder_resources = 16, .initiator_depth = 16,
-        .retry_count = 7, .rnr_retry_count = 7 };
+
+    struct rdma_conn_param cp = { .responder_resources = 16,
+        .initiator_depth = 16, .retry_count = 7, .rnr_retry_count = 7 };
+    struct rdma_cm_event *ev;
     if (rdma_connect(w->cm_id[qi], &cp)) WCM_FAIL("connect");
-    if (cm_wait(ch, RDMA_CM_EVENT_ESTABLISHED, NULL)) WCM_FAIL("ESTABLISHED event");
+    if (cm_wait(ch, RDMA_CM_EVENT_ESTABLISHED, &ev))
+        WCM_FAIL("ESTABLISHED event");
+    if (first) {
+        if (ev->param.conn.private_data_len < sizeof(struct xrd_mr_info)) {
+            rdma_ack_cm_event(ev);
+            return -1;
+        }
+        struct xrd_mr_info mi;
+        memcpy(&mi, ev->param.conn.private_data, sizeof(mi));
+        e->raddr = mi.raddr;
+        e->rkey = mi.rkey;
+        *size_out = mi.size;
+    }
+    rdma_ack_cm_event(ev);
     return 0;
 #undef WCM_FAIL
+}
+
+static int pages_init(store_engine *e, uint64_t rsize) {
+    e->page_count = rsize / e->page_size;
+    if (e->page_count == 0) return -1;
+    e->pages = calloc(e->page_count, sizeof(store_page));
+    e->page_buckets = calloc(e->page_bucketcount, sizeof(store_page *));
+    e->freeloc = calloc(e->page_bucketcount, sizeof(struct loc_stack));
+    if (!e->pages || !e->page_buckets || !e->freeloc) return -1;
+    for (unsigned int i = 0; i < e->page_count; i++) {
+        store_page *p = &e->pages[i];
+        pthread_mutex_init(&p->mutex, NULL);
+        p->id = i;
+        p->version = 1;
+        p->remote_off = (uint64_t)i * e->page_size;
+        p->free = true;
+        p->next = e->free_pages;
+        e->free_pages = p;
+    }
+    e->stats.page_count = e->page_count;
+    e->stats.page_size = e->page_size;
+    e->stats.pages_free = e->page_count;
+    return 0;
+}
+
+int extstore_workers_prepare(void *ptr, unsigned int nworkers,
+                             unsigned int nqp, unsigned int window) {
+    store_engine *e = ptr;
+    if (!e || nworkers == 0) return -1;
+    if (nqp < 1) nqp = 1;
+    if (nqp > EXT_QP_MAX) nqp = EXT_QP_MAX;
+    if (window < 1) window = 1;
+    if (window > 64) window = 64;
+    e->w_nqp = nqp;
+    e->w_window = window;
+    e->worker_count = nworkers;
+    e->workers = calloc(nworkers, sizeof(store_worker *));
+    if (!e->workers) return -1;
+
+    for (unsigned int i = 0; i < nworkers; i++) {
+        store_worker *w = calloc(1, sizeof(*w));
+        if (!w) return -1;
+        w->e = e;
+        w->nqp = nqp;
+        w->window = window;
+        e->workers[i] = w;
+    }
+
+    uint64_t rsize = 0;
+    for (unsigned int i = 0; i < nworkers; i++) {
+        store_worker *w = e->workers[i];
+        for (unsigned int qi = 0; qi < nqp; qi++)
+            if (cm_connect_worker_qp(e, w, i, qi, i == 0 && qi == 0, &rsize))
+                return -1;
+    }
+    fprintf(stderr, "extstore: genie_connect OK (raddr=0x%lx rkey=0x%x size=%lu, "
+            "workers=%u qps/worker=%u)\n", (unsigned long)e->raddr, e->rkey,
+            (unsigned long)rsize, nworkers, nqp);
+
+    size_t bsz = (size_t)nworkers * e->read_slots * e->slot_size;
+    e->wbounce_base = dma_alloc(bsz);
+    if (!e->wbounce_base) return -1;
+    e->wbounce_mr = ibv_reg_mr(e->pd, e->wbounce_base, bsz,
+                               IBV_ACCESS_LOCAL_WRITE);
+    if (!e->wbounce_mr) {
+        fprintf(stderr, "extstore: reg_mr(worker bounce %zuB) failed: %s\n",
+                bsz, strerror(errno));
+        return -1;
+    }
+
+    e->w_staging_slots = e->write_slots / nworkers;
+    if (e->w_staging_slots > 64) e->w_staging_slots = 64;
+    if (e->w_staging_slots < 1) e->w_staging_slots = 1;
+    size_t ssz = (size_t)nworkers * e->w_staging_slots * e->slot_size;
+    e->wstaging_base = dma_alloc(ssz);
+    if (!e->wstaging_base) return -1;
+    e->wstaging_mr = ibv_reg_mr(e->pd, e->wstaging_base, ssz,
+                                IBV_ACCESS_LOCAL_WRITE);
+    if (!e->wstaging_mr) {
+        fprintf(stderr, "extstore: reg_mr(worker staging %zuB) failed: %s\n",
+                ssz, strerror(errno));
+        return -1;
+    }
+
+    for (unsigned int i = 0; i < nworkers; i++) {
+        store_worker *w = e->workers[i];
+        w->bounce_base = e->wbounce_base
+            + (size_t)i * e->read_slots * e->slot_size;
+        w->bounce_free = e->read_slots >= 64 ? ~0ULL
+                                             : ((1ULL << e->read_slots) - 1);
+        w->staging_slots = e->w_staging_slots;
+        w->staging_base = e->wstaging_base
+            + (size_t)i * e->w_staging_slots * e->slot_size;
+        w->staging_free = w->staging_slots >= 64 ? ~0ULL
+                                                  : ((1ULL << w->staging_slots) - 1);
+    }
+
+    if (getenv("EXT_SELFTEST") && selftest(e, e->workers[0]) != 0)
+        return -1;
+    if (pages_init(e, rsize) != 0) return -1;
+    fprintf(stderr, "extstore: no IO threads (worker-inline READ/WRITE)\n");
+    return 0;
 }
 
 void *extstore_worker_create(void *ptr, unsigned int worker_id) {
     store_engine *e = ptr;
     if (!e || !e->workers || worker_id >= e->worker_count) return NULL;
-    store_worker *w = calloc(1, sizeof(store_worker));
-    if (!w) return NULL;
-    w->e = e;
-    w->nqp = e->w_nqp;
-    w->window = e->w_window;
-    w->bounce_base = e->wbounce_base
-        + (size_t)worker_id * e->read_slots * e->slot_size;
-    w->bounce_free = (e->read_slots >= 64) ? ~0ULL : ((1ULL << e->read_slots) - 1);
-    w->staging_slots = e->w_staging_slots;
-    w->staging_base = e->wstaging_base
-        + (size_t)worker_id * e->w_staging_slots * e->slot_size;
-    w->staging_free = (w->staging_slots >= 64) ? ~0ULL
-                                               : ((1ULL << w->staging_slots) - 1);
-    w->cq = ibv_create_cq(e->pd->context, 2 * w->window * w->nqp, NULL, NULL, 0);
-    if (!w->cq) {
-        fprintf(stderr, "extstore: worker %u create_cq failed: %s\n",
-                worker_id, strerror(errno));
-        free(w); return NULL;
-    }
-    for (unsigned int qi = 0; qi < w->nqp; qi++) {
-        if (cm_connect_worker_qp(e, w, qi)) { free(w); return NULL; }
-    }
-    e->workers[worker_id] = w;
-    return w;
+    return e->workers[worker_id];
 }
 
 /* Post as much of the chain as window/ORD/slots allow; excess to wait list.
@@ -901,7 +625,7 @@ static void worker_post(store_worker *w, obj_io *chain) {
                 chain = io->next; io->next = NULL;
                 if (w->wait_tail) w->wait_tail->next = io; else w->wait_head = io;
                 w->wait_tail = io;
-                w->wait_enq++;
+                atomic_fetch_add(&w->wait_enq, 1);
             }
             /* also park nothing else to do */
             break;
@@ -949,6 +673,7 @@ int extstore_worker_post_write(void *worker, obj_io *io) {
     store_worker *w = worker;
     store_engine *e = w->e;
     if (atomic_load(&e->dead)) return -1;
+    if (w->outstanding >= w->window) return EAGAIN;
     unsigned int qi = w->rr % w->nqp;
     struct ibv_sge sg = { .addr = (uintptr_t)io->buf, .length = io->len,
         .lkey = e->wstaging_mr->lkey };
@@ -1009,9 +734,12 @@ int extstore_worker_drain(void *worker, int budget) {
     struct ibv_sge sync_sg[32];
     if (budget > 32) budget = 32;
 
-    w->drain_calls++;
+    atomic_fetch_add(&w->drain_calls, 1);
     int c = ibv_poll_cq(w->cq, budget, wc);
-    if (c <= 0) { w->drain_empty++; return atomic_load(&e->dead) ? -1 : 0; }
+    if (c <= 0) {
+        atomic_fetch_add(&w->drain_empty, 1);
+        return atomic_load(&e->dead) ? -1 : 0;
+    }
 
     uint64_t t_poll = g_prof_on ? prof_rdtsc() : 0;
     int nsync = 0;
@@ -1085,25 +813,6 @@ int extstore_worker_drain(void *worker, int budget) {
     return atomic_load(&e->dead) ? -1 : c;
 }
 
-/* ---- staging pool ---- */
-
-char *extstore_staging_get(void *ptr) {
-    store_engine *e = ptr;
-    pthread_mutex_lock(&e->staging_mutex);
-    while (e->staging_top == 0 && !atomic_load(&e->dead))
-        pthread_cond_wait(&e->staging_cond, &e->staging_mutex);
-    char *s = e->staging_top ? e->staging_free[--e->staging_top] : NULL;
-    pthread_mutex_unlock(&e->staging_mutex);
-    return s;
-}
-void extstore_staging_put(void *ptr, char *slot) {
-    store_engine *e = ptr;
-    pthread_mutex_lock(&e->staging_mutex);
-    e->staging_free[e->staging_top++] = slot;
-    pthread_cond_signal(&e->staging_cond);
-    pthread_mutex_unlock(&e->staging_mutex);
-}
-
 /* ---- misc API kept for storage.c ---- */
 
 int extstore_check(void *ptr, unsigned int page_id, uint64_t page_version) {
@@ -1116,35 +825,11 @@ int extstore_check(void *ptr, unsigned int page_id, uint64_t page_version) {
     return rv;
 }
 
-int extstore_delete(void *ptr, unsigned int page_id, uint64_t page_version,
-        unsigned int count, unsigned int bytes) {
-    store_engine *e = ptr;
-    if (page_id >= e->page_count) return -1;
-    store_page *p = &e->pages[page_id];
-    pthread_mutex_lock(&p->mutex);
-    int rv = -1;
-    if (p->version == page_version) {
-        if (p->obj_count >= count) p->obj_count -= count; else p->obj_count = 0;
-        if (p->bytes_used >= bytes) p->bytes_used -= bytes; else p->bytes_used = 0;
-        rv = 0;
-    }
-    pthread_mutex_unlock(&p->mutex);
-    return rv;
-}
-
-/* Sum per-thread histograms and pull avg / p50 / p99 (ns) out of the merged one. */
+/* Sum per-worker histograms and pull avg / p50 / p99 (ns). */
 static void prof_summarize(store_engine *e, int read,
         uint64_t *count, uint64_t *avg, uint64_t *p50, uint64_t *p99) {
     uint64_t merged[PROF_BUCKETS]; memset(merged, 0, sizeof(merged));
     uint64_t total = 0, sum = 0;
-    for (unsigned int i = 0; i < e->io_threadcount; i++) {
-        store_iothr *t = &e->io_threads[i];
-        uint32_t *h = read ? t->prof_r_hist : t->prof_w_hist;
-        total += read ? t->prof_r_count : t->prof_w_count;
-        sum   += read ? t->prof_r_sum_ns : t->prof_w_sum_ns;
-        for (int b = 0; b < PROF_BUCKETS; b++) merged[b] += h[b];
-    }
-    /* v2 (P2a): worker-inline READs record into per-worker blocks */
     if (e->workers) {
         for (unsigned int i = 0; i < e->worker_count; i++) {
             store_worker *w = e->workers[i];
@@ -1174,18 +859,23 @@ void extstore_get_stats(void *ptr, struct extstore_stats *st) {
     *st = e->stats;
     st->page_data = pd;
     STAT_UL(e);
+    st->worker_window = e->w_window;
+    st->worker_drain_calls = 0;
+    st->worker_drain_empty = 0;
+    st->worker_wait_enq = 0;
+    for (unsigned int i = 0; i < e->worker_count; i++) {
+        store_worker *w = e->workers[i];
+        if (!w) continue;
+        st->worker_drain_calls += atomic_load(&w->drain_calls);
+        st->worker_drain_empty += atomic_load(&w->drain_empty);
+        st->worker_wait_enq += atomic_load(&w->wait_enq);
+    }
     if (g_prof_on) {
         prof_summarize(e, 1, &st->prof_read_count, &st->prof_read_avg_ns,
                        &st->prof_read_p50_ns, &st->prof_read_p99_ns);
         prof_summarize(e, 0, &st->prof_write_count, &st->prof_write_avg_ns,
                        &st->prof_write_p50_ns, &st->prof_write_p99_ns);
         uint64_t rc = 0, wc = 0, rs = 0, rx = 0, ws = 0, wx = 0;
-        for (unsigned int i = 0; i < e->io_threadcount; i++) {
-            store_iothr *t = &e->io_threads[i];
-            rc += t->prof_r_crypto_ns; wc += t->prof_w_crypto_ns;
-            rs += t->prof_r_sync_ns; rx += t->prof_r_xfer_ns;
-            ws += t->prof_w_sync_ns; wx += t->prof_w_xfer_ns;
-        }
         if (e->workers) {
             for (unsigned int i = 0; i < e->worker_count; i++) {
                 store_worker *w = e->workers[i];
@@ -1206,14 +896,6 @@ void extstore_get_stats(void *ptr, struct extstore_stats *st) {
 
 void extstore_prof_reset(void *ptr) {
     store_engine *e = ptr;
-    for (unsigned int i = 0; i < e->io_threadcount; i++) {
-        store_iothr *t = &e->io_threads[i];
-        t->prof_r_count = t->prof_w_count = t->prof_r_sum_ns = t->prof_w_sum_ns = 0;
-        t->prof_r_crypto_ns = t->prof_w_crypto_ns = 0;
-        t->prof_r_sync_ns = t->prof_r_xfer_ns = t->prof_w_sync_ns = t->prof_w_xfer_ns = 0;
-        memset(t->prof_r_hist, 0, sizeof(t->prof_r_hist));
-        memset(t->prof_w_hist, 0, sizeof(t->prof_w_hist));
-    }
     if (e->workers) {
         for (unsigned int i = 0; i < e->worker_count; i++) {
             store_worker *w = e->workers[i];
@@ -1237,37 +919,14 @@ void extstore_prof_read_done(void *ptr, obj_io *io,
     if (!g_prof_on || !io->t_start || !io->t_end ||
             crypto_done < crypto_start)
         return;
-    store_engine *e = ptr;
-    uintptr_t buf = (uintptr_t)io->buf;
-    /* v2 (P2a): inline READs land in the calling worker's bounce partition. */
-    {
-        store_worker *w = g_drain_worker;
-        if (w) {
-            uintptr_t ws = (uintptr_t)w->bounce_base;
-            uintptr_t we = ws + (size_t)e->read_slots * e->slot_size;
-            if (buf >= ws && buf < we) {
-                prof_record(w->prof_r_hist, &w->prof_r_count, &w->prof_r_sum_ns,
-                            crypto_done - io->t_start);
-                w->prof_r_crypto_ns += (uint64_t)
-                        ((crypto_done - crypto_start) * g_ns_per_cycle);
-                io->t_start = io->t_end = 0;
-                return;
-            }
-        }
-    }
-    for (unsigned int i = 0; i < e->io_threadcount; i++) {
-        store_iothr *t = &e->io_threads[i];
-        uintptr_t start = (uintptr_t)t->bounce_base;
-        uintptr_t end = start + (size_t)e->read_slots * e->slot_size;
-        if (buf >= start && buf < end) {
-            prof_record(t->prof_r_hist, &t->prof_r_count, &t->prof_r_sum_ns,
-                        crypto_done - io->t_start);
-            t->prof_r_crypto_ns += (uint64_t)
-                    ((crypto_done - crypto_start) * g_ns_per_cycle);
-            io->t_start = io->t_end = 0;
-            return;
-        }
-    }
+    (void)ptr;
+    store_worker *w = g_drain_worker;
+    if (!w) return;
+    prof_record(w->prof_r_hist, &w->prof_r_count, &w->prof_r_sum_ns,
+                crypto_done - io->t_start);
+    w->prof_r_crypto_ns += (uint64_t)
+            ((crypto_done - crypto_start) * g_ns_per_cycle);
+    io->t_start = io->t_end = 0;
 }
 
 void extstore_get_page_data(void *ptr, struct extstore_stats *st) {

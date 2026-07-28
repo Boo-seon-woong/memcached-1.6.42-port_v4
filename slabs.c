@@ -41,6 +41,7 @@ static size_t mem_malloced = 0;
  * early-wake the LRU maintenance thread */
 static bool mem_limit_reached = false;
 static int power_largest;
+static bool remote_only_mode;
 
 static void *mem_base = NULL;
 static void *mem_current = NULL;
@@ -81,13 +82,19 @@ static void slabs_preallocate (const unsigned int maxslabs);
  * the transient full item an inbound SET is read into before it is sealed to
  * the remote slot. Anything larger cannot reach remote memory either. */
 unsigned int slabs_clsid(const size_t size) {
-    if (size == 0)
+    if (size == 0 || size > settings.item_size_max)
         return 0;
-    if (size <= slabclass[V2_CLS_STUB].size)
-        return V2_CLS_STUB;
-    if (size <= slabclass[V2_CLS_TRANSIENT].size)
-        return V2_CLS_TRANSIENT;
-    return 0;
+    if (remote_only_mode) {
+        if (size <= slabclass[V2_CLS_STUB].size)
+            return V2_CLS_STUB;
+        return size <= slabclass[V2_CLS_TRANSIENT].size
+            ? V2_CLS_TRANSIENT : 0;
+    }
+    int res = POWER_SMALLEST;
+    while (size > slabclass[res].size)
+        if (res++ == power_largest)
+            return power_largest;
+    return res;
 }
 
 bool slabs_class_check(const int id) {
@@ -204,7 +211,9 @@ unsigned int slabs_fixup(char *chunk, const int border) {
  * Determines the chunk sizes and initializes the slab class descriptors
  * accordingly.
  */
-void slabs_init(const size_t limit, const double factor, const bool prealloc, const uint32_t *slab_sizes, void *mem_base_external, bool reuse_mem) {
+void slabs_init(const size_t limit, const double factor, const bool prealloc,
+        const uint32_t *slab_sizes, void *mem_base_external, bool reuse_mem,
+        bool remote_only, unsigned int remote_slot_size) {
     int i = POWER_SMALLEST - 1;
     unsigned int size = sizeof(item) + settings.chunk_size;
 
@@ -245,22 +254,13 @@ void slabs_init(const size_t limit, const double factor, const bool prealloc, co
 
     memset(slabclass, 0, sizeof(slabclass));
 
-    /* v2 (P1): fixed two-class layout (see md/V2_CODE_SPEC.md P1).
-     * slot_size mirrors the engine's EXT_SLOT_SIZE env (default 256); the
-     * transient class must hold any item whose sealed form fits one remote
-     * slot, crypto on or off. factor/slab_sizes are ignored. */
-    if (slab_sizes != NULL || factor != 1.25) {
-        fprintf(stderr, "v2: slab growth factor/slab_sizes are ignored (two fixed classes)\n");
-    }
-    {
-        unsigned int slot_size = 256;
-        const char *env = getenv("EXT_SLOT_SIZE");
-        if (env != NULL && atoi(env) > 0)
-            slot_size = atoi(env);
+    remote_only_mode = remote_only;
+    if (remote_only_mode) {
+        /* v2 remote-only mode: fixed stub/transient classes. */
         unsigned int stub_sz = sizeof(item) + KEY_MAX_LENGTH + 1
             + sizeof(uint64_t) + sizeof(item_hdr);
         unsigned int trans_sz = sizeof(item) + KEY_MAX_LENGTH + 1
-            + sizeof(uint64_t) + slot_size;
+            + sizeof(uint64_t) + remote_slot_size;
         if (stub_sz % CHUNK_ALIGN_BYTES)
             stub_sz += CHUNK_ALIGN_BYTES - (stub_sz % CHUNK_ALIGN_BYTES);
         if (trans_sz % CHUNK_ALIGN_BYTES)
@@ -277,6 +277,25 @@ void slabs_init(const size_t limit, const double factor, const bool prealloc, co
             fprintf(stderr, "slab class %d (transient): chunk %u perslab %u\n",
                     V2_CLS_TRANSIENT, trans_sz, slabclass[V2_CLS_TRANSIENT].perslab);
         }
+    } else {
+        while (++i < MAX_NUMBER_OF_SLAB_CLASSES-1) {
+            if (slab_sizes != NULL) {
+                if (slab_sizes[i-1] == 0)
+                    break;
+                size = slab_sizes[i-1];
+            } else if (size >= settings.slab_chunk_size_max / factor) {
+                break;
+            }
+            if (size % CHUNK_ALIGN_BYTES)
+                size += CHUNK_ALIGN_BYTES - (size % CHUNK_ALIGN_BYTES);
+            slabclass[i].size = size;
+            slabclass[i].perslab = settings.slab_page_size / size;
+            if (slab_sizes == NULL)
+                size *= factor;
+        }
+        power_largest = i;
+        slabclass[i].size = settings.slab_chunk_size_max;
+        slabclass[i].perslab = settings.slab_page_size / settings.slab_chunk_size_max;
     }
 
     /* for the test suite:  faking of how much we've already malloc'd */

@@ -5,9 +5,9 @@
 > 기준이다. 이 디렉터리의 `extstore.c` / `storage.c`는 전면 재작성돼 여기 적힌
 > 줄 번호와 맞지 않는다.
 >
-> 현재 port는 [`SOURCE_CHANGE_SPEC.md`](SOURCE_CHANGE_SPEC.md), 변수 정의는
-> [`GLOSSARY.md`](GLOSSARY.md), 채택/폐기된 결정은
-> [`EXTSTORE_RDMA_PORTING.md`](EXTSTORE_RDMA_PORTING.md)를 본다.
+> 현재 v2 port는 [`md/V2_CODE_SPEC.md`](md/V2_CODE_SPEC.md), 변수 정의는
+> [`GLOSSARY.md`](GLOSSARY.md)를 본다. `SOURCE_CHANGE_SPEC.md`와
+> `EXTSTORE_RDMA_PORTING.md`는 v1 역사 기록이다.
 >
 > line-by-line 독해용 로드맵. 읽은 항목은 체크박스로 진행 상황 기록.
 

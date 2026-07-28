@@ -1,7 +1,7 @@
 /*
  * Software CPU-clock samples; no vPMU event is used.
- * argv: 8 worker TIDs, 4 io TIDs, 8 client TIDs. Missing TIDs are zero.
- * group: 1=worker, 2=io, 3=client.
+ * argv: 12 worker TIDs, 8 client TIDs. Missing TIDs are zero.
+ * group: 1=worker, 3=client.
  */
 BEGIN
 {
@@ -9,8 +9,8 @@ BEGIN
     if ($3)  { @group[$3] = 1; }  if ($4)  { @group[$4] = 1; }
     if ($5)  { @group[$5] = 1; }  if ($6)  { @group[$6] = 1; }
     if ($7)  { @group[$7] = 1; }  if ($8)  { @group[$8] = 1; }
-    if ($9)  { @group[$9] = 2; }  if ($10) { @group[$10] = 2; }
-    if ($11) { @group[$11] = 2; } if ($12) { @group[$12] = 2; }
+    if ($9)  { @group[$9] = 1; }  if ($10) { @group[$10] = 1; }
+    if ($11) { @group[$11] = 1; } if ($12) { @group[$12] = 1; }
     if ($13) { @group[$13] = 3; } if ($14) { @group[$14] = 3; }
     if ($15) { @group[$15] = 3; } if ($16) { @group[$16] = 3; }
     if ($17) { @group[$17] = 3; } if ($18) { @group[$18] = 3; }

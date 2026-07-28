@@ -11,7 +11,7 @@
 #
 # Watch pages_used: it should plateau. Continuous growth across rounds with a
 # constant key count means freed slots are not being reclaimed.
-set -u
+set -euo pipefail
 H=${1:-127.0.0.1}; P=${2:-11311}; ROUNDS=${3:-6}
 KEYS=${KEYS:-5000}; N=${N:-5000}
 
@@ -22,9 +22,9 @@ echo "round  value_size  pages_used  bytes_used  badcrc  curr_items"
 for r in $(seq 1 "$ROUNDS"); do
   # alternate sizes so each rewrite of a key changes its slot size requirement
   case $((r % 3)) in
-    0) D=200 ;;
-    1) D=400 ;;
-    2) D=800 ;;
+    0) D=16 ;;
+    1) D=64 ;;
+    2) D=128 ;;
   esac
   memtier_benchmark -s "$H" -p "$P" -P memcache_text --hide-histogram \
     -c 4 -t 2 -n "$N" --ratio=1:0 -d "$D" --key-maximum="$KEYS" --key-pattern=S:S \
@@ -36,5 +36,7 @@ for r in $(seq 1 "$ROUNDS"); do
 done
 
 echo
-echo "PASS if pages_used plateaus and badcrc stays 0 with curr_items == $KEYS."
-echo "Growing pages_used at a constant key count = freed slots are not being reused."
+test "$(stat badcrc_from_extstore)" -eq 0
+test "$(stat ext_slot_acct_leak)" -eq 0
+test "$(stat curr_items)" -eq "$KEYS"
+echo "PASS: mixed in-range values preserved keys, tags, and slot accounting."

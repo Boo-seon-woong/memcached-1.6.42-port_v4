@@ -16,6 +16,7 @@ void storage_stats(ADD_STAT add_stats, void *c);
 void process_extstore_stats(ADD_STAT add_stats, void *c);
 void storage_prof_reset(void);   // D6: clear in-server span histograms
 bool storage_validate_item(void *e, item *it);
+unsigned int storage_slot_size(void *conf);
 #ifdef EXTSTORE
 int storage_get_item(LIBEVENT_THREAD *t, item *it, mc_resp *resp);
 int storage_prepare_workers(void *storage, int nthreads);

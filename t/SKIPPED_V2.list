@@ -1,0 +1,38 @@
+# basename | reason
+binary-extstore.t | upstream flash-extstore options/backend removed
+binary.t | relies on eviction under a deliberately tiny cache
+chunked-extstore.t | chunked remote objects are unsupported
+chunked-items.t | exercises chunking plus eviction under memory pressure
+dyn-maxbytes.t | configures removed slab automove and reclaim behavior
+error-extstore.t | upstream flash-extstore options/backend removed
+evictions.t | v2 has no eviction
+extstore-buckets.t | upstream flash-extstore buckets/compaction removed
+extstore-cas.t | upstream flash-extstore options/backend removed
+extstore-jbod.t | v2 has one remote MR, not flash JBOD
+extstore-overdel.t | upstream flash-extstore options/backend removed
+extstore-start.t | upstream flash-extstore options/backend removed
+extstore-tiered.t | flash tiering/compaction removed
+extstore-tiered2.t | flash tiering/compaction removed
+extstore.t | upstream flash-extstore options/backend removed
+flush-all.t | LRU walk was removed; flush boundary is lazy/second-granularity
+getset.t | large-value and cache-pressure sections require chunking/eviction
+issue_14.t | asserts slab-page reclamation behavior removed in v2
+issue_22.t | explicitly fills a tiny cache and expects eviction
+issue_41.t | fills slab classes and expects eviction/reclaim
+issue_163.t | asserts LRU object reclamation
+issue_183.t | asserts LRU object reclamation
+lru-crawler.t | crawler removed
+lru-maintainer.t | maintainer and segmented LRU removed
+lru.t | LRU commands and queues removed
+maxconns.t | its extstore subtest assumes a local flash path
+metaget.t | its extstore section assumes the upstream flash backend/options
+restart.t | configures removed temporary_ttl and slab-maintainer behavior
+slabs-cas.t | starts memcached with the removed slab_reassign option
+slabs-mover.t | slab mover removed
+slabs-reassign-chunked.t | slab reassignment and chunked values removed
+slabs-reassign2.t | slab reassignment removed
+slabs_reassign.t | slab reassignment removed
+stats.t | starts with removed LRU options and asserts removed counters
+strtol-testing.t | expects parsing inside the now-unsupported slabs command
+watcher.t | waits for mutation/deletion events coupled to removed LRU paths
+whitespace.t | scans generated/tracked build artifacts in this development tree

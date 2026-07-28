@@ -4084,8 +4084,9 @@ static void usage(void) {
     printf("   - ext_path:            Genie endpoint and remote MR size.\n"
            "                          ie: ext_path=10.99.0.2:11212:4g\n"
            "   - ext_page_size:       remote allocation page size in MiB (default: 64)\n"
-           "   - ext_threads:         RDMA connection count (default: 1)\n"
-           "   - ext_io_depth:        maximum outstanding operations per connection (default: 64)\n");
+           "   - ext_worker_window:   outstanding operations per worker (default: 16)\n"
+           "   - ext_qp_per_worker:   RC QPs per worker, 1..4 (default: 1)\n"
+           "   - ext_drain_spin:      CQ drain spin budget, 0..4096 (default: 1024)\n");
 #endif
 #ifdef PROXY
     printf("   - proxy_config:        path to lua library file. separate with ':' for multiple files\n"
@@ -4639,7 +4640,6 @@ int main (int argc, char **argv) {
     bool udp_specified = false;
     bool start_assoc_maint = true;
     enum hashfunc_type hash_type = MURMUR3_HASH;
-    uint32_t tocrawl;
     uint32_t slab_sizes[MAX_NUMBER_OF_SLAB_CLASSES];
     bool use_slab_sizes = false;
     char *slab_sizes_unparsed = NULL;
@@ -5727,8 +5727,14 @@ int main (int argc, char **argv) {
         reuse_mem = false;
     }
 #endif
+    unsigned int remote_slot_size = EXT_SLOT_SIZE_DEFAULT;
+#ifdef EXTSTORE
+    if (storage_enabled)
+        remote_slot_size = storage_slot_size(storage_cf);
+#endif
     slabs_init(settings.maxbytes, settings.factor, preallocate,
-            use_slab_sizes ? slab_sizes : NULL, mem_base, reuse_mem);
+            use_slab_sizes ? slab_sizes : NULL, mem_base, reuse_mem,
+            storage_enabled, remote_slot_size);
 #ifdef EXTSTORE
     if (storage_enabled) {
         storage = storage_init(storage_cf);

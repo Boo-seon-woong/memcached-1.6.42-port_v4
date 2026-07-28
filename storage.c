@@ -26,6 +26,7 @@ static _Thread_local bool g_ret_init = false;
 static unsigned int g_worker_window = 16; // v2 P2a (ext_worker_window)
 static unsigned int g_qp_per_worker = 1;  // v2 P2a (ext_qp_per_worker)
 static _Atomic uint64_t g_read_retry_ct = 0;
+static _Atomic uint64_t g_worker_write_spins = 0;
 static _Atomic uint64_t g_badcrc_log_ct = 0;      // rate-limit for the badcrc diagnostic
 static _Atomic uint64_t g_flush_log_ct = 0;       // rate-limit for the flush diagnostic
 
@@ -55,29 +56,17 @@ static uint64_t nonce_counter(const void *obj) {   /* [salt 4][counter 8] */
 }
 
 typedef struct {
-    pthread_mutex_t mutex;
-    pthread_cond_t cond;
     int done;
     int ret;
 } store_wait;
 
 /* v2 (P2b): inline path never initialises mutex/cond — the writer spins on
  * `done` and reaps the completion from its own drain on the same thread. */
-static void storage_store_done_inline_cb(void *e, obj_io *io, int ret) {
-    (void)e;
-    store_wait *w = io->data;
-    w->ret = ret;
-    w->done = 1;
-}
-
 static void storage_store_done_cb(void *e, obj_io *io, int ret) {
     (void)e;
     store_wait *w = io->data;
-    pthread_mutex_lock(&w->mutex);
     w->ret = ret;
     w->done = 1;
-    pthread_cond_signal(&w->cond);
-    pthread_mutex_unlock(&w->mutex);
 }
 
 /*
@@ -124,9 +113,8 @@ bool storage_validate_item(void *e, item *it) {
 void storage_delete(void *e, item *it) {
     if (it->it_flags & ITEM_HDR) {
         item_hdr *hdr = (item_hdr *)ITEM_data(it);
-        extstore_delete(e, hdr->page_id, hdr->page_version, 1, hdr->len);
         struct ext_loc loc = { hdr->page_version, hdr->offset, hdr->len, hdr->page_id };
-        extstore_free_loc(e, &loc);   /* return the remote slot (P-1) */
+        extstore_free_loc(e, &loc);
     }
 }
 
@@ -197,6 +185,18 @@ void storage_stats(ADD_STAT add_stats, void *c) {
                 (unsigned long long)atomic_load(&g_abort_alloc));
         APPEND_STAT("extstore_plaintext_slab_fallback", "%llu",
                 (unsigned long long)atomic_load(&g_plaintext_slab_fallback));
+        APPEND_STAT("ext_worker_window", "%llu",
+                (unsigned long long)st.worker_window);
+        APPEND_STAT("ext_worker_drain_calls", "%llu",
+                (unsigned long long)st.worker_drain_calls);
+        APPEND_STAT("ext_worker_drain_empty", "%llu",
+                (unsigned long long)st.worker_drain_empty);
+        APPEND_STAT("ext_worker_wait_enq", "%llu",
+                (unsigned long long)st.worker_wait_enq);
+        APPEND_STAT("ext_worker_write_spins", "%llu",
+                (unsigned long long)atomic_load(&g_worker_write_spins));
+        APPEND_STAT("ext_slot_acct_leak", "%llu",
+                (unsigned long long)st.slot_acct_leak);
         APPEND_STAT("extstore_prof_span_ver", "%u", 2);
         // Span v2 distribution (ns); populated only under EXT_RDMA_PROF=1.
         APPEND_STAT("extstore_prof_read_count", "%llu", (unsigned long long)st.prof_read_count);
@@ -220,10 +220,7 @@ void storage_stats(ADD_STAT add_stats, void *c) {
 
 }
 
-// This callback runs in the IO thread.
-// TODO: Some or all of this should move to the
-// io_pending's callback back in the worker thread.
-// It might make sense to keep the crc32c check here though.
+// This callback runs inline while the owning worker drains its CQ.
 static void _storage_get_item_cb(void *e, obj_io *io, int ret) {
     io_pending_storage_t *p = (io_pending_storage_t *)io->data;
     mc_resp *resp = p->resp;
@@ -247,11 +244,9 @@ static void _storage_get_item_cb(void *e, obj_io *io, int ret) {
                 atomic_fetch_add(&g_read_retry_ct, 1);
                 io->next = NULL;
                 /* v2 (P2a): re-post on the worker whose drain is running. */
-                if (extstore_worker_current() != NULL) {
-                    extstore_worker_submit(extstore_worker_current(), io);
-                } else {
-                    extstore_submit(e, io);
-                }
+                void *w = extstore_worker_current();
+                assert(w != NULL);
+                extstore_worker_submit(w, io);
                 return;
             }
             miss = true;
@@ -491,14 +486,9 @@ void storage_submit_cb(io_queue_t *q) {
         eio_head = io_ctx;
     }
     if (eio_head == NULL) return;
-    /* v2 (P2a): post READs inline on this worker's own QPs; the drain event
-     * reaps them on this same thread. IO threads only carry WRITEs now. */
-    if (t != NULL && t->ext_worker != NULL) {
-        extstore_worker_submit(t->ext_worker, eio_head);
-        worker_storage_arm_drain(t);
-    } else {
-        extstore_submit(q->ctx, eio_head);
-    }
+    assert(t != NULL && t->ext_worker != NULL);
+    extstore_worker_submit(t->ext_worker, eio_head);
+    worker_storage_arm_drain(t);
 }
 
 // Runs locally in worker thread.
@@ -525,8 +515,10 @@ static void storage_release_pending(io_pending_t *pending) {
     } else if (p->miss) {
         // Keep the stub on an integrity failure so a transient DMA visibility
         // failure can recover on a later GET. No local value is available.
-        if (!p->badcrc)
+        if (!p->badcrc) {
+            storage_delete(p->thread->storage, p->hdr_it);
             item_unlink(p->hdr_it);
+        }
         pthread_mutex_lock(&c->thread->stats.mutex);
         c->thread->stats.miss_from_extstore++;
         if (p->badcrc)
@@ -584,9 +576,13 @@ int storage_store_item(void *e, item *it, item **hdr_out, uint32_t hv) {
      * STORED contract is unchanged; only the wait mechanism differs (cond ->
      * drain). See md/V2_CODE_SPEC.md P2b. */
     LIBEVENT_THREAD *wt = current_worker_thread();
-    void *w = (wt != NULL) ? wt->ext_worker : NULL;
-    char *slot = (w != NULL) ? extstore_worker_staging_get(w)
-                             : extstore_staging_get(e);
+    void *w = wt != NULL ? wt->ext_worker : NULL;
+    if (w == NULL) {
+        extstore_free_loc(e, &loc);
+        do_item_remove(hdr_it);
+        return -1;
+    }
+    char *slot = extstore_worker_staging_get(w);
     if (slot == NULL) {
         extstore_free_loc(e, &loc);
         do_item_remove(hdr_it);
@@ -614,8 +610,7 @@ int storage_store_item(void *e, item *it, item **hdr_out, uint32_t hv) {
     }
     uint64_t prof_crypto_done = extstore_prof_stamp();
     if (sealed != (int)rlen) {
-        if (w != NULL) extstore_worker_staging_put(w, slot);
-        else extstore_staging_put(e, slot);
+        extstore_worker_staging_put(w, slot);
         extstore_free_loc(e, &loc);
         do_item_remove(hdr_it);
         return -1;
@@ -634,33 +629,23 @@ int storage_store_item(void *e, item *it, item **hdr_out, uint32_t hv) {
         .data = &wait, .next = NULL, .buf = slot,
         .page_version = loc.page_version, .len = rlen, .offset = loc.offset,
         .page_id = loc.page_id, .mode = OBJ_IO_WRITE,
-        .cb = (w != NULL) ? storage_store_done_inline_cb : storage_store_done_cb,
+        .cb = storage_store_done_cb,
         .t_start = prof_start, .t_end = prof_crypto_done,
     };
 
-    if (w != NULL) {
-        if (extstore_worker_post_write(w, &io) != 0) {
-            wait.done = true; wait.ret = -1;
-        }
-        /* Spin on our own CQ until this WRITE completes. GET completions
-         * reaped here are parked and flushed by the drain caller, so no
-         * re-entrancy (R6). Exit is completion or engine death. */
-        while (!wait.done) {
-            if (extstore_worker_drain(w, 32) < 0) break;
-        }
-        extstore_worker_staging_put(w, slot);
-    } else {
-        pthread_mutex_init(&wait.mutex, NULL);
-        pthread_cond_init(&wait.cond, NULL);
-        extstore_submit(e, &io);
-        pthread_mutex_lock(&wait.mutex);
-        while (!wait.done)
-            pthread_cond_wait(&wait.cond, &wait.mutex);
-        pthread_mutex_unlock(&wait.mutex);
-        pthread_cond_destroy(&wait.cond);
-        pthread_mutex_destroy(&wait.mutex);
-        extstore_staging_put(e, slot);
+    while (extstore_worker_outstanding(w) >= g_worker_window) {
+        atomic_fetch_add(&g_worker_write_spins, 1);
+        if (extstore_worker_drain(w, 32) < 0) break;
     }
+    if (extstore_worker_post_write(w, &io) != 0) {
+        wait.done = true;
+        wait.ret = -1;
+    }
+    while (!wait.done) {
+        atomic_fetch_add(&g_worker_write_spins, 1);
+        if (extstore_worker_drain(w, 32) < 0) break;
+    }
+    extstore_worker_staging_put(w, slot);
 
     if (wait.ret != (int)rlen) {
         extstore_free_loc(e, &loc);
@@ -727,14 +712,21 @@ void *storage_init_config(struct settings *s) {
     struct storage_settings *cf = calloc(1, sizeof(struct storage_settings));
 
     cf->ext_cf.page_size = 64 * 1024 * 1024;
-    cf->ext_cf.io_threadcount = 1;
-    cf->ext_cf.io_depth = 64;
     cf->ext_cf.page_buckets = PAGE_BUCKET_COUNT;
     char *v;
-    cf->ext_cf.slot_size   = (v = getenv("EXT_SLOT_SIZE"))   ? atoi(v) : 2048;
+    cf->ext_cf.slot_size = EXT_SLOT_SIZE_DEFAULT;
+    if ((v = getenv("EXT_SLOT_SIZE")) &&
+            !safe_strtoul(v, &cf->ext_cf.slot_size))
+        cf->ext_cf.slot_size = 0;
     g_plaintext_slot_size = cf->ext_cf.slot_size;
-    cf->ext_cf.read_slots  = (v = getenv("EXT_READ_SLOTS"))  ? atoi(v) : 32;
-    cf->ext_cf.write_slots = (v = getenv("EXT_WRITE_SLOTS")) ? atoi(v) : 256;
+    cf->ext_cf.read_slots = 32;
+    if ((v = getenv("EXT_READ_SLOTS")) &&
+            !safe_strtoul(v, &cf->ext_cf.read_slots))
+        cf->ext_cf.read_slots = 0;
+    cf->ext_cf.write_slots = 256;
+    if ((v = getenv("EXT_WRITE_SLOTS")) &&
+            !safe_strtoul(v, &cf->ext_cf.write_slots))
+        cf->ext_cf.write_slots = 0;
     cf->ext_cf.worker_window = 16;   /* v2 P2a; ORD boundary for nqp=1 */
     cf->ext_cf.qp_per_worker = 1;
     if ((v = getenv("EXT_READ_RETRIES"))) g_read_retries = atoi(v);
@@ -754,8 +746,6 @@ int storage_read_config(void *conf, char **subopt) {
 
     enum {
         EXT_PAGE_SIZE,
-        EXT_THREADS,
-        EXT_IO_DEPTH,
         EXT_PATH,
         EXT_WORKER_WINDOW,
         EXT_QP_PER_WORKER,
@@ -764,8 +754,6 @@ int storage_read_config(void *conf, char **subopt) {
 
     char *const subopts_tokens[] = {
         [EXT_PAGE_SIZE] = "ext_page_size",
-        [EXT_THREADS] = "ext_threads",
-        [EXT_IO_DEPTH] = "ext_io_depth",
         [EXT_PATH] = "ext_path",
         [EXT_WORKER_WINDOW] = "ext_worker_window",
         [EXT_QP_PER_WORKER] = "ext_qp_per_worker",
@@ -784,27 +772,6 @@ int storage_read_config(void *conf, char **subopt) {
                 return 1;
             }
             ext_cf->page_size *= 1024 * 1024; /* megabytes */
-            break;
-        case EXT_THREADS:
-            if (subopts_value == NULL) {
-                fprintf(stderr, "Missing ext_threads argument\n");
-                return 1;
-            }
-            if (!safe_strtoul(subopts_value, &ext_cf->io_threadcount)) {
-                fprintf(stderr, "could not parse argument to ext_threads\n");
-                return 1;
-            }
-            /* v2: 0 = worker-inline only (no IO threads spawned) */
-            break;
-        case EXT_IO_DEPTH:
-            if (subopts_value == NULL) {
-                fprintf(stderr, "Missing ext_io_depth argument\n");
-                return 1;
-            }
-            if (!safe_strtoul(subopts_value, &ext_cf->io_depth)) {
-                fprintf(stderr, "could not parse argument to ext_io_depth\n");
-                return 1;
-            }
             break;
         case EXT_WORKER_WINDOW:
             if (subopts_value == NULL ||
@@ -858,6 +825,13 @@ int storage_check_config(void *conf) {
     struct storage_settings *cf = conf;
 
     if (cf->storage_file) {
+        if (cf->ext_cf.slot_size <= EXT_CRYPTO_OVERHEAD ||
+                cf->ext_cf.slot_size > settings.item_size_max ||
+                cf->ext_cf.read_slots < 1 || cf->ext_cf.read_slots > 64 ||
+                cf->ext_cf.write_slots < 1) {
+            fprintf(stderr, "invalid EXT_SLOT_SIZE/EXT_READ_SLOTS/EXT_WRITE_SLOTS\n");
+            return 1;
+        }
         if (settings.udpport) {
             fprintf(stderr, "Cannot use UDP with extstore enabled (-U 0 to disable)\n");
             return 1;
@@ -879,6 +853,11 @@ int storage_check_config(void *conf) {
     }
 
     return 2;
+}
+
+unsigned int storage_slot_size(void *conf) {
+    struct storage_settings *cf = conf;
+    return cf->ext_cf.slot_size;
 }
 
 void *storage_init(void *conf) {

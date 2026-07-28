@@ -6,7 +6,9 @@ base tree: `memcached-1.6.42-port` @ `3bb5553` 복사본
 2026-07-28 대화로 확정된 결정: ① GET·SET 모두 worker-inline, IO thread 완전
 삭제 ② 개발 게이트는 co-located, 최종 판정은 off-box ③ off-box stock 보정
 측정을 최종 캠페인 앞에 배치 ④ eviction 제거(SET 실패 + lazy expiry).
-각 단계 완료 시 해당 절을 실측 동작 기록으로 갱신한다. 변수 정의는
+함수/구조체 수준 구현 명세는 [`V2_CODE_SPEC.md`](V2_CODE_SPEC.md)에 있으며,
+개발 중 결정은 만들지 않는다(코드 spec 갱신 후 진행). 각 단계 완료 시 해당
+절을 실측 동작 기록으로 갱신한다. 변수 정의는
 [`../GLOSSARY.md`](../GLOSSARY.md), 실측 근거는 v1 tree의
 `md/THREE_EXP_20260727.md`·`md/CPU_COST_ACCOUNTING.md`·
 `md/FRONTIER_7POINT_20260724.md`.
@@ -105,16 +107,16 @@ off-box 상한의 선행 지표다.
 | 제거 이유 | class가 1개가 되므로(§1.4) 재배분 연산이 정의되지 않는다 |
 | 게이트 | G-base |
 
-### 1.4 slab class 축퇴 → 단일 고정 크기 stub class
+### 1.4 slab class 축퇴 → 고정 크기 2-class (stub + 인바운드 임시)
 
 | 항목 | 내용 |
 |---|---|
 | 대상 | `slabs.c` class 배열(63개), growth factor, `do_item_alloc` class 선택 |
 | 유지 | `slabs.c` 페이지/freelist 뼈대는 유지 (diff 최소). 전용 arena 교체는 P4 후보로만 남긴다 — stub alloc은 SET 경로 전용이라 GET hot path와 무관 |
-| 변경 | class 1개 강제. slot 크기 = `sizeof(item) + KEY_MAX_LENGTH+1 + sizeof(item_hdr)` 상한 고정 ≈ 320B |
+| 변경 | class 2개 강제 — stub class(≈336B)와 인바운드 SET 임시 full item class(≈536B, slot 크기 종속). **정정(2026-07-28)**: 인바운드 SET이 값 전체를 담는 임시 item을 slabs에서 할당하므로 단일 class는 불가. 산식은 [`V2_CODE_SPEC.md`](V2_CODE_SPEC.md) P1 |
 | 크기 산정 | remote 4GiB / `EXT_SLOT_SIZE` 256B = 16.7M slot → stub 전량 상주 최대 ~5.4GB. 현 실험 keyset(9B key, 1M)은 stub ≈96B → 96MB. `-m`은 "stub arena 상한"으로 의미 변경(§5) |
 | eviction 부재 | stub alloc 실패 ⇔ `-m` 부족 → SET은 `SERVER_ERROR out of memory`. remote slot 고갈도 SET 실패(v1 계승). 기동 시 `-m`이 stub_max×slot 수 미만이면 경고 로그(§6 R4) |
-| 게이트 | G-base + 1M preload 후 `stats slabs` class 1개 |
+| 게이트 | G-base + 1M preload 후 `stats slabs` class 2개 |
 
 ### 1.5 부수 정리
 
@@ -193,11 +195,15 @@ drain에서 slot 반환 시 대기 conn부터 재개.
 1. worker: remote slot 할당(전역 allocator, SET 전용 lock), 자기 staging
    파티션의 slot에 `ext_crypto_seal` (worker TLS ctx — SET latency 계약
    "seal 시작→WRITE CQE"의 시작점).
-2. WRITE post (worker, inline, signaled). conn은 io-pending — **STORED는
-   WRITE CQE를 drain에서 수거한 뒤 반환**한다. v1의 "성공한 SET 전에 remote
-   WRITE 완료" 불변식 유지, 대기 방식만 cond→drain으로 바뀐다.
-3. WRITE CQE drain 시: stub publish(`ITEM_HDR` hash 연결) → STORED 응답.
-   실패 CQE는 `NOT_STORED` + slot 반납(v1 계승).
+2. WRITE post (worker, inline, signaled) 후 **bounded spin**: worker가 자기
+   CQ를 drain하며 해당 WRITE CQE를 기다린다(통상 1-2회전, RTT ~3µs). 이
+   결정(2026-07-28)으로 `storage_store_item`의 동기 반환 계약이 유지되어
+   memcached.c store 경로가 무수정이다. spin 중 수거되는 GET CQE는 정상
+   처리되고 conn 재개는 event로 미뤄지므로 재진입 없음(R6). v1도 cond로
+   동일하게 블로킹했으므로 semantics 동일, 대기 비용은 오히려 감소.
+3. WRITE 완료 시 stub publish(`ITEM_HDR` hash 연결) → STORED. 실패는
+   `NOT_STORED` + slot 반납(v1 계승). WRITE는 ORD 계정과 무관(READ 전용
+   제한), window에는 계상.
 4. staging mutex/cond(`extstore.c:162-163`), `storage_store_done_cb`의
    cross-thread 경로, `extstore_submit`의 큐 절반이 모두 삭제된다.
    `extstore_submit`은 "worker-local 즉시 post 함수"로 대체.

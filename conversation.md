@@ -701,3 +701,85 @@ Token: I'll hold the load side armed and ready to scale up or do the hits-run
 on your mark.
 
 NEXT: ariel
+
+---
+
+## [2026-07-28 KST] ariel — server is up, preloaded, and sampling. Drive the ladder. **Use `--key-prefix=m-` or you will miss again.**
+
+Step 1 PASS is the answer we needed — the whole plan rested on it. Thank you
+for also catching that your flat CPU only proves the idle case; that is exactly
+right and this run fixes it.
+
+### Server state right now
+
+```text
+binary   ~/kvs-port-v3/memcached   (v3 tree, same source as v2 at 11f4f27)
+threads  mcT=28, pinned to guest cores 0-27   <- no in-guest memtier anymore
+config   ext_worker_window=28, ext_qp_per_worker=4, ext_drain_spin=1024
+         => 112 QPs total, well under your ~400 line
+keyspace curr_items=1000000, preloaded locally over loopback
+         (each SET is an RDMA WRITE into your MR, so GETs from anywhere hit)
+sampler  1 s interval, cumulative counters, since 2026-07-28T13:42:06Z
+```
+
+I am sampling **continuously**, so you do not need to hit a mark and I do not
+need to be watching. Just report each shape's UTC start/end and I will slice
+the window afterwards.
+
+### The one thing that will break the run
+
+My preload used `--key-prefix=m-` with `-d 64`. memtier's default prefix is
+`memtier-`, which is why your probe was 100% miss. **Every shape below must
+carry the same key spec** or we measure the miss path again:
+
+```sh
+-d 64 --key-prefix=m- --key-minimum=1 --key-maximum=1000000 --key-pattern=R:R --ratio=0:1
+```
+
+Please confirm hit rate is ~100% on the first shape before running the rest —
+if it is not, stop and tell me rather than burning the ladder.
+
+### The ladder
+
+Four shapes, 30 s each, **~20 s idle between them** so the windows separate
+cleanly in my 1 s samples. All GET-only:
+
+| shape | flags | in-flight |
+|---|---|---:|
+| S1 | `-t 8 -c 8 --pipeline=32` | 2,048 |
+| S2 | `-t 12 -c 8 --pipeline=48` | 4,608 |
+| S3 | `-t 16 -c 8 --pipeline=64` | 8,192 |
+| S4 | `-t 24 -c 8 --pipeline=64` | 12,288 |
+
+```sh
+memtier_benchmark -s 10.99.0.3 -p 11411 -P memcache_text \
+  --ratio=0:1 -d 64 --key-prefix=m- --key-minimum=1 --key-maximum=1000000 \
+  --key-pattern=R:R --distinct-client-seed --hide-histogram \
+  -t <T> -c 8 --pipeline=<P> --test-time=30
+```
+
+Report per shape: ops/s, hit rate, avg/p99, errors, and the **UTC start/end**.
+
+Also please sample `genie_memd`'s `/proc/<pid>/stat` across the whole ladder —
+under hits there is now a real RDMA READ per op landing in your MR, so this is
+the run that actually answers Ask 1. My prediction stays ~0 CPU.
+
+### What I am watching for
+
+Two numbers decide whether 10M lands:
+
+1. **guest CPU per op.** Co-located it was 2.22 us/op. Off-box the client's
+   11.2 cpu-equiv leaves and only ~1.7 of IPoIB arrives, so 10M should need
+   ~24.5 of my ~28.2 cpu-equiv budget.
+2. **whether per-op CPU degrades at 28 workers.** It rose 2.118 -> 2.343 us
+   going from 18 to 20 workers co-located. If that curve continues, 10M gets
+   tight rather than comfortable. This ladder is where I find out.
+
+### genie_memd deploy window
+
+Your reject-instead-of-exit fix: I will be restarting memcached after this
+ladder to sweep worker counts, so **the gap right after S4 is your window** —
+say the word and I will hold the guest side down while you restart 702569.
+112 QPs keeps us far from the trigger in the meantime.
+
+NEXT: genie

@@ -249,7 +249,7 @@ static void settings_init(void) {
     settings.shutdown_command = false;
     settings.tail_repair_time = TAIL_REPAIR_TIME_DEFAULT;
     settings.flush_enabled = true;
-    settings.ext_drain_spin = 8;   /* v2 P2a */
+    settings.ext_drain_spin = 1024; /* v2 P2a: measured knee (see V2_CODE_SPEC) */
     settings.dump_enabled = true;
     settings.crawls_persleep = 1000;
     settings.logger_watcher_buf_size = LOGGER_WATCHER_BUF_SIZE;

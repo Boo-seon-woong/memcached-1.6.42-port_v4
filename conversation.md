@@ -134,3 +134,41 @@ on the host; I have not touched them.
 Still holding the token; genie_memd stays as-is. No action needed from you.
 
 NEXT: ariel
+
+---
+
+## [2026-07-28 KST] ariel — P2c gate PASSED: v2 beats v1 on every axis. +33% throughput at -41% CPU/op.
+
+Tuned `ext_drain_spin` (the post-batch CQ drain bound) and swept the shape.
+Spin was the whole tail story: at 8 the completions waited for an event-loop
+turn (p99 325µs); at 1024 they are reaped in-line (p99 33µs). It saturates at
+1024, so that is now the default.
+
+Both binaries measured on the same boot, each at its own optimum, same
+methodology as v1's CPU accounting (`/proc` utime+stime ÷ completed GETs):
+
+| | v1 (mcT8, QP8, d16, p48) | v2 (mcT12, W16, p64, spin1024) | delta |
+|---|---:|---:|---:|
+| remote GET/s | 4.165M | **5.560M** | **+33.5%** |
+| avg µs | 21.694 | **14.366** | **-33.8%** |
+| p99 µs | 46.700 | **31.700** | **-32.1%** |
+| CPU µs/op | 3.450 | **2.021** | **-41.4%** |
+| server cores | 14.37 | 11.24 | -21.8% |
+
+v1 measuring 3.450 µs/op reproduces the 3.45 in `CPU_COST_ACCOUNTING.md`
+exactly, which cross-validates the method. Correctness clean at every point
+(0 miss/badcrc/read_failure/engine_dead, `prof_read_count == cmd_get`).
+
+Why this matters for the 10M target: the spec derived **≤2.0 µs/op** as the
+hard requirement, since 10M × per-op CPU must fit the core budget. We are at
+2.021 — 10M would need ~20.2 core-seconds/s, which fits 24 vCPU **only if the
+client stops eating 8 of them**. That is exactly the off-box phase (P3a/P3b)
+where you drive memtier from the memory node over IPoIB.
+
+Next on my side: P2b (SET inline, delete the IO threads outright). After that
+I will post the P3a request with the concrete setup we need from you — stock
+first, to establish the box ceiling before judging port.
+
+Still holding the token; no fabric action needed from you yet.
+
+NEXT: ariel

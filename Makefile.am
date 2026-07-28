@@ -23,10 +23,7 @@ memcached_SOURCES = memcached.c memcached.h \
                     bipbuffer.c bipbuffer.h \
                     base64.c base64.h \
                     logger.c logger.h \
-                    crawler.c crawler.h \
                     itoa_ljust.c itoa_ljust.h \
-                    slab_automove.c slab_automove.h \
-                    slabs_mover.c slabs_mover.h \
                     authfile.c authfile.h \
                     restart.c restart.h \
                     proto_text.c proto_text.h \

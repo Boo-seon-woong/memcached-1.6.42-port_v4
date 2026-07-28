@@ -46,7 +46,6 @@
 #endif
 
 #include "itoa_ljust.h"
-#include "slabs_mover.h"
 #include "protocol_binary.h"
 #include "cache.h"
 #include "logger.h"
@@ -393,15 +392,6 @@ struct stats {
     uint64_t      malloc_fails;
     uint64_t      listen_disabled_num;
     uint64_t      slabs_moved;       /* times slabs were moved around */
-    uint64_t      slab_reassign_rescues; /* items rescued during slab move */
-    uint64_t      slab_reassign_inline_reclaim; /* valid items lost during slab move */
-    uint64_t      slab_reassign_chunk_rescues; /* chunked-item chunks recovered */
-    uint64_t      slab_reassign_busy_items; /* valid temporarily unmovable */
-    uint64_t      slab_reassign_busy_deletes; /* refcounted items killed */
-    uint64_t      slab_reassign_busy_nomem; /* valid items lost during slab move */
-    const char *  slab_reassign_last_busy_status; /* text of last busy item status */
-    uint64_t      lru_crawler_starts; /* Number of item crawlers kicked off */
-    uint64_t      lru_maintainer_juggles; /* number of LRU bg pokes */
     uint64_t      time_in_listen_disabled_us;  /* elapsed time in microseconds while server unable to process new connections */
     uint64_t      log_worker_dropped; /* logs dropped by worker threads */
     uint64_t      log_worker_written; /* logs written by worker threads */
@@ -432,8 +422,6 @@ struct stats_state {
     unsigned int  log_watchers; /* number of currently active watchers */
     bool          hash_is_expanding; /* If the hash table is being expanded */
     bool          accepting_conns;  /* whether we are currently accepting */
-    bool          slab_reassign_running; /* slab reassign in progress */
-    bool          lru_crawler_running; /* crawl in progress */
 };
 
 #define MAX_VERBOSITY_LEVEL 2
@@ -471,30 +459,14 @@ struct settings {
     volatile sig_atomic_t sig_hup;  /* a HUP signal was received but not yet handled */
     bool sasl;              /* SASL on/off */
     bool maxconns_fast;     /* Whether or not to early close connections */
-    bool lru_crawler;        /* Whether or not to enable the autocrawler thread */
-    bool lru_maintainer_thread; /* LRU maintainer background thread */
-    bool lru_segmented;     /* Use split or flat LRU's */
-    bool slab_reassign;     /* Whether or not slab reassignment is allowed */
     bool ssl_enabled; /* indicates whether SSL is enabled */
-    int slab_automove;     /* Whether or not to automatically move slabs */
-    unsigned int slab_automove_version; /* bump if AM config args change */
-    double slab_automove_ratio; /* youngest must be within pct of oldest */
-    unsigned int slab_automove_window; /* window mover for algorithm */
     int hashpower_init;     /* Starting hash power level */
     bool shutdown_command; /* allow shutdown command */
     int tail_repair_time;   /* LRU tail refcount leak repair time */
     bool flush_enabled;     /* flush_all enabled */
     bool dump_enabled;      /* whether cachedump/metadump commands work */
     char *hash_algorithm;     /* Hash algorithm in use */
-    int lru_crawler_sleep;  /* Microsecond sleep between items */
-    uint32_t lru_crawler_tocrawl; /* Number of items to crawl per run */
-    int hot_lru_pct; /* percentage of slab space for HOT_LRU */
-    int warm_lru_pct; /* percentage of slab space for WARM_LRU */
-    double hot_max_factor; /* HOT tail age relative to COLD tail */
-    double warm_max_factor; /* WARM tail age relative to COLD tail */
     int crawls_persleep; /* Number of LRU crawls to run before sleeping */
-    bool temp_lru; /* TTL < temporary_ttl uses TEMP_LRU */
-    uint32_t temporary_ttl; /* temporary LRU threshold */
     int idle_timeout;       /* Number of seconds to let connections idle */
     unsigned int logger_watcher_buf_size; /* size of logger's per-watcher buffer */
     unsigned int logger_buf_size; /* size of per-thread logger buffer */
@@ -502,7 +474,6 @@ struct settings {
     bool drop_privileges;   /* Whether or not to drop unnecessary process privileges */
     bool watch_enabled; /* allows watch commands to be dropped */
     bool relaxed_privileges;   /* Relax process restrictions when running testapp */
-    struct slab_rebal_thread *slab_rebal; /* struct for page mover thread */
 #ifdef TLS
     void *ssl_ctx; /* holds the SSL server context which has the server certificate */
     char *ssl_chain_cert; /* path to the server SSL chain certificate */
@@ -590,28 +561,6 @@ typedef struct _stritem {
     /* then " flags length\r\n" (no terminating null) */
     /* then data with terminating \r\n (no terminating null; it's binary!) */
 } item;
-
-// TODO: If we eventually want user loaded modules, we can't use an enum :(
-enum crawler_run_type {
-    CRAWLER_AUTOEXPIRE=0, CRAWLER_EXPIRED, CRAWLER_METADUMP, CRAWLER_MGDUMP
-};
-
-typedef struct {
-    struct _stritem *next;
-    struct _stritem *prev;
-    struct _stritem *h_next;    /* hash chain next */
-    rel_time_t      time;       /* least recent access */
-    rel_time_t      exptime;    /* expire time */
-    int             nbytes;     /* size of data */
-    unsigned short  refcount;
-    uint16_t        it_flags;   /* ITEM_* above */
-    uint8_t         slabs_clsid;/* which slab class we're in */
-    uint8_t         nkey;       /* key length, w/terminating null and padding */
-    uint32_t        remaining;  /* Max keys to crawl per slab per invocation */
-    uint64_t        reclaimed;  /* items reclaimed during this crawl. */
-    uint64_t        unfetched;  /* items reclaimed unfetched during this crawl. */
-    uint64_t        checked;    /* items examined during this crawl. */
-} crawler;
 
 /* Header when an item is actually a chunk of another item. */
 typedef struct _strchunk {
@@ -713,7 +662,6 @@ typedef struct {
     void *storage;              /* data object for storage system */
 #endif
     logger *l;                  /* logger buffer */
-    void *lru_bump_buf;         /* async LRU bump buffer */
 #ifdef TLS
     char   *ssl_wbuf;
 #endif
@@ -946,7 +894,6 @@ extern int daemonize(int nochdir, int noclose);
 #include "slabs.h"
 #include "assoc.h"
 #include "items.h"
-#include "crawler.h"
 #include "trace.h"
 #include "hash.h"
 

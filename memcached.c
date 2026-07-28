@@ -17,7 +17,6 @@
 #include "storage.h"
 #include "authfile.h"
 #include "restart.h"
-#include "slabs_mover.h"
 #include <sys/stat.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -245,24 +244,8 @@ static void settings_init(void) {
     settings.slab_chunk_size_max = settings.slab_page_size / 2;
     settings.sasl = false;
     settings.maxconns_fast = true;
-    settings.lru_crawler = false;
-    settings.lru_crawler_sleep = 100;
-    settings.lru_crawler_tocrawl = 0;
-    settings.lru_maintainer_thread = false;
-    settings.lru_segmented = true;
-    settings.hot_lru_pct = 20;
-    settings.warm_lru_pct = 40;
-    settings.hot_max_factor = 0.2;
-    settings.warm_max_factor = 2.0;
-    settings.temp_lru = false;
-    settings.temporary_ttl = 61;
     settings.idle_timeout = 0; /* disabled */
     settings.hashpower_init = 0;
-    settings.slab_reassign = true;
-    settings.slab_automove = 1;
-    settings.slab_automove_version = 0;
-    settings.slab_automove_ratio = 0.8;
-    settings.slab_automove_window = 10;
     settings.shutdown_command = false;
     settings.tail_repair_time = TAIL_REPAIR_TIME_DEFAULT;
     settings.flush_enabled = true;
@@ -1883,29 +1866,6 @@ void server_stats(ADD_STAT add_stats, void *c) {
     APPEND_STAT("hash_power_level", "%u", stats_state.hash_power_level);
     APPEND_STAT("hash_bytes", "%llu", (unsigned long long)stats_state.hash_bytes);
     APPEND_STAT("hash_is_expanding", "%u", stats_state.hash_is_expanding);
-    if (settings.slab_reassign) {
-        const char *busy_status = stats.slab_reassign_last_busy_status;
-        if (!busy_status) {
-            // Ensure we can't be NULL, for portability reasons.
-            busy_status = "none";
-        }
-        APPEND_STAT("slab_reassign_rescues", "%llu", stats.slab_reassign_rescues);
-        APPEND_STAT("slab_reassign_chunk_rescues", "%llu", stats.slab_reassign_chunk_rescues);
-        APPEND_STAT("slab_reassign_inline_reclaim", "%llu", stats.slab_reassign_inline_reclaim);
-        APPEND_STAT("slab_reassign_busy_items", "%llu", stats.slab_reassign_busy_items);
-        APPEND_STAT("slab_reassign_busy_deletes", "%llu", stats.slab_reassign_busy_deletes);
-        APPEND_STAT("slab_reassign_busy_nomem", "%llu", stats.slab_reassign_busy_nomem);
-        APPEND_STAT("slab_reassign_last_busy_status", "%s", busy_status);
-        APPEND_STAT("slab_reassign_running", "%u", stats_state.slab_reassign_running);
-        APPEND_STAT("slabs_moved", "%llu", stats.slabs_moved);
-    }
-    if (settings.lru_crawler) {
-        APPEND_STAT("lru_crawler_running", "%u", stats_state.lru_crawler_running);
-        APPEND_STAT("lru_crawler_starts", "%u", stats.lru_crawler_starts);
-    }
-    if (settings.lru_maintainer_thread) {
-        APPEND_STAT("lru_maintainer_juggles", "%llu", (unsigned long long)stats.lru_maintainer_juggles);
-    }
     APPEND_STAT("malloc_fails", "%llu",
                 (unsigned long long)stats.malloc_fails);
     APPEND_STAT("log_worker_dropped", "%llu", (unsigned long long)stats.log_worker_dropped);
@@ -1966,26 +1926,11 @@ void process_stat_settings(ADD_STAT add_stats, void *c) {
     APPEND_STAT("item_size_max", "%d", settings.item_size_max);
     APPEND_STAT("maxconns_fast", "%s", settings.maxconns_fast ? "yes" : "no");
     APPEND_STAT("hashpower_init", "%d", settings.hashpower_init);
-    APPEND_STAT("slab_reassign", "%s", settings.slab_reassign ? "yes" : "no");
-    APPEND_STAT("slab_automove", "%d", settings.slab_automove);
-    APPEND_STAT("slab_automove_ratio", "%.2f", settings.slab_automove_ratio);
-    APPEND_STAT("slab_automove_window", "%u", settings.slab_automove_window);
     APPEND_STAT("slab_chunk_max", "%d", settings.slab_chunk_size_max);
-    APPEND_STAT("lru_crawler", "%s", settings.lru_crawler ? "yes" : "no");
-    APPEND_STAT("lru_crawler_sleep", "%d", settings.lru_crawler_sleep);
-    APPEND_STAT("lru_crawler_tocrawl", "%lu", (unsigned long)settings.lru_crawler_tocrawl);
     APPEND_STAT("tail_repair_time", "%d", settings.tail_repair_time);
     APPEND_STAT("flush_enabled", "%s", settings.flush_enabled ? "yes" : "no");
     APPEND_STAT("dump_enabled", "%s", settings.dump_enabled ? "yes" : "no");
     APPEND_STAT("hash_algorithm", "%s", settings.hash_algorithm);
-    APPEND_STAT("lru_maintainer_thread", "%s", settings.lru_maintainer_thread ? "yes" : "no");
-    APPEND_STAT("lru_segmented", "%s", settings.lru_segmented ? "yes" : "no");
-    APPEND_STAT("hot_lru_pct", "%d", settings.hot_lru_pct);
-    APPEND_STAT("warm_lru_pct", "%d", settings.warm_lru_pct);
-    APPEND_STAT("hot_max_factor", "%.2f", settings.hot_max_factor);
-    APPEND_STAT("warm_max_factor", "%.2f", settings.warm_max_factor);
-    APPEND_STAT("temp_lru", "%s", settings.temp_lru ? "yes" : "no");
-    APPEND_STAT("temporary_ttl", "%u", settings.temporary_ttl);
     APPEND_STAT("idle_timeout", "%d", settings.idle_timeout);
     APPEND_STAT("watcher_logbuf_size", "%u", settings.logger_watcher_buf_size);
     APPEND_STAT("worker_logbuf_size", "%u", settings.logger_buf_size);
@@ -4096,30 +4041,15 @@ static void usage(void) {
            "                          disabled by default; very dangerous option.\n"
            "   - hash_algorithm:      the hash table algorithm\n"
            "                          default is murmur3 hash. options: jenkins, murmur3, xxh3\n"
-           "   - no_lru_crawler:      disable LRU Crawler background thread.\n"
-           "   - lru_crawler_sleep:   microseconds to sleep between items\n"
-           "                          default is %d.\n"
-           "   - lru_crawler_tocrawl: max items to crawl per slab per run\n"
-           "                          default is %u (unlimited)\n",
-           flag_enabled_disabled(settings.maxconns_fast), settings.hashpower_init,
-           settings.lru_crawler_sleep, settings.lru_crawler_tocrawl);
+           "",
+           flag_enabled_disabled(settings.maxconns_fast), settings.hashpower_init);
     printf("   - read_buf_mem_limit:  limit in megabytes for connection read/response buffers.\n"
            "                          do not adjust unless you have high (20k+) conn. limits.\n"
            "                          0 means unlimited (default: %u)\n",
            settings.read_buf_mem_limit);
     verify_default("read_buf_mem_limit", settings.read_buf_mem_limit == 0);
-    printf("   - no_lru_maintainer:   disable new LRU system + background thread.\n"
-           "   - hot_lru_pct:         pct of slab memory to reserve for hot lru.\n"
-           "                          (requires lru_maintainer, default pct: %d)\n"
-           "   - warm_lru_pct:        pct of slab memory to reserve for warm lru.\n"
-           "                          (requires lru_maintainer, default pct: %d)\n"
-           "   - hot_max_factor:      items idle > cold lru age * drop from hot lru. (default: %.2f)\n"
-           "   - warm_max_factor:     items idle > cold lru age * this drop from warm. (default: %.2f)\n"
-           "   - temporary_ttl:       TTL's below get separate LRU, can't be evicted.\n"
-           "                          (requires lru_maintainer, default: %d)\n"
-           "   - idle_timeout:        timeout for idle connections. (default: %d, no timeout)\n",
-           settings.hot_lru_pct, settings.warm_lru_pct, settings.hot_max_factor, settings.warm_max_factor,
-           settings.temporary_ttl, settings.idle_timeout);
+    printf("   - idle_timeout:        timeout for idle connections. (default: %d, no timeout)\n",
+           settings.idle_timeout);
     printf("   - slab_chunk_max:      (EXPERIMENTAL) maximum slab size in kilobytes. use extreme care. (default: %d)\n"
            "   - watcher_logbuf_size: size in kilobytes of per-watcher write buffer. (default: %u)\n"
            "   - worker_logbuf_size:  size in kilobytes of per-worker-thread buffer\n"
@@ -4133,7 +4063,6 @@ static void usage(void) {
            settings.slab_chunk_size_max / (1 << 10), settings.logger_watcher_buf_size / (1 << 10),
            settings.logger_buf_size / (1 << 10));
     verify_default("tail_repair_time", settings.tail_repair_time == TAIL_REPAIR_TIME_DEFAULT);
-    verify_default("lru_crawler_tocrawl", settings.lru_crawler_tocrawl == 0);
     verify_default("idle_timeout", settings.idle_timeout == 0);
 #ifdef HAVE_DROP_PRIVILEGES
     printf("   - drop_privileges:     enable dropping extra syscall privileges\n"
@@ -4452,7 +4381,6 @@ static int _mc_meta_save_cb(const char *tag, void *ctx, void *data) {
     restart_set_kv(ctx, "slab_chunk_size_max", "%d", settings.slab_chunk_size_max);
     restart_set_kv(ctx, "slab_page_size", "%d", settings.slab_page_size);
     restart_set_kv(ctx, "use_cas", "%s", settings.use_cas ? "true" : "false");
-    restart_set_kv(ctx, "slab_reassign", "%s", settings.slab_reassign ? "true" : "false");
 
     // Online state to remember.
 
@@ -4517,7 +4445,6 @@ static int _mc_meta_load_cb(const char *tag, void *ctx, void *data) {
         R_SLAB_PAGE_SIZE,
         R_SLAB_CONFIG,
         R_USE_CAS,
-        R_SLAB_REASSIGN,
         R_CURRENT_CAS,
         R_OLDEST_LIVE,
         R_LOGGER_GID,
@@ -4536,7 +4463,6 @@ static int _mc_meta_load_cb(const char *tag, void *ctx, void *data) {
         [R_SLAB_PAGE_SIZE] = "slab_page_size",
         [R_SLAB_CONFIG] = "slab_config",
         [R_USE_CAS] = "use_cas",
-        [R_SLAB_REASSIGN] = "slab_reassign",
         [R_CURRENT_CAS] = "current_cas",
         [R_OLDEST_LIVE] = "oldest_live",
         [R_LOGGER_GID] = "logger_gid",
@@ -4613,11 +4539,6 @@ static int _mc_meta_load_cb(const char *tag, void *ctx, void *data) {
             break;
         case R_USE_CAS:
             if (!is_bool || settings.use_cas != val_bool) {
-                reuse_mmap = -1;
-            }
-            break;
-        case R_SLAB_REASSIGN:
-            if (!is_bool || settings.slab_reassign != val_bool) {
                 reuse_mmap = -1;
             }
             break;
@@ -4715,8 +4636,6 @@ int main (int argc, char **argv) {
     bool protocol_specified = false;
     bool tcp_specified = false;
     bool udp_specified = false;
-    bool start_lru_maintainer = true;
-    bool start_lru_crawler = true;
     bool start_assoc_maint = true;
     enum hashfunc_type hash_type = MURMUR3_HASH;
     uint32_t tocrawl;
@@ -4734,21 +4653,8 @@ int main (int argc, char **argv) {
         MAXCONNS_FAST = 0,
         HASHPOWER_INIT,
         NO_HASHEXPAND,
-        SLAB_REASSIGN,
-        SLAB_AUTOMOVE,
-        SLAB_AUTOMOVE_RATIO,
-        SLAB_AUTOMOVE_WINDOW,
         TAIL_REPAIR_TIME,
         HASH_ALGORITHM,
-        LRU_CRAWLER,
-        LRU_CRAWLER_SLEEP,
-        LRU_CRAWLER_TOCRAWL,
-        LRU_MAINTAINER,
-        HOT_LRU_PCT,
-        WARM_LRU_PCT,
-        HOT_MAX_FACTOR,
-        WARM_MAX_FACTOR,
-        TEMPORARY_TTL,
         IDLE_TIMEOUT,
         WATCHER_LOGBUF_SIZE,
         WORKER_LOGBUF_SIZE,
@@ -4759,12 +4665,8 @@ int main (int argc, char **argv) {
         MODERN,
         NO_MODERN,
         NO_CHUNKED_ITEMS,
-        NO_SLAB_REASSIGN,
-        NO_SLAB_AUTOMOVE,
         NO_MAXCONNS_FAST,
         INLINE_ASCII_RESP,
-        NO_LRU_CRAWLER,
-        NO_LRU_MAINTAINER,
         NO_DROP_PRIVILEGES,
         DROP_PRIVILEGES,
         RESP_OBJ_MEM_LIMIT,
@@ -4798,21 +4700,8 @@ int main (int argc, char **argv) {
         [MAXCONNS_FAST] = "maxconns_fast",
         [HASHPOWER_INIT] = "hashpower",
         [NO_HASHEXPAND] = "no_hashexpand",
-        [SLAB_REASSIGN] = "slab_reassign",
-        [SLAB_AUTOMOVE] = "slab_automove",
-        [SLAB_AUTOMOVE_RATIO] = "slab_automove_ratio",
-        [SLAB_AUTOMOVE_WINDOW] = "slab_automove_window",
         [TAIL_REPAIR_TIME] = "tail_repair_time",
         [HASH_ALGORITHM] = "hash_algorithm",
-        [LRU_CRAWLER] = "lru_crawler",
-        [LRU_CRAWLER_SLEEP] = "lru_crawler_sleep",
-        [LRU_CRAWLER_TOCRAWL] = "lru_crawler_tocrawl",
-        [LRU_MAINTAINER] = "lru_maintainer",
-        [HOT_LRU_PCT] = "hot_lru_pct",
-        [WARM_LRU_PCT] = "warm_lru_pct",
-        [HOT_MAX_FACTOR] = "hot_max_factor",
-        [WARM_MAX_FACTOR] = "warm_max_factor",
-        [TEMPORARY_TTL] = "temporary_ttl",
         [IDLE_TIMEOUT] = "idle_timeout",
         [WATCHER_LOGBUF_SIZE] = "watcher_logbuf_size",
         [WORKER_LOGBUF_SIZE] = "worker_logbuf_size",
@@ -4823,12 +4712,8 @@ int main (int argc, char **argv) {
         [MODERN] = "modern",
         [NO_MODERN] = "no_modern",
         [NO_CHUNKED_ITEMS] = "no_chunked_items",
-        [NO_SLAB_REASSIGN] = "no_slab_reassign",
-        [NO_SLAB_AUTOMOVE] = "no_slab_automove",
         [NO_MAXCONNS_FAST] = "no_maxconns_fast",
         [INLINE_ASCII_RESP] = "inline_ascii_resp",
-        [NO_LRU_CRAWLER] = "no_lru_crawler",
-        [NO_LRU_MAINTAINER] = "no_lru_maintainer",
         [NO_DROP_PRIVILEGES] = "no_drop_privileges",
         [DROP_PRIVILEGES] = "drop_privileges",
         [RESP_OBJ_MEM_LIMIT] = "resp_obj_mem_limit",
@@ -5231,42 +5116,10 @@ int main (int argc, char **argv) {
             case NO_HASHEXPAND:
                 start_assoc_maint = false;
                 break;
-            case SLAB_REASSIGN:
-                settings.slab_reassign = true;
-                break;
-            case SLAB_AUTOMOVE:
-                if (subopts_value == NULL) {
-                    settings.slab_automove = 1;
-                    break;
-                }
-                settings.slab_automove = atoi(subopts_value);
-                if (settings.slab_automove < 0 || settings.slab_automove > 2) {
-                    fprintf(stderr, "slab_automove must be between 0 and 2\n");
-                    goto error;
-                }
-                break;
-            case SLAB_AUTOMOVE_RATIO:
-                if (subopts_value == NULL) {
-                    fprintf(stderr, "Missing slab_automove_ratio argument\n");
-                    goto error;
-                }
-                settings.slab_automove_ratio = atof(subopts_value);
-                if (settings.slab_automove_ratio <= 0 || settings.slab_automove_ratio > 1) {
-                    fprintf(stderr, "slab_automove_ratio must be > 0 and < 1\n");
-                    goto error;
-                }
-                break;
-            case SLAB_AUTOMOVE_WINDOW:
-                if (subopts_value == NULL) {
-                    fprintf(stderr, "Missing slab_automove_window argument\n");
-                    goto error;
-                }
-                settings.slab_automove_window = atoi(subopts_value);
-                if (settings.slab_automove_window < 3) {
-                    fprintf(stderr, "slab_automove_window must be > 2\n");
-                    goto error;
-                }
-                break;
+
+
+
+
             case TAIL_REPAIR_TIME:
                 if (subopts_value == NULL) {
                     fprintf(stderr, "Missing numeric argument for tail_repair_time\n");
@@ -5294,87 +5147,15 @@ int main (int argc, char **argv) {
                     goto error;
                 }
                 break;
-            case LRU_CRAWLER:
-                start_lru_crawler = true;
-                break;
-            case LRU_CRAWLER_SLEEP:
-                if (subopts_value == NULL) {
-                    fprintf(stderr, "Missing lru_crawler_sleep value\n");
-                    goto error;
-                }
-                settings.lru_crawler_sleep = atoi(subopts_value);
-                if (settings.lru_crawler_sleep > 1000000 || settings.lru_crawler_sleep < 0) {
-                    fprintf(stderr, "LRU crawler sleep must be between 0 and 1 second\n");
-                    goto error;
-                }
-                break;
-            case LRU_CRAWLER_TOCRAWL:
-                if (subopts_value == NULL) {
-                    fprintf(stderr, "Missing lru_crawler_tocrawl value\n");
-                    goto error;
-                }
-                if (!safe_strtoul(subopts_value, &tocrawl)) {
-                    fprintf(stderr, "lru_crawler_tocrawl takes a numeric 32bit value\n");
-                    goto error;
-                }
-                settings.lru_crawler_tocrawl = tocrawl;
-                break;
-            case LRU_MAINTAINER:
-                start_lru_maintainer = true;
-                settings.lru_segmented = true;
-                break;
-            case HOT_LRU_PCT:
-                if (subopts_value == NULL) {
-                    fprintf(stderr, "Missing hot_lru_pct argument\n");
-                    goto error;
-                }
-                settings.hot_lru_pct = atoi(subopts_value);
-                if (settings.hot_lru_pct < 1 || settings.hot_lru_pct >= 80) {
-                    fprintf(stderr, "hot_lru_pct must be > 1 and < 80\n");
-                    goto error;
-                }
-                break;
-            case WARM_LRU_PCT:
-                if (subopts_value == NULL) {
-                    fprintf(stderr, "Missing warm_lru_pct argument\n");
-                    goto error;
-                }
-                settings.warm_lru_pct = atoi(subopts_value);
-                if (settings.warm_lru_pct < 1 || settings.warm_lru_pct >= 80) {
-                    fprintf(stderr, "warm_lru_pct must be > 1 and < 80\n");
-                    goto error;
-                }
-                break;
-            case HOT_MAX_FACTOR:
-                if (subopts_value == NULL) {
-                    fprintf(stderr, "Missing hot_max_factor argument\n");
-                    goto error;
-                }
-                settings.hot_max_factor = atof(subopts_value);
-                if (settings.hot_max_factor <= 0) {
-                    fprintf(stderr, "hot_max_factor must be > 0\n");
-                    goto error;
-                }
-                break;
-            case WARM_MAX_FACTOR:
-                if (subopts_value == NULL) {
-                    fprintf(stderr, "Missing warm_max_factor argument\n");
-                    goto error;
-                }
-                settings.warm_max_factor = atof(subopts_value);
-                if (settings.warm_max_factor <= 0) {
-                    fprintf(stderr, "warm_max_factor must be > 0\n");
-                    goto error;
-                }
-                break;
-            case TEMPORARY_TTL:
-                if (subopts_value == NULL) {
-                    fprintf(stderr, "Missing temporary_ttl argument\n");
-                    goto error;
-                }
-                settings.temp_lru = true;
-                settings.temporary_ttl = atoi(subopts_value);
-                break;
+
+
+
+
+
+
+
+
+
             case IDLE_TIMEOUT:
                 if (subopts_value == NULL) {
                     fprintf(stderr, "Missing numeric argument for idle_timeout\n");
@@ -5437,23 +5218,13 @@ int main (int argc, char **argv) {
             case NO_CHUNKED_ITEMS:
                 settings.slab_chunk_size_max = settings.slab_page_size;
                 break;
-            case NO_SLAB_REASSIGN:
-                settings.slab_reassign = false;
-                break;
-            case NO_SLAB_AUTOMOVE:
-                settings.slab_automove = 0;
-                break;
+
+
             case NO_MAXCONNS_FAST:
                 settings.maxconns_fast = false;
                 break;
-            case NO_LRU_CRAWLER:
-                settings.lru_crawler = false;
-                start_lru_crawler = false;
-                break;
-            case NO_LRU_MAINTAINER:
-                start_lru_maintainer = false;
-                settings.lru_segmented = false;
-                break;
+
+
 #ifdef TLS
             case SSL_CERT:
                 if (subopts_value == NULL) {
@@ -5551,13 +5322,8 @@ int main (int argc, char **argv) {
                 if (!slab_chunk_size_changed) {
                     settings.slab_chunk_size_max = settings.slab_page_size;
                 }
-                settings.slab_reassign = false;
-                settings.slab_automove = 0;
                 settings.maxconns_fast = false;
-                settings.lru_segmented = false;
                 hash_type = JENKINS_HASH;
-                start_lru_crawler = false;
-                start_lru_maintainer = false;
                 break;
             case NO_DROP_PRIVILEGES:
                 settings.drop_privileges = false;
@@ -5714,15 +5480,6 @@ int main (int argc, char **argv) {
         meta->slab_config = "1.25";
     }
 
-    if (settings.hot_lru_pct + settings.warm_lru_pct > 80) {
-        fprintf(stderr, "hot_lru_pct + warm_lru_pct cannot be more than 80%% combined\n");
-        exit(EX_USAGE);
-    }
-
-    if (settings.temp_lru && !start_lru_maintainer) {
-        fprintf(stderr, "temporary_ttl requires lru_maintainer to be enabled\n");
-        exit(EX_USAGE);
-    }
 
     if (hash_init(hash_type) != 0) {
         fprintf(stderr, "Failed to initialize hash_algorithm!\n");
@@ -6018,10 +5775,8 @@ int main (int argc, char **argv) {
 #endif
 #ifdef EXTSTORE
     memcached_thread_init(settings.num_threads, storage);
-    init_lru_crawler(storage);
 #else
     memcached_thread_init(settings.num_threads, NULL);
-    init_lru_crawler(NULL);
 #endif
 
 #ifdef PROXY
@@ -6034,26 +5789,6 @@ int main (int argc, char **argv) {
 
     if (start_assoc_maint && start_assoc_maintenance_thread() == -1) {
         exit(EXIT_FAILURE);
-    }
-    if (start_lru_crawler && start_item_crawler_thread() != 0) {
-        fprintf(stderr, "Failed to enable LRU crawler thread\n");
-        exit(EXIT_FAILURE);
-    }
-#ifdef EXTSTORE
-    if (start_lru_maintainer && start_lru_maintainer_thread(storage) != 0) {
-#else
-    if (start_lru_maintainer && start_lru_maintainer_thread(NULL) != 0) {
-#endif
-        fprintf(stderr, "Failed to enable LRU maintainer thread\n");
-        free(meta);
-        return 1;
-    }
-
-    if (settings.slab_reassign) {
-        settings.slab_rebal = start_slab_maintenance_thread(storage);
-        if (!settings.slab_rebal) {
-            exit(EXIT_FAILURE);
-        }
     }
 
     if (settings.idle_timeout && start_conn_timeout_thread() == -1) {

@@ -374,7 +374,7 @@ static void *get_page_from_global_pool(void) {
 static int do_slabs_newslab(const unsigned int id) {
     slabclass_t *p = &slabclass[id];
     slabclass_t *g = &slabclass[SLAB_GLOBAL_PAGE_POOL];
-    int len = (settings.slab_reassign || settings.slab_chunk_size_max != settings.slab_page_size)
+    int len = (settings.slab_chunk_size_max != settings.slab_page_size)
         ? settings.slab_page_size
         : p->size * p->perslab;
     char *ptr;
@@ -646,8 +646,6 @@ static void memory_release(void) {
     if (mem_base != NULL)
         return;
 
-    if (!settings.slab_reassign)
-        return;
 
     while (mem_malloced > mem_limit &&
             (p = get_page_from_global_pool()) != NULL) {

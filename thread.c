@@ -157,17 +157,12 @@ void pause_threads(enum pause_thread_types type) {
 
     switch (type) {
         case PAUSE_ALL_THREADS:
-            slab_maintenance_pause(settings.slab_rebal);
-            lru_maintainer_pause();
-            lru_crawler_pause();
+            /* v2: no mover/maintainer/crawler side threads remain. */
         case PAUSE_WORKER_THREADS:
             pause_workers = true;
             pthread_mutex_lock(&worker_hang_lock);
             break;
         case RESUME_ALL_THREADS:
-            slab_maintenance_resume(settings.slab_rebal);
-            lru_maintainer_resume();
-            lru_crawler_resume();
         case RESUME_WORKER_THREADS:
             pthread_mutex_unlock(&worker_hang_lock);
             break;
@@ -222,19 +217,6 @@ void stop_threads(void) {
 
     // stop each side thread.
     // TODO: Verify these all work if the threads are already stopped
-    stop_item_crawler_thread(CRAWLER_WAIT);
-    if (settings.verbose > 0)
-        fprintf(stderr, "stopped lru crawler\n");
-    if (settings.lru_maintainer_thread) {
-        stop_lru_maintainer_thread();
-        if (settings.verbose > 0)
-            fprintf(stderr, "stopped maintainer\n");
-    }
-    if (settings.slab_reassign) {
-        stop_slab_maintenance_thread(settings.slab_rebal);
-        if (settings.verbose > 0)
-            fprintf(stderr, "stopped slab mover\n");
-    }
     logger_stop();
     if (settings.verbose > 0)
         fprintf(stderr, "stopped logger thread\n");
@@ -503,8 +485,7 @@ static void *worker_libevent(void *arg) {
      * all threads have finished initializing.
      */
     me->l = logger_create();
-    me->lru_bump_buf = item_lru_bump_buf_create();
-    if (me->l == NULL || me->lru_bump_buf == NULL) {
+    if (me->l == NULL) {
         abort();
     }
 

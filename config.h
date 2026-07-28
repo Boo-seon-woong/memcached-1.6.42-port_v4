@@ -31,10 +31,10 @@
 /* Define to 1 if support accept4 */
 #define HAVE_ACCEPT4 1
 
-/* Define to 1 if you have the 'cap_enter' function. */
+/* Define to 1 if you have the `cap_enter' function. */
 /* #undef HAVE_CAP_ENTER */
 
-/* Define to 1 if you have the 'clock_gettime' function. */
+/* Define to 1 if you have the `clock_gettime' function. */
 #define HAVE_CLOCK_GETTIME 1
 
 /* Define this if you have an implementation of drop_privileges() */
@@ -43,7 +43,7 @@
 /* Define this if you have an implementation of drop_worker_privileges() */
 /* #undef HAVE_DROP_WORKER_PRIVILEGES */
 
-/* Define to 1 if you have the 'eventfd' function. */
+/* Define to 1 if you have the `eventfd' function. */
 #define HAVE_EVENTFD 1
 
 /* GCC 64bit Atomics available */
@@ -55,7 +55,7 @@
 /* Define to 1 if support getopt_long */
 #define HAVE_GETOPT_LONG 1
 
-/* Define to 1 if you have the 'getpagesizes' function. */
+/* Define to 1 if you have the `getpagesizes' function. */
 /* #undef HAVE_GETPAGESIZES */
 
 /* Have ntohll */
@@ -70,25 +70,25 @@
 /* Set to nonzero if you want to enable proxy uring handling */
 /* #undef HAVE_LIBURING */
 
-/* Define to 1 if you have the 'memcntl' function. */
+/* Define to 1 if you have the `memcntl' function. */
 /* #undef HAVE_MEMCNTL */
 
-/* Define to 1 if you have the 'mlockall' function. */
+/* Define to 1 if you have the `mlockall' function. */
 #define HAVE_MLOCKALL 1
 
-/* Define to 1 if you have the 'pledge' function. */
+/* Define to 1 if you have the `pledge' function. */
 /* #undef HAVE_PLEDGE */
 
-/* Define to 1 if you have the 'pread' function. */
+/* Define to 1 if you have the `pread' function. */
 #define HAVE_PREAD 1
 
-/* Define to 1 if you have the 'preadv' function. */
+/* Define to 1 if you have the `preadv' function. */
 #define HAVE_PREADV 1
 
 /* Define to 1 if support pthread_setname_np */
 #define HAVE_PTHREAD_SETNAME_NP 1
 
-/* Define to 1 if you have the 'sandbox_init' function. */
+/* Define to 1 if you have the `sandbox_init' function. */
 /* #undef HAVE_SANDBOX_INIT */
 
 /* we have sasl_callback_ft */
@@ -103,7 +103,7 @@
 /* Define to 1 if you have the <sasl/sasl.h> header file. */
 #define HAVE_SASL_SASL_H 1
 
-/* Define to 1 if you have the 'setppriv' function. */
+/* Define to 1 if you have the `setppriv' function. */
 /* #undef HAVE_SETPPRIV */
 
 /* Define to 1 if stdbool.h conforms to C99. */
@@ -124,7 +124,7 @@
 /* Define to 1 if you have the <string.h> header file. */
 #define HAVE_STRING_H 1
 
-/* Define to 1 if you have the 'sysconf' function. */
+/* Define to 1 if you have the `sysconf' function. */
 #define HAVE_SYSCONF 1
 
 /* Define to 1 if you have the <sys/auxv.h> header file. */
@@ -139,7 +139,7 @@
 /* Define to 1 if you have the <unistd.h> header file. */
 #define HAVE_UNISTD_H 1
 
-/* Define to 1 if the system has the type '_Bool'. */
+/* Define to 1 if the system has the type `_Bool'. */
 #define HAVE__BOOL 1
 
 /* Set to nonzero if you want 64bit client flags */
@@ -175,13 +175,13 @@
 /* Set to nonzero if you want to enable proxy backend tls support */
 /* #undef PROXY_TLS */
 
-/* The size of 'void *', as computed by sizeof. */
+/* The size of `void *', as computed by sizeof. */
 #define SIZEOF_VOID_P 8
 
 /* Set to nonzero if you want to compile a statically linked binary */
 /* #undef STATIC */
 
-/* Define to 1 if all of the C89 standard headers exist (not just the ones
+/* Define to 1 if all of the C90 standard headers exist (not just the ones
    required in a freestanding environment). This macro is provided for
    backward compatibility; new code need not use it. */
 #define STDC_HEADERS 1
@@ -207,7 +207,7 @@
 /* make sure IOV_MAX is defined */
 #define _GNU_SOURCE 1
 
-/* Define to empty if 'const' does not conform to ANSI C. */
+/* Define to empty if `const' does not conform to ANSI C. */
 /* #undef const */
 
 /* define to int if socklen_t not available */

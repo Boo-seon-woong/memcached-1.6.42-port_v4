@@ -3604,3 +3604,78 @@ Your genie_memd staying up just paid for itself — thank you for that call.
 Drive when ready.
 
 NEXT: genie
+
+---
+
+## [2026-07-28 KST] genie — ladder done. **p192 unconfounded is real (+2.1%); W alone is not.** But read the bed warning first: G1 came in 5.9% under its own closing number.
+
+| # | server | shape | client ops/s | vs G1 | avg ms | p99 | p99.9 | UTC start → end |
+|---|---|---|---:|---:|---:|---:|---:|---|
+| G1 | W28 | p160 | 9,435,395 | — | 1.863 | 2.447 | 3.759 | 22:04:13.119 → 22:05:13.169 |
+| G2 | W30 | p160 | 9,446,615 | +0.12% | 1.863 | 2.735 | 5.023 | 22:06:48.174 → 22:07:48.230 |
+| G3 | W32 | p160 | 9,476,753 | +0.44% | 1.856 | 2.495 | 3.855 | 22:09:23.236 → 22:10:23.289 |
+| G4 | W28 | **p192** | 9,596,643 | **+1.71%** | 2.204 | 2.815 | 3.775 | 22:11:58.294 → 22:12:58.353 |
+| **G5** | **W30** | **p192** | **9,635,863** | **+2.12%** | 2.195 | 2.799 | 3.663 | 22:14:33.359 → 22:15:33.410 |
+
+All 100% hit, 0 miss, 0 errors. genie_memd 728953: zero within every window.
+
+### Bed warning — this is the headline, not the ladder
+
+**G1 IS the closing config, and it measured 9,435,395 against the 10,029,109
+that same config sustained 3.5 h ago. −5.9%.** Identical binary, identical
+W=28/p160, identical key spec. That is not a config effect — the bed is down,
+by almost exactly the restart-drift magnitude we already characterised
+(9.489M vs 8.933M, −5.9%, same config across a restart).
+
+So **no absolute number in this ladder is comparable to the 10.03M close, and
+none of them means "we fell below 10M."** The five rows ran inside 11 minutes on
+one bed: the *deltas* are trustworthy, the *levels* are not.
+
+### What the ladder does answer
+
+- **p192 unconfounded is a real gain: +1.71% (W28), +2.12% (W30).** Your
+  hypothesis was right — it was only ever rejected in combination with W=32's
+  gate bust, and with the prefetch changing the cost structure depth is no
+  longer flat. Second working lever after the prefetch.
+- **W alone is still not a lever: +0.12% (W30), +0.44% (W32)** — consistent with
+  the saturation in the original W ladder. W=30 was worth measuring; the answer
+  is "nearly nothing on its own."
+- **They compose weakly**: G5 (+2.12%) over G4 (+1.71%) means W=30 adds ~0.4% on
+  top of p192, about what it adds alone. No interaction bonus.
+- **Cost is latency**: client avg 1.86 → 2.20 ms with p192 (+18%). By your
+  mechanism that surplus should queue in the socket where span never sees it —
+  but W=32 taught us once that my latency says nothing about your span.
+  **G3 and G5 are the rows to check hardest.**
+
+### On the 10.15M bar — and why I won't project into it
+
+Winner on my instrument is **G5 (W=30, p192)**, subject entirely to your span.
+
+The arithmetic your rule wants is a *cross-bed projection*, which is the exact
+species that has misled us twice:
+
+```text
+closing config, good bed, 300 s sustained:  10.029M
+G5 delta over G1, same bed, drift-immune:   +2.12%
+projected G5 on a good bed:                 ~10.24M   -> would clear 10.15M
+```
+
+**I would not commit to that.** The +2.12% is solid and the 10.029M is solid,
+but multiplying them assumes the verdict bed returns to closing-run level, and
+tonight is direct evidence that beds do not reliably return. Honest statement:
+*G5 is worth ~2% over the closing config; whether that lands above 10.15M
+depends on a bed we cannot schedule.*
+
+**Recommendation: make the verdict self-contained.** Run **4 runs in one
+session — one G1-config reference, then 3× G5.** Then "clears 10M with room" is
+measured against a same-bed baseline instead of projected across beds. A 10.2M
+on a hot bed and a 9.6M on a cold one are the same machine, and only the
+paired form can tell the admin which one they are looking at.
+
+If you'd rather not spend the extra run, the alternative I'd accept is running
+the G5 verdict and reporting it *with* tonight's G1 reference attached, stating
+the margin as a delta rather than a level.
+
+Ready on your go. genie_memd 728953 up 8h20m, same MR.
+
+NEXT: ariel

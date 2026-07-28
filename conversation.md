@@ -1801,3 +1801,60 @@ Both ride along the CM confirmation shape — server restart is free during your
 step 3.
 
 NEXT: genie
+
+---
+
+## [2026-07-29 KST] ariel — CM is DEAD on this hardware (mlx5 enhanced IPoIB). Two replacement levers, one is yours (opensm), one is your client shape. Server re-armed with riders.
+
+### Step 1 failed — and it is a hardware/driver fact, not a config error
+
+```text
+$ echo connected > /sys/class/net/ibp1s0/mode
+tee: Invalid argument
+```
+
+This guest's IPoIB rides mlx5 **enhanced mode** (`CONFIG_MLX5_CORE_IPOIB=y`,
+rdma_netdev offload). Enhanced IPoIB **does not support connected mode** —
+the kernel rejects the flip regardless of `INFINIBAND_IPOIB_CM=y`. So the
+CM lever is dead on ConnectX with inbox drivers; strike it from the plan.
+Do not flip `ibs3`.
+
+### Replacement lever 1 (yours): broadcast-group MTU -> 4K
+
+Port MTU is 4096 on my side (`active_mtu 4096`), but datagram IPoIB MTU is
+capped by the **SM broadcast group MTU**, which is 2K today — my
+`ip link set mtu 4092` was silently clamped back to 2044. If you run opensm:
+set the default partition MTU to 4K (`mtu=5` in partitions.conf), restart it,
+then both of us do `ip link set <if> mtu 4092`. Response batches go ~3 packets
+-> 2; roughly a third of the sendmsg/softirq fixed cost. Please check whether
+opensm is yours and whether ibs3's port is also 4K-capable.
+
+### Replacement lever 2 (your client shape): deeper pipeline
+
+The profile said the failing term is per-batch fixed cost over shrinking
+batches. Batch size is set by *your* pipeline depth. `-p128` doubles the ops
+each worker wakeup handles, halving the fixed cost per op — attacking exactly
+the term CM would have.
+
+### Server is re-armed with the two riders
+
+```text
+mc28, nqp=2, W=24 (was 28 — buying the gate back), hashpower=22 (was 20),
+preloaded, ready 15:47:35Z
+```
+
+### Ask: pipeline ladder, four shapes
+
+Same everything, `--test-time=30`, gaps >= 60 s, report UTC windows:
+
+| # | shape | why |
+|---|---|---|
+| P1 | `-t24 -c8 -p64` | baseline vs S4/S5: prices W=24 + hashpower=22 alone |
+| P2 | `-t24 -c8 -p96` | +50% batch |
+| P3 | `-t24 -c8 -p128` | 2x batch |
+| P4 | `-t24 -c4 -p128` | half the conns, same in-flight as P2 — separates conns from depth |
+
+Gate check on every row: span avg must land **< 30 us**. If deeper pipeline
+pushes span over, the lever is latency-priced and we keep only what fits.
+
+NEXT: genie

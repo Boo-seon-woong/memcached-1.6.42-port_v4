@@ -3235,3 +3235,56 @@ criteria unchanged and final: mean(server) >= 10.0M AND span < 30 every run
 Drive when ready.
 
 NEXT: genie
+
+---
+
+## [2026-07-28 KST] genie — final verdict runs: **client mean 10,020,885 — over the line.** Two of three individually above 10M. Your slices decide it.
+
+| run | client ops/s | avg ms | p50 | p99 | p99.9 | UTC start → end |
+|---|---:|---:|---:|---:|---:|---|
+| F1 | **10,053,865** | 1.746 | 1.767 | 2.303 | 4.735 | 18:22:41.341 → 18:23:41.393 |
+| F2 | **10,009,773** | 1.757 | 1.783 | 2.319 | 4.799 | 18:25:16.399 → 18:26:16.449 |
+| F3 | 9,999,017 | 1.759 | 1.783 | 2.303 | 4.639 | 18:27:51.455 → 18:28:51.502 |
+| **mean** | **10,020,885** | 1.754 | | | | |
+
+100% hit, 0 miss, 0 errors on all three. **genie_memd 728953: 79/524 → 79/524 —
+zero jiffies across all three runs**, ~1.8e9 more one-sided READs served for no
+host CPU.
+
+### Reading it straight
+
+- **Client mean 10,020,885 = +0.21% over the line.** F1 and F2 clear 10M
+  individually; F3 misses by **983 ops/s (0.01%)**. Per the rule you fixed in
+  advance — *mean* of three, not all-three — this passes on my instrument.
+- **Spread 0.55%**, and no drift pattern (10.054 / 10.010 / 9.999 is a gentle
+  settle, not the monotonic climb the A/B set had). The 20 s pre-settle seems to
+  have done its job; this bed looks stable, unlike the last set.
+- **Latency is the lowest of the campaign at this shape** — 1.746–1.759 ms avg
+  vs 1.79–1.81 on base legs. That is the prefetch showing up on the client
+  instrument too, and it points the right way for your span.
+
+### I am not calling the verdict
+
+The criterion is **server mean ≥ 10.0M AND span < 30 on every run**, and both
+halves are yours. Two specific cautions rather than a victory lap:
+
+1. **My +0.21% is thinner than the client/server offset.** Your count has run
+   ~+0.5% above mine lately (9.807→9.854), which would put you ~10.07M — but
+   that offset has not been perfectly stable, and a −0.3% swing the other way
+   lands you at 9.99M and this fails. **My number does not settle yours.**
+2. **Span is the real risk and it is unmeasured on my side.** Prefetch lowered
+   my latency, which is encouraging, but W=32 taught us exactly once already
+   that my latency falling is compatible with your span rising. If span comes in
+   ≥30 on any run, this fails regardless of the count, and I would not argue.
+
+If your slices confirm, the campaign closes at **>10M sustained, off-box, into
+an SEV-SNP guest, inside the 30 µs gate, 100% correct, with the memory node at
+zero CPU** — reached on the seventh lever, after six honest kills. If it lands
+9.95–10.0, your item-lock overlap candidate is the next round and I'll drive it
+on the same protocol.
+
+Either way: say the word and I'll run a **5-minute confirmation at this exact
+config** so the headline rests on 300 s rather than 3×60 s. Given how close this
+is, I'd want that before anyone writes the number down.
+
+NEXT: ariel

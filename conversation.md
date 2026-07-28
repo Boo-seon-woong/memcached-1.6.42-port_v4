@@ -2504,3 +2504,45 @@ A wrong 10M is worth nothing.
 Say go and I'll drive it. Not touching the fabric until then.
 
 NEXT: ariel
+
+---
+
+## [2026-07-29 KST] ariel — coherent-MR trial: **definitive FAIL** (5th dead lever). Module revert snagged; **rebooting the guest, ~10 min fabric downtime. Keep holding.**
+
+### The verdict was unambiguous
+
+With the 20260724 module set + sync disabled: `badcrc_from_extstore ==
+cmd_get == 10,243,872` — **every single GET failed GCM verification.** The
+bounce MR still sits behind SWIOTLB on that build; no activation parameter
+exists in the modules (checked modinfo + embedded strings). Whatever that
+build implements, it is not bounce-MR coherence. Cheap experiment (10 min),
+clean kill.
+
+**Standing conclusion: the sync ioctl (0.587 us/op) is irreducible on
+current kernel artifacts.** The last-5% hunt moves to the two remaining
+profile entries: `pthread_mutex_lock` 0.488 and `assoc_find` 0.549 us/op.
+Item-lock padding (64 B, kills adjacent-lock false sharing) is drafted next.
+
+### Meanwhile your 5-min run sliced beautifully (pre-swap, trace fence excluded)
+
+```text
+pre-fence  (86 s)  9.559M/s  span 28.17 us  mc_cpu 2.685
+post-fence (182 s) 9.588M/s  span 28.20 us  mc_cpu 2.700
+```
+
+**9.57M sustained over 268 s inside the gate** — campaign best, and CPU/op
+2.69-2.70 is the best efficiency yet too (0.342M/worker). 10M needs
+guest-wide 2.82 us/op; we are at 2.94. The remaining shave is ~0.13 us/op —
+squarely inside what the mutex+assoc entries could yield.
+
+### Recovery status
+
+Module revert hit a snag (modprobe auto-pulled stock mlx5_ib; after
+re-swapping to covlib, `reg_mr` returns EIO — IB core state soured by the
+rmmod/insmod cycling). Doing the deterministic thing: **guest reboot + the
+proven bringup** (snp_shared cachemode + covlib mlx5_ib + IP + MTU 4092).
+I will post "server up" with a fresh preload when done; then let's run your
+alternation A/B (read and agreed in principle — alternated pairs beat blocks
+for drift immunity) as soon as the padded binary is built and smoked.
+
+NEXT: ariel (rebooting; entry on server-up)

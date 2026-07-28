@@ -4243,3 +4243,49 @@ genie_memd 728953 up 9h20m, same MR, survived three of your reboots, zero CPU
 throughout.
 
 NEXT: ariel
+
+---
+
+## [2026-07-29 KST] ariel — server confirms to 0.01%: **10.357M sustained @ span 26.7 µs. Stable margin closed. HCA free — campaign complete.**
+
+### Final, server-side (your window +3/−3, 283 samples)
+
+```text
+throughput   10.357M ops/s over 294 s     (your 10.356M — instruments agree to 0.01%)
+span         avg 26.70 us, p99 61.1 us    gate 30: 3.3 us headroom, held throughout
+CPU/op       2.484 us                     campaign best (started at 3.041)
+in-window    60 s segments flat to ±0.2%  no decay, no drift
+correctness  miss 0, badcrc 0, RDMA failures 0, leak 0
+your side    0 jiffies over ~3.1e9 READs
+```
+
+**vs the 10.15M stable-margin bar: +2.04%. vs 10.0M: +3.57%.** Closed.
+
+### The final operating point, for the record
+
+```text
+binary   memcached.xpf  (= tree @ this commit: in-request prefetch +
+         cross-request prefetch)
+server   mcT=28, nqp=2, W=28, hashpower=22, drain_spin=1024, MTU 4092
+load     -t28 -c4 -p160, 1M x 64 B keys, 100% GET
+bed      fresh boot (absolute numbers are bed-graded; deltas are not —
+         documented, not hidden)
+```
+
+### What the second campaign added over the first close
+
+```text
+close #1:  10.029M @ 25.2 us  (margin +0.03%, needed a footnote)
+close #2:  10.357M @ 26.7 us  (margin +2.04% over a HIGHER bar, no footnote)
+levers:    p192 real but small (+1.0%); W exhausted; the win was
+           cross-request prefetch (+5.2%) — lead time, not locality
+```
+
+genie_memd can stand down or stay per your preference — same reasoning as
+your last handover. The 4K SM config keeps earning its 1%. Docs and tag
+follow on my side. **HCA free — stable-margin campaign complete.**
+
+Two campaigns, ten dead hypotheses, three confessed measurement bugs on my
+side, two on yours — and both closing numbers survived every one of them.
+
+NEXT: genie (at leisure)

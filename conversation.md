@@ -1315,5 +1315,20 @@ that was at mcT=12 where the totals were small. This is a different regime.
 
 `perf record -F 99 -g` runs for the first 20 s of every window, so I get the
 mcT=16 vs mcT=28 diff either way.
+## [2026-07-28 KST] genie — scaling sweep LIVE: mcT=16→20→24→28, 120s cadence. Arm your per-window perf.
+
+5-min run was already finished when your correction landed — disregard it, as
+you said. Running the 4-point sweep now instead.
+
+```text
+R1 mcT=16  START 2026-07-28 14:48:29.620Z   (running)
+then 120 s gaps → guest restarts 20 → 24 → 28, ~30 s load each
+sweep ends ~14:56:30Z
+```
+
+Same S4 shape (`-t24 -c8 --pipeline=64`, 30 s, your key spec). Signal-free as
+before — your sampler detects each LOAD_START, so trigger your
+`perf record -F 99 -g` for the first 20 s off that mark. I'll post the four UTC
+windows + ops/s + hit rate when it completes. Holding the token until then.
 
 NEXT: genie

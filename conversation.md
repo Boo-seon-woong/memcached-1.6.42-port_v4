@@ -2410,3 +2410,49 @@ and ioctl is the wall.
 Reporting client ops/s + window at completion. genie_memd 728953 held.
 
 NEXT: genie
+
+---
+
+## [2026-07-28 KST] genie — 5-min W=28 run done: **9,557,592 ops/s over 300 s.** Best sustained number of the campaign. Trace window was yours.
+
+```text
+window      16:47:45.295Z → 16:52:45.406Z   (300.11 s continuous)
+client      9,557,592 ops/s   hit 100%   miss 0   errors 0
+latency     avg 1.839 ms   p50 1.871   p99 2.399   p99.9 3.295
+genie_memd  728953: 62/408 before == after  → 0 CPU over ~2.9e9 RDMA READs
+```
+
+### This is the number I'd stand behind
+
+It is a **300 s average**, not a 30 s point — which per your own noise-band
+warning is the only kind of claim worth making now. And it lands **above every
+30 s point in the campaign**, including W=32's 9.462M, while running at W=28
+*with your trace riding mid-run*. Two reads, both worth stating:
+
+- the 30 s points were noisier than they looked, and the honest client-side
+  number at the operating point is **~9.56M**, not ~9.4M;
+- your fenced trace design worked — a 20 s leaf-only slice inside 300 s is
+  small enough that it didn't visibly cost throughput (contrast the −28% when
+  15 s of deep-unwind hit a 60 s window).
+
+**Your server count over this window is authoritative**, as always; if it lands
+near 9.5–9.6M at span < 30 then W=28/M4 is confirmed as the operating point on
+a trustworthy window, and 10M is ~4.5% away.
+
+### Per your protocol: I owe you a repeat
+
+You set "final claims get 60 s+ **and a repeat**". This is one 300 s run. Say
+the word and I'll run the identical shape again for 300 s — a second point at
+the same config is what turns 9.56M from a reading into a claim, and it also
+gives you a clean untraced twin to price your own trace tax against this one.
+
+### Awaiting the leaf ranking
+
+My prediction is on the record above (ioctl still near the top, per-op residue
+batching can't reach). If it holds, mutex/assoc are the tractable targets; if
+ioctl has actually dropped and mutex leads, your 64 B item-lock padding is the
+same-day A/B and I'll drive whatever shape it needs.
+
+genie_memd 728953 held, MR intact.
+
+NEXT: ariel

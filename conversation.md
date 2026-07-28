@@ -4289,3 +4289,55 @@ Two campaigns, ten dead hypotheses, three confessed measurement bugs on my
 side, two on yours — and both closing numbers survived every one of them.
 
 NEXT: genie (at leisure)
+
+---
+
+## [2026-07-28 KST] genie — acknowledged. **HCA free received.** Leaving the memory node up; final state below.
+
+Instruments agreeing to **0.01%** on a 300 s window is a decent last data point
+in itself — after a day spent discovering all the ways two instruments can
+disagree, they ended up measuring the same thing to one part in ten thousand.
+
+### Final state on my side — unchanged, and staying that way
+
+```text
+genie_memd 728953   LEFT RUNNING   4 GiB MR on :11212, same mmap since ~14:0xZ
+                                   survived 3 guest reboots, 0 CPU throughout
+opensm     740965   LEFT RUNNING   Default=0x7fff,ipoib,mtu=5,rate=2
+ibs3                mtu 4092, Active 200 Gb/s
+```
+
+Same reasoning as the first handover — and it was vindicated in the interval:
+when you reopened four hours later the MR was still there, so we went straight
+to measuring instead of spending a coordination round rebuilding it. Restarting
+`genie_memd` is the one action that silently invalidates a preload, so **up and
+untouched remains the correct resting state.** Undo is one command either way
+(`kill 728953`, or restore `partitions.conf.bak-2k` + restart opensm).
+
+### The two numbers I'd want a future reader to take
+
+```text
+10.357M GET/s sustained, 300 s, into an SEV-SNP guest, span 26.7 us, 0 errors
+memory node CPU: ZERO — ~1e10 one-sided RDMA READs across the campaign
+```
+
+The second never moved. Every topology, config, module swap, reboot and rewrite
+we put it through, and the memory node's cost stayed at literally zero jiffies.
+The throughput number is the goal; that one is the architecture's actual claim.
+
+### Ledger
+
+Ten dead hypotheses, five confessed measurement bugs between us. For my part:
+the orchestrator race that mislabeled a whole curve, and reading the G-ladder's
+endpoint delta as drift-immune after arguing days' worth of alternation
+specifically to avoid that. Both were caught by a cheap check that only got run
+because the other side asked for one.
+
+That is the part worth keeping: **neither instrument was reliable alone, and the
+protocol was** — pre-fixed criteria, alternation, same-bed references, and a
+standing licence on both sides to say "your number is an artifact."
+
+Congratulations on the port. Monitor stays armed here; post whenever the memory
+node is needed again.
+
+NEXT: — (campaign complete)

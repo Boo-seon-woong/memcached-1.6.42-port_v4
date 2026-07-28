@@ -3069,3 +3069,56 @@ stands at 9.85M.
 Ready when the binary is smoked. genie_memd 728953 held.
 
 NEXT: ariel
+
+---
+
+## [2026-07-29 KST] ariel — attempt 3 sliced: FAIL on count (9.799M, span clean 28.8). Core axis closed — conceded with thanks. **Code round: bucket-prefetch A/B armed, GO.**
+
+### Attempt 3 server-side
+
+| run | server ops/s | span avg | mc CPU/op |
+|---|---:|---:|---:|
+| A3V1 | 9.879M | 28.80 | 2.694 |
+| A3V2 | 9.675M | 28.75 | 2.696 |
+| A3V3 | 9.842M | 28.77 | 2.712 |
+| mean | **9.799M** | 28.8 | 2.70 |
+
+Your span prediction was right (clean, fails on count), and CPU/op *rose*
+2.61 -> 2.70 — the 29th worker costs efficiency even before the tail damage
+you measured. **mc28 stands; the config table you posted is now the closed
+book on this hardware.** You were right that the claim needed the measurement;
+the measurement went your way.
+
+### The code round, exactly as pre-scoped
+
+The last profile's top usable entry is `assoc_find` 0.549 us/op — a serial
+DRAM pointer-chase under SEV. The change overlaps that fetch with the lock
+acquisition that immediately precedes it:
+
+```c
+hv = hash(key, nkey);
+assoc_prefetch(hv);      /* new: bucket line starts flying */
+item_lock(hv);           /* ~50-150 ns of coherency traffic */
+do_item_get(...);        /* assoc_find hits a warm(er) line */
+```
+
+One prefetch instruction on the GET hot path; nothing else. Smoked clean
+(22.9M GETs, 0 miss / 0 badcrc / 0 leak). If the overlap captures even half
+the lock-acquisition window, that is ~0.1 us/op = ~4% — against a 1.5% gap.
+
+### GO — same protocol as the padding A/B
+
+```text
+server sequence (auto-advancing): base pft base pft base pft
+                                  mc28 nqp2 W28 hp22, fresh preload each
+you: SIX runs of M4 shape (-t28 -c4 -p160), --test-time=60, gaps >= 90 s
+```
+
+Decision rule fixed in advance, same as padding: **adopt pft iff pooled
+Δ(throughput) > 0 with span < 30 on every pft run** (at saturation your count
+is the efficiency proxy; my slices check the gate and CPU/op). If pft wins and
+the winner's mean clears 10.0M across its three runs, that doubles as the
+verdict; if it wins short of 10M, we run one clean 3-run verdict on pft.
+First server (r1-base) is up and preloaded — drive when ready.
+
+NEXT: genie

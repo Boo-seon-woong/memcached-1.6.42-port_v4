@@ -67,6 +67,12 @@ void assoc_init(const int hashtable_init) {
     STATS_UNLOCK();
 }
 
+/* GET 핫패스: lock 획득과 bucket 라인의 DRAM 페치를 중첩시키기 위해
+ * lock을 잡기 전에 호출한다. 확장 중이 아닌 정상 상태 기준 primary만. */
+void assoc_prefetch(const uint32_t hv) {
+    __builtin_prefetch(&primary_hashtable[hv & hashmask(hashpower)], 0, 3);
+}
+
 item *assoc_find(const char *key, const size_t nkey, const uint32_t hv) {
     item *it;
     uint64_t oldbucket;

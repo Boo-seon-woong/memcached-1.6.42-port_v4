@@ -925,6 +925,7 @@ item *item_get(const char *key, const size_t nkey, LIBEVENT_THREAD *t, const boo
     item *it;
     uint32_t hv;
     hv = hash(key, nkey);
+    assoc_prefetch(hv);
     item_lock(hv);
     it = do_item_get(key, nkey, hv, t, do_update);
     item_unlock(hv);

@@ -518,10 +518,17 @@ static void *worker_libevent(void *arg) {
         if (me->ext_worker != NULL) {
             unsigned int out = extstore_worker_outstanding(me->ext_worker);
             if (out) {
-                unsigned int spins = 0;
+                unsigned int spins = 0, empty = 0;
                 do {
-                    if (extstore_worker_drain(me->ext_worker, 32) > 0)
+                    if (extstore_worker_drain(me->ext_worker, 32) > 0) {
                         storage_flush_returns();
+                        empty = 0;
+                    } else if (settings.ext_drain_empty_max &&
+                               ++empty >= settings.ext_drain_empty_max) {
+                        /* 빈 CQ를 계속 긁는 대신 event loop로 돌아간다.
+                         * 남은 완료는 drain point (b)가 거둔다. */
+                        break;
+                    }
                     out = extstore_worker_outstanding(me->ext_worker);
                 } while (out && ++spins < settings.ext_drain_spin);
                 if (out) worker_storage_arm_drain(me);

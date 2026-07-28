@@ -251,6 +251,7 @@ static void settings_init(void) {
     settings.tail_repair_time = TAIL_REPAIR_TIME_DEFAULT;
     settings.flush_enabled = true;
     settings.ext_drain_spin = 1024; /* v2 P2a: measured knee (see V2_CODE_SPEC) */
+    settings.ext_drain_empty_max = 0; /* 0 = 기존 동작(중단 없음); 측정으로 정한다 */
     settings.dump_enabled = true;
     settings.crawls_persleep = 1000;
     settings.logger_watcher_buf_size = LOGGER_WATCHER_BUF_SIZE;
@@ -4088,7 +4089,8 @@ static void usage(void) {
            "   - ext_page_size:       remote allocation page size in MiB (default: 64)\n"
            "   - ext_worker_window:   outstanding operations per worker (default: 16)\n"
            "   - ext_qp_per_worker:   RC QPs per worker, 1..4 (default: 1)\n"
-           "   - ext_drain_spin:      CQ drain spin budget, 0..4096 (default: 1024)\n");
+           "   - ext_drain_spin:      CQ drain spin budget, 0..4096 (default: 1024)\n"
+           "   - ext_drain_empty_max: stop spinning after N consecutive empty CQ polls, 0=never (default: 0)\n");
 #endif
 #ifdef PROXY
     printf("   - proxy_config:        path to lua library file. separate with ':' for multiple files\n"

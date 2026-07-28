@@ -754,6 +754,7 @@ int storage_read_config(void *conf, char **subopt) {
         EXT_ORD_LIMIT,
         EXT_BATCH,
         EXT_DRAIN_SPIN,
+        EXT_DRAIN_EMPTY_MAX,
     };
 
     char *const subopts_tokens[] = {
@@ -764,6 +765,7 @@ int storage_read_config(void *conf, char **subopt) {
         [EXT_ORD_LIMIT] = "ext_ord_limit",
         [EXT_BATCH] = "ext_batch",
         [EXT_DRAIN_SPIN] = "ext_drain_spin",
+        [EXT_DRAIN_EMPTY_MAX] = "ext_drain_empty_max",
         NULL
     };
 
@@ -792,6 +794,13 @@ int storage_read_config(void *conf, char **subopt) {
                 !safe_strtoul(subopts_value, &settings.ext_drain_spin) ||
                 false) {
                 fprintf(stderr, "ext_drain_spin must be a number\n");
+                return 1;
+            }
+            break;
+        case EXT_DRAIN_EMPTY_MAX:
+            if (subopts_value == NULL ||
+                !safe_strtoul(subopts_value, &settings.ext_drain_empty_max)) {
+                fprintf(stderr, "ext_drain_empty_max must be a number\n");
                 return 1;
             }
             break;

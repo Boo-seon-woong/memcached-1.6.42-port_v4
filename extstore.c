@@ -148,6 +148,9 @@ typedef struct store_worker {
     struct ibv_sge *sync_sg;
     obj_io *wait_head, *wait_tail;
     atomic_uint_fast64_t drain_calls, drain_empty, wait_enq;
+    /* 완료 경로 회계는 worker가 소유한다. 전역 stats_mutex를 핫패스에서
+     * 잡으면 worker 수에 따라 경합이 커진다. 읽기는 get_stats에서 합산. */
+    atomic_uint_fast64_t objects_read, bytes_read, objects_written, bytes_written;
     uint64_t prof_r_count, prof_r_sum_ns;
     uint64_t prof_r_crypto_ns, prof_r_sync_ns, prof_r_xfer_ns;
     uint32_t prof_r_hist[PROF_BUCKETS];
@@ -839,6 +842,7 @@ int extstore_worker_drain(void *worker, int budget) {
     }
     uint64_t t_sync_done = g_prof_on ? prof_rdtsc() : 0;
 
+    uint64_t nwritten = 0, bwritten = 0;
     g_drain_worker = w;
     for (int i = 0; i < c; i++) {
         obj_io *io = (obj_io *)(uintptr_t)wc[i].wr_id;
@@ -871,18 +875,22 @@ int extstore_worker_drain(void *worker, int budget) {
             bm_free(w->bounce_free, (int)((buf - w->bounce_base) / e->slot_size));
             w->read_out[qi]--;
         } else if (ok) {
-            STAT_L(e);
-            e->stats.objects_written++; e->stats.bytes_written += len;
-            STAT_UL(e);
+            nwritten++; bwritten += len;
         }
         w->outstanding--;
     }
     g_drain_worker = NULL;
 
-    STAT_L(e);
-    e->stats.objects_read += nsync;
-    for (int i = 0; i < nsync; i++) e->stats.bytes_read += sync_sg[i].length;
-    STAT_UL(e);
+    if (nwritten) {
+        atomic_fetch_add(&w->objects_written, nwritten);
+        atomic_fetch_add(&w->bytes_written, bwritten);
+    }
+    if (nsync) {
+        uint64_t br = 0;
+        for (int i = 0; i < nsync; i++) br += sync_sg[i].length;
+        atomic_fetch_add(&w->objects_read, (uint64_t)nsync);
+        atomic_fetch_add(&w->bytes_read, br);
+    }
 
     /* refill from the wait list with the freed capacity */
     if (w->wait_head && !atomic_load(&e->dead)) {
@@ -949,6 +957,10 @@ void extstore_get_stats(void *ptr, struct extstore_stats *st) {
         st->worker_drain_calls += atomic_load(&w->drain_calls);
         st->worker_drain_empty += atomic_load(&w->drain_empty);
         st->worker_wait_enq += atomic_load(&w->wait_enq);
+        st->objects_read += atomic_load(&w->objects_read);
+        st->bytes_read += atomic_load(&w->bytes_read);
+        st->objects_written += atomic_load(&w->objects_written);
+        st->bytes_written += atomic_load(&w->bytes_written);
     }
     if (g_prof_on) {
         prof_summarize(e, 1, &st->prof_read_count, &st->prof_read_avg_ns,

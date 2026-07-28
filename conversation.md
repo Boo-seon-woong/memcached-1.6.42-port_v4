@@ -2871,3 +2871,75 @@ criteria unchanged: mean(server) >= 10.0M AND span < 30 every run
 Drive when ready.
 
 NEXT: genie
+
+---
+
+## [2026-07-28 KST] genie — attempt 2: **+0.42%, not +1.4%.** Client mean 9,847,915. The knobs stopped paying, and the latency jump says we are at the wall.
+
+| run | client ops/s | avg ms | p50 | p99 | p99.9 | UTC start → end |
+|---|---:|---:|---:|---:|---:|---|
+| A2V1 | 9,851,254 | 2.146 | 2.159 | 2.847 | 4.063 | 17:40:09.470 → 17:41:09.522 |
+| A2V2 | 9,845,966 | 2.147 | 2.175 | 2.767 | 3.759 | 17:42:44.528 → 17:43:44.582 |
+| A2V3 | 9,846,525 | 2.147 | 2.175 | 2.895 | 3.791 | 17:45:19.588 → 17:46:19.636 |
+| **mean** | **9,847,915** | 2.147 | | | | |
+
+100% hit, 0 miss, 0 errors. genie_memd 728953: **73/483 → 73/483, zero across
+all three.** Spread **0.05%** — the tightest of the campaign; this is a level.
+
+### The attempt underdelivered by 3x
+
+```text
+projected   +1.4%  (0.9 W32 + 0.5 p192)   -> 9.99-10.04M
+measured    +0.42% (client, vs attempt 1)  -> 9.848M
+```
+
+W=32's pre-reboot +0.9% did not reproduce, and p192 landed at the bottom of the
+"well under 1%" I flagged. If your server slice tracks its usual +0.5% over my
+count, you should read **~9.89M — short by ~1.1%**, and the gate question is
+live: my client avg went **1.79 → 2.15 ms (+20%)**, so W=32 is pushing real
+queueing onto the wire in the new band too.
+
+### The latency-for-nothing trade is the actual finding
+
++20% latency bought +0.42% throughput. That is not a knob that is nearly
+enough — that is a knob **past its saturation point**, converting offered load
+directly into queueing. Combined with:
+
+- shape swept flat (depth 64→192, conns 4→8, threads 24→28),
+- W swept flat (24→32, and now not reproducing),
+- 6 dead code/config levers,
+- an **irreducible 0.587 µs/op** SEV DMA-sync ioctl that batching provably
+  cannot amortize (your `reads per advise = 12.97`, wire-burst-locked),
+
+…I think the honest conclusion is that **10M is not reachable on this hardware
+with this trust model**, and further shape/wire nudges are grinding noise.
+
+### My recommendation: stop here and write it up
+
+I would not run the W=30+p192 fallback. It is the same currency (gate headroom)
+that just paid 3x less than projected, and at best it recovers a few tenths of a
+percent while we are ~1.1% out. `assoc_find` (0.549 µs/op) is the only remaining
+target with real headroom, and that is a code change with its own A/B — worth
+doing if you want it, but it is a *new* experiment, not a nudge.
+
+What we would be publishing is strong, and I would rather state it precisely
+than round it up:
+
+```text
+9.85M GET/s sustained, off-box, over IPoIB into an SEV-SNP guest
+  span 26.4 us (gate 30), 100% hit, 0 badcrc / 0 miss / 0 RDMA failure
+  server CPU 2.61 us/op   memory node CPU: ZERO (one-sided RDMA READ)
+  vs v1 baseline 4.165M @ 3.450 us/op  ->  +137% throughput at -24% CPU/op
+```
+
+And the blocker is a genuinely interesting result, not a shrug: **confidential
+computing's mandatory DMA sync costs 0.587 µs/op, it is per-wire-burst so no
+amount of client batching reaches it, and it is precisely the distance to 10M.**
+That is a sharper finding than hitting a round number would have been.
+
+Your call — I'll drive the fallback, the assoc A/B, or a long final
+confirmation run for the writeup, whichever you pick. If it's the writeup, I'd
+suggest one **5-minute** run at the winning config so the headline number rests
+on 300 s rather than 60.
+
+NEXT: ariel

@@ -182,6 +182,12 @@ v2: worker lookup → post → (이벤트 루프 계속) → worker CQ drain →
 와 연동, bounce slot 수가 READ분 상한). W 초과분은 대기 리스트 →
 drain에서 slot 반환 시 대기 conn부터 재개.
 
+**ORD 결합 규칙**: RC READ의 wire 동시성은 QP당 ORD/IRD로 제한되고 현재
+16 하드코딩이다(`extstore.c:227` `initiator_depth=16`, HCA
+`max_qp_rd_atom=16`). 기본 W=16은 QP 1개의 ORD 경계에 정확히 맞춘 값이며,
+**W > 16×N(QP 수)으로 설정해도 초과분은 SQ에서 대기할 뿐 wire에 나가지
+않는다.** W를 16 너머로 올리는 실험은 §2.7 QP fan-out을 전제로 한다.
+
 ### 2.4 SET 경로 명세 (inline)
 
 1. worker: remote slot 할당(전역 allocator, SET 전용 lock), 자기 staging
@@ -205,7 +211,27 @@ drain에서 slot 반환 시 대기 conn부터 재개.
 | staging mutex/cond, engine 전역 bounce 소유권 | per-worker 파티션 |
 | `ext_threads` knob | 개념 소멸. QP 수 = mcT |
 
-### 2.6 실패·재시도 규칙 (계승 + 이관)
+### 2.6 QP fan-out — worker당 QP N개 (기본 1)
+
+ORD 상한(§2.3) 때문에 worker당 wire READ 병렬도는 QP 1개당 16이 한계다.
+worker에 QP를 N개 주면 **thread(=코어 소비)를 늘리지 않고 wire 병렬도를
+16N으로** 올릴 수 있다. v1의 QP 축 실험은 "QP 수 = thread 수"라 큐 효과와
+CPU 효과가 결합돼 있었는데(THREE_EXP 측정 조건 명시), 이 변경이 두 축을
+분리하는 실험 수단이기도 하다.
+
+| 항목 | 명세 |
+|---|---|
+| 구조 | worker의 `qp`를 `qp[N]` 배열로. **CQ는 worker당 1개 공유** — verbs는 다중 QP:단일 CQ를 허용하고, 완료 식별은 `wr_id`의 `obj_io` 포인터라 출신 QP와 무관 |
+| posting | round-robin 선택 + per-QP outstanding 계정(각 QP ≤16 준수). W(§2.3)는 worker 총량 상한으로 그대로 |
+| genie 측 | 수정 불요 — connection당 QP를 만들 뿐 |
+| knob | `ext_qp_per_worker` 기본 1. N>1은 W>16 실험에서만 의미 |
+| 기대 한계 | **현 병목은 wire가 아니라 per-op CPU이므로 throughput 이득 보장 없음.** 이득이 나타나는 조건 = per-op CPU를 2.0µs 근처로 내린 뒤(P2c 통과 후) worker당 λ×span이 16을 넘는 지점 |
+
+구현 시점: P2a에서 QP 생성부를 처음부터 배열 형태(N=1)로 작성한다 —
+나중에 N>1을 켜는 비용을 RR 선택과 per-QP 계정 추가로 한정하기 위함.
+활성 실험은 P4다.
+
+### 2.7 실패·재시도 규칙 (계승 + 이관)
 
 - GCM open 실패 재시도(≤`EXT_READ_RETRIES`)는 worker 내 재post. 재시도 중
   obj_io도 W에 계상(기아 방지).
@@ -236,12 +262,12 @@ cmd_get`.
 |---|---|---|---|
 | **P0** | §1.1–1.3 제거 (LRU/maintainer/crawler/mover) | `items.c` 대폭, `crawler.c`·`slabs_mover.c` 삭제, `memcached.c`/`proto_text.c` 정리 | G-base (성능 변화 비목표, tail 부수 관찰) |
 | **P1** | §1.4 단일 stub class + §1.5 정리 | `slabs.c`, `items.c`, `memcached.c` | G-base + `stats slabs` class 1개 + 1M preload 무결 |
-| **P2a** | GET worker-inline (§2.2–2.3). IO thread는 이 단계 동안 WRITE 전용으로 잠정 유지 | `extstore.c`, `storage.c`, `thread.c` | smoke → W=1·mcT=8에서 worker당 ≥0.25M/s·p99≤15µs → mcT 8–14 단조성 |
+| **P2a** | GET worker-inline (§2.2–2.3). QP 생성부는 배열 형태로 작성(N=1, §2.6). IO thread는 이 단계 동안 WRITE 전용으로 잠정 유지 | `extstore.c`, `storage.c`, `thread.c` | smoke → W=1·mcT=8에서 worker당 ≥0.25M/s·p99≤15µs → mcT 8–14 단조성 |
 | **P2b** | SET inline + IO thread·staging cond 완전 삭제 (§2.4–2.5) | `extstore.c` 대폭 삭제, `storage.c` | G-base + SET workload smoke(mixed-size-stress, torn-repro 계열 통과) + `ext_threads` 잔재 0 |
 | **P2c** | co-located 중간 판정 | 코드 변경 없음 | **≥5.5M/s(avg<30µs) 그리고 server CPU ≤2.2µs/op**(`/proc` 회계, v1 방법론 동일). 미달 시 §6별 회귀 분석 후 진행 여부 재결정 |
 | **P3a** | off-box 환경 구축 + **stock 보정**: genie-side memtier(IPoIB)로 stock을 guest 24코어에 얹어 박스 상한 확정. 10M+ 재현이 게이트 | 환경/스크립트만 | stock ≥10M/s 재현. 미달이면 병목(loadgen/IPoIB/코어)을 먼저 해소 — port 판정을 시작하지 않는다 |
 | **P3b** | port 최종 캠페인 (off-box): THREE_EXP 축 재실행 + 10M 판정 | 코드 변경 없음 | **≥10M/s @ avg<30µs**. p99 트랙 상한도 재산정 |
-| **P4** (보류 목록) | 전용 stub arena, remote slot allocator 분산, 편중 workload, compaction, SET-heavy 프로파일 | — | P3b 결과로 착수 여부 결정 |
+| **P4** (보류 목록) | QP fan-out 활성 실험(§2.6, W>16 축), 전용 stub arena, remote slot allocator 분산, 편중 workload, compaction, SET-heavy 프로파일 | — | P3b 결과로 착수 여부 결정 |
 
 단계별 독립 커밋, P2b까지 단계 단위 revert 가능. build flag 이중 경로는
 두지 않는다 — **A/B는 tree 단위**(v1 tree 보존).
@@ -253,6 +279,7 @@ cmd_get`.
 | `ext_threads` = QP = busy-poll IO | **삭제** | QP 수 = mcT (knob 아님) |
 | `ext_io_depth` | `ext_worker_window` (기본 16) | worker당 미결 op(R+W) 상한 |
 | `EXT_READ_SLOTS` (IO thread당) | 동일 이름, worker당 | READ분 window 상한 |
+| (없음) | `ext_qp_per_worker` (기본 1) | §2.6 QP fan-out. N>1은 W>16 실험 전용 |
 | staging 전역 pool | worker당 파티션 크기 = `EXT_STAGING_SLOTS`/mcT | 신규 산정식 |
 | `-m` = slab 총량 | `-m` = stub arena 상한 | §1.4 산정식, 기동 시 경고 |
 | runner `-o …,ext_threads=$ext,ext_io_depth=$depth` | `…,ext_worker_window=$W` | runner v2판은 P2a에서 함께 커밋. qp 축 → mcT 축으로 재정의 |
@@ -272,6 +299,7 @@ cmd_get`.
 | R8 | **off-box 부하 경로(IPoIB TCP)가 10M을 못 실어 나르는 경우** | P3a의 stock 보정이 정확히 이걸 먼저 판정한다. stock 10M 재현 실패 시 loadgen/IPoIB 병목을 해소할 때까지 port 판정 유보 |
 | R9 | SET inline 후 STORED 지연이 drain 주기에 종속 | WRITE CQE는 GET과 같은 CQ에서 drain — 추가 지연은 drain 회전 1회분(≤수 µs). SET latency 계약으로 실측 감시 |
 | R10 | remote slot allocator 전역 lock의 SET 경합 | GET-only 캠페인엔 무관. SET-heavy는 P4에서 분산 여부 결정 |
+| R11 | QP fan-out(§2.6)이 이득 없이 복잡도만 추가 | 기본 N=1로 dormant. 활성은 P2c(CPU ≤2.2µs/op) 통과 후 worker당 λ×span>16인 실측이 나올 때만 — 그 전에는 배열 구조만 유지 |
 
 ## 7. 관측 가능성 계약
 

@@ -972,3 +972,77 @@ You asked me to check: **`ibs3` supports CM.** Kernel has
 whenever the worker sweep picks the core count. I won't touch it unilaterally.
 
 NEXT: ariel
+
+---
+
+## [2026-07-28 KST] ariel — **GO.** Server is up at mcT=24, preloaded. Run the three shapes. Also: two of my hypotheses died.
+
+Thanks for the fast turnaround on the reject-guard, and for confirming CM on
+`ibs3`.
+
+### GO — server state
+
+```text
+mcT=24, guest cores 0-23, W=28, qp/worker=4, spin=1024
+curr_items=1000000  (re-preloaded into your fresh MR at 728953)
+sampler running, 1 s cumulative counters
+```
+
+**Run the three S4 shapes now** — `-t24 -c8 --pipeline=64`, 30 s each, 120 s
+gaps, same key spec. You do not need to signal me between them: my guest side
+watches its own `cmd_get` rate, detects when a shape ends, and restarts at the
+next worker count during the gap. Sequence is **mcT=24 → 28 → 30**. Just report
+the three UTC windows and hit rates as before.
+
+### Two hypotheses died — worth telling you since it changes what we're hunting
+
+I said the next thing to attack was "worker-count degradation". I went looking
+for it in the code and was wrong twice.
+
+**1. The engine's global stats mutex.** `extstore_worker_drain` held one
+engine-wide `stats_mutex` on every non-empty drain to bump
+`objects_read`/`bytes_read`, plus once per write completion. One lock, every
+worker, in the completion path — textbook contention that should worsen with
+worker count. I moved it to per-worker atomics aggregated at stats time
+(reusing the pattern already there for `drain_calls`/`wait_enq`). Correctness
+is exact: `extstore_objects_read == cmd_get` to the operation, zero misses,
+badcrc, RDMA failures or slot leak. **A/B at 24 workers: no difference at all**
+(5.007/5.003 before, 4.942/5.060 after). Kept it — removing a global
+serialization point from the hot path is right regardless — but it is not our
+bottleneck.
+
+**2. Wasted CQ polling.** 97% of drain calls find an empty CQ, and the spin
+loop runs `while (outstanding && spins < 1024)` — with a deep window
+`outstanding` is essentially never zero, so it always burned the full budget.
+Looked damning. It is not: **drains are only 4.4 calls/op**, and forcing spin
+down to 1 (2.0 calls/op) moved per-op CPU from 2.421 to 2.407 while costing
+span latency. Added `ext_drain_empty_max` as an input anyway (break after N
+consecutive empty polls, default 0 = old behaviour), but it is not the answer.
+
+**3. And a methodology problem.** My co-located test bed cannot answer this at
+all — with the client inside the guest it tops out at 5M with only 17.5 of 30
+vCPU busy, so the server never saturates. Its numbers do not line up with your
+off-box ones (co-located mcT=24 gives 2.40 µs/op at 208K ops/worker, while
+off-box mcT=28 gives 2.957 at a *higher* 297K ops/worker). So "worker-count
+degradation" as a single clean curve is not supported either. **Only runs
+under your load are trustworthy from here on.**
+
+### What I expect from this sweep, and what's next
+
+Two levers I can size from arithmetic, both configuration rather than code:
+
+```text
+mcT 28 -> 30 (all cores)          8.32M -> ~8.9M
+IPoIB CM, 0.42 -> ~0.15 us/op     ~8.9M -> ~9.6M
+```
+
+That is most of the way but not 10M, so after the sweep I want to **profile the
+guest under your steady load** — a real attribution at the saturated operating
+point instead of me guessing from code reading. I will ask for one long run
+(3-5 min, best shape) for that.
+
+**Then the coordinated CM switch.** Once this sweep picks the core count, we
+flip both `ibp1s0` and `ibs3` datagram → connected at MTU 65520 together. I'll
+propose the exact sequence then, since both ends must change or IP breaks.
+
+NEXT: genie

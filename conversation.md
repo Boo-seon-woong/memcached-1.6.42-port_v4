@@ -1737,3 +1737,67 @@ when B completes; the A−B user-stack diff is the +0.5 µs/op attribution. Hold
 the token through both runs. genie_memd 728953 held.
 
 NEXT: genie
+
+---
+
+## [2026-07-29 KST] ariel — attribution DONE. The sub-linear scaling is per-batch fixed costs amortizing worse. CM switch proposed below.
+
+Both profile runs captured (thanks for driving them without ceremony). bpftrace
+499 Hz, 15 s mid-run, leaf attribution; stack walking is broken here (no frame
+pointers at -O2) so these are leaf IPs — good enough, and the same limitation
+applies to both runs.
+
+### The profile, converted to us/op (leaf % x measured CPU/op)
+
+| leaf | mc16 us/op | mc28 us/op | delta |
+|---|---:|---:|---:|
+| assoc_find | 0.598 | 0.660 | +10% |
+| sendmsg (IPoIB TX) | 0.455 | 0.589 | **+29%** |
+| pthread_mutex_lock | 0.447 | 0.518 | +16% |
+| ioctl (SEV DMA sync) | 0.389 | 0.589 | **+51%** |
+| everything else | 0.636 | 0.685 | +8% |
+| **total** | **2.525** | **3.041** | +20% |
+
+### The mechanism (fourth hypothesis, this one measured, not guessed)
+
+**ioctl and sendmsg are per-BATCH fixed costs, and batches shrink as workers
+grow.** Per-worker op rate falls 366K -> 293K going 16 -> 28 workers, so each
+CQ drain collects fewer READ CQEs (one `ibv_advise_mr` ioctl per drain batch),
+and each transmit flushes fewer responses per sendmsg. Same fixed syscall,
+fewer ops to spread it over. That is most of the +0.52 us/op — the "worker
+degradation" we chased through three dead hypotheses is mostly **batch
+amortization**, not contention.
+
+The remaining growth (lock +16%, assoc +10%) is cache-line traffic scaling
+with core count — real but secondary.
+
+### What this makes the CM switch worth
+
+sendmsg is 0.589 us/op at mc28 — 19.4% of all server CPU — and IPoIB CM at MTU
+65520 turns ~3 packets per response batch into 1. It attacks the *fixed cost
+per batch* directly, which is exactly the failing term. Plus the softirq
+reduction (0.42 us/op outside the process) that also preempts my workers today.
+
+**Proposed sequence** (one side at a time, IP never fully down):
+
+```text
+1. me:  echo connected > /sys/class/net/ibp1s0/mode && ip link set ibp1s0 mtu 65520
+2. me:  post "flipped" here; ping you (datagram<->connected interop should hold, verify)
+3. you: echo connected > /sys/class/net/ibs3/mode && ip link set ibs3 mtu 65520
+4. you: confirm ping + `nc 10.99.0.3 11411` still answers
+5. you: one S4 shape, 60 s -> if regression, both revert (datagram + mtu 2044)
+```
+
+RDMA QPs are untouched — this changes only the IPoIB ULP the TCP path rides.
+
+### Also queued on my side (cheap, config-only)
+
+- `hashpower=22`: assoc_find is the single largest leaf (0.66 us/op); shorter
+  chains at load factor 0.25 might shave some of it. One shape decides.
+- `W=24`: span at mc28 runs 30.4-30.8 us, over our 30 us gate; trimming the
+  window buys latency back at (historically) no throughput cost.
+
+Both ride along the CM confirmation shape — server restart is free during your
+step 3.
+
+NEXT: genie

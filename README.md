@@ -1,15 +1,84 @@
 # memcached-1.6.42 RDMA remote-memory port
 
-이 트리의 SEV-SNP guest 실험은
-[`md/experiment.md`](md/experiment.md)를 위에서 아래로 따라 실행한다.
-원본 memcached 대비 source-level 변경 명세는
-[`SOURCE_CHANGE_SPEC.md`](SOURCE_CHANGE_SPEC.md)를 참조한다.
-CPU-µs/op 상세 회계와 최적화 우선순위는
-[`md/CPU_COST_ACCOUNTING.md`](md/CPU_COST_ACCOUNTING.md)에 있다.
-최적화를 하나씩 적용한 동일 workload 비교는
-[`md/CPU_OPTIMIZATION_ROLLOUT.md`](md/CPU_OPTIMIZATION_ROLLOUT.md)에 기록한다.
-extstore가 켜지면 성공한 SET value는 AES-256-GCM으로 원격 WRITE가 완료된 뒤
-`ITEM_HDR` metadata만 local RAM에 남으며, local value cache/fallback은 없다.
+memcached의 extstore backend를 flash에서 **암호화된 원격 메모리**로 교체한 port다.
+client↔memcached TCP protocol은 그대로 두고, 성공한 SET value는 AES-256-GCM으로
+seal한 뒤 one-sided RDMA WRITE가 완료돼야 `STORED`가 되며, local RAM에는
+`ITEM_HDR` stub만 남는다. local value cache도 fallback도 없다.
+
+## 현재 상태
+
+| 항목 | 값 |
+|---|---|
+| 상태 | 구현 완료, 성능 측정 단계 |
+| 기준 commit | `597fc83` |
+| 성능 binary SHA-256 | `564505f442dce8cf0695df4391dae529de33102083f54011ffa8a660a957cf33` (tree의 `./memcached`와 동일) |
+| guest | SEV-SNP, 24 vCPU, 48 GB configured RAM |
+| 운영점 | `mtT=8 × c16`, `mcT=8`, `pipeline=8`, `QP/ext=8`, `depth=16`, `-R 1024` |
+| workload | GET-only, 64 B value, 1,000,000 preloaded keys, crypto ON |
+
+같은 binary·같은 운영점의 remote GET throughput 실측:
+
+| 측정일 | remote GET/s | avg | p50 | p99 | 문서 |
+|---|---:|---:|---:|---:|---|
+| 2026-07-24 | 2.445M | 22.252µs | 20.300µs | 59.600µs | [FRONTIER](md/FRONTIER_7POINT_20260724.md) |
+| 2026-07-27 | 2.967M | 20.888µs | 20.400µs | 43.700µs | [SENSITIVITY](md/SENSITIVITY_THREAD_PIPELINE_20260727.md) |
+
+두 값은 같은 binary와 같은 shape인데 21% 차이가 난다. **날짜가 다른 절대값을
+섞어 최적점을 고르지 않는다.** 각 결론은 같은 실행 안의 상대 비교로만 내린다.
+avg `<30µs`는 두 실행 모두 충족하고 p99 `<30µs`는 어느 point도 충족하지 못했다.
+
+## 읽기 순서
+
+이 순서대로 읽으면 용어 → 구조 → 결정 → 재현 → 결과 → 원자료로 이어진다.
+
+| # | 문서 | 내용 |
+|---|---|---|
+| 1 | [`GLOSSARY.md`](GLOSSARY.md) | thread, QP, depth, pipeline, slot 등 **모든 변수의 정의**. 다른 문서는 여기 이름만 쓴다. |
+| 2 | [`SOURCE_CHANGE_SPEC.md`](SOURCE_CHANGE_SPEC.md) | 현재 source가 실제로 하는 일. 파일별 변경 범위와 불변식. |
+| 3 | [`EXTSTORE_RDMA_PORTING.md`](EXTSTORE_RDMA_PORTING.md) | 채택·폐기·보류된 설계 결정과 그 근거. |
+| 4 | [`md/experiment.md`](md/experiment.md) | 재현 절차와 측정 계약. |
+| 5 | [`md/FRONTIER_7POINT_20260724.md`](md/FRONTIER_7POINT_20260724.md) | 현재 운영점을 고른 실험과 stock 동일-shape control. |
+| 6 | [`md/SENSITIVITY_THREAD_PIPELINE_20260727.md`](md/SENSITIVITY_THREAD_PIPELINE_20260727.md) | worker thread / pipeline 단일축 민감도(최신 실행). |
+| 7 | [`md/CPU_COST_ACCOUNTING.md`](md/CPU_COST_ACCOUNTING.md) | CPU-µs/op 회계. 최적화 우선순위의 근거. |
+| 8 | [`md/CPU_OPTIMIZATION_ROLLOUT.md`](md/CPU_OPTIMIZATION_ROLLOUT.md) | 패치를 하나씩 적용한 당시 측정 기록. |
+| 9 | [`md/CONFIG_MATRIX_10S_20260724.md`](md/CONFIG_MATRIX_10S_20260724.md) | 최초 전체 matrix. 5–6의 전 단계 기록. |
+| 10 | [`md/RAW_DATA_INDEX.md`](md/RAW_DATA_INDEX.md) | 모든 실험 raw 파일의 위치. |
+
+stock 1.6.42를 이해하기 위한 자료는 별도이며 port 동작을 설명하지 않는다.
+
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) — stock memcached 전체 구조
+- [`ARCHITECTURE_STUDY.md`](ARCHITECTURE_STUDY.md) — stock의 데이터부/통신부 분리
+- [`EXTSTORE_READING.md`](EXTSTORE_READING.md) — stock extstore(flash) 독해 노트
+
+[`conversation.md`](conversation.md)는 ariel(guest)과 genie(remote host) 사이의
+fabric 예약·장애 대응 채널 로그다. 문서가 아니라 append-only 기록이다.
+
+## 빌드와 실행
+
+```bash
+./configure && make                # extstore는 기본 on, RDMA/OpenSSL link는 Makefile.am에 있음
+
+LD_LIBRARY_PATH=$HOME/covlib MLX5_COHERENT_QP=1 MLX5_COHERENT_CQ=1 \
+EXT_CRYPTO_KEY=./ext.key EXT_SLOT_SIZE=256 EXT_READ_SLOTS=64 EXT_RDMA_PROF=1 \
+./memcached -p 11211 -U 0 -t 8 -m 2048 -c 8192 -R 1024 \
+    -o ext_path=10.99.0.2:11212:4g,ext_threads=8,ext_io_depth=16
+```
+
+covlib(patched libibverbs/libmlx5)와 `MLX5_COHERENT_*`가 없으면 `rdma_cm`이
+hang한다. remote 쪽은 `genie-server/genie_memd <port> <size> --prefill`이다.
+자세한 조건은 [`GLOSSARY.md`](GLOSSARY.md) §7에 있다.
+
+**빌드 함정**: 이 tree는 automake 1.17로 생성됐는데 시스템 automake는 1.16.5다.
+`Makefile.am`을 건드리면 `make`가 regen을 시도하다 실패한다. 편집한 뒤에는
+timestamp를 생성물이 더 새것이 되도록 정렬한다.
+
+```bash
+touch configure.ac && sleep 1 && touch aclocal.m4 Makefile.am && sleep 1 && \
+touch configure config.h.in Makefile.in && sleep 1 && \
+touch config.status config.h Makefile stamp-h1
+```
+
+---
 
 아래는 upstream memcached README다.
 

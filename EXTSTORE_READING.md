@@ -1,10 +1,15 @@
 # extstore 코드 독해 가이드 (memcached-1.6.42)
 
-> line-by-line 독해용 로드맵. 읽은 항목은 체크박스로 진행 상황 기록.
-> 라인 번호는 1.6.42 소스 기준 (이 디렉토리).
+> **이 문서는 stock extstore(flash) 코드 독해 전용이며 현재 RDMA port 동작을
+> 설명하지 않는다.** 모든 line reference와 기본값은 **`../memcached-1.6.42/`**
+> 기준이다. 이 디렉터리의 `extstore.c` / `storage.c`는 전면 재작성돼 여기 적힌
+> 줄 번호와 맞지 않는다.
 >
-> **이 문서는 순수 코드 독해 전용.** RDMA 포팅 검토는 별도 문서
-> `EXTSTORE_RDMA_PORTING.md`에 있으며 서로 독립적으로 관리한다.
+> 현재 port는 [`SOURCE_CHANGE_SPEC.md`](SOURCE_CHANGE_SPEC.md), 변수 정의는
+> [`GLOSSARY.md`](GLOSSARY.md), 채택/폐기된 결정은
+> [`EXTSTORE_RDMA_PORTING.md`](EXTSTORE_RDMA_PORTING.md)를 본다.
+>
+> line-by-line 독해용 로드맵. 읽은 항목은 체크박스로 진행 상황 기록.
 
 ## 전체 구조
 
@@ -464,4 +469,3 @@ LRU maintainer가 메모리 압력을 보고 수위를 정한다 → 이 스레�
    (`extstore_write_request` ↔ `extstore_write` 짝)을 여기서 확인할 것
 2. `lru_pull_tail`의 `LRU_PULL_RETURN_ITEM` 분기 (`items.c:1072`) 미독
 3. `slab_automove_extstore.c`의 압력 계산 전체 (`:88-124`) 미독 — §0 항목
-

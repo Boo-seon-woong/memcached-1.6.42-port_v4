@@ -227,6 +227,16 @@ def main():
         rows = list(csv.DictReader(source))
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
+    mc_threads = rows_for(rows, "mc_threads")
+    if mc_threads:
+        pipeline = rows_for(rows, "pipeline")
+        assert len(mc_threads) == 16 and len(pipeline) == 8, "sensitivity sweep is incomplete"
+        line_chart(out / "mc-thread-sweep.svg", "Memcached worker-thread sweep",
+                   mc_threads, "mc_threads")
+        line_chart(out / "pipeline-sweep.svg", "Memtier pipeline sweep",
+                   pipeline, "pipeline")
+        print(*(str(p) for p in sorted(out.glob("*.svg"))), sep="\n")
+        return
     frontier = rows_for(rows, "frontier")
     if frontier:
         stock = rows_for(rows, "stock")

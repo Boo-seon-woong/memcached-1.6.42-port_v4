@@ -7,7 +7,9 @@
 > 다루는 것: ① 파일 책임 구조, ② 두 축(데이터부 / 통신부)과 그 접합점, ③ set/get 경로,
 > ④ **전송 계층 함수 포인터의 정체 규명**(local 내부 전송인가 remote 전송인가).
 >
-> 모든 코드 위치는 `파일:라인` 형식이며 memcached-1.6.42 기준이다.
+> 모든 코드 위치는 `파일:라인` 형식이며 **`../memcached-1.6.42/`(stock)** 기준이다.
+> 이 디렉터리의 port는 [`SOURCE_CHANGE_SPEC.md`](SOURCE_CHANGE_SPEC.md),
+> 변수 정의는 [`GLOSSARY.md`](GLOSSARY.md)를 본다.
 
 ---
 

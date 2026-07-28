@@ -1,7 +1,11 @@
 # memcached 1.6.42 — 아키텍처 & 워크플로우
 
+> **이 문서는 stock memcached 1.6.42 전용이다.** 모든 `file:line` 참조는
+> `../memcached-1.6.42/` 기준이며, 이 디렉터리의 RDMA port 동작을 설명하지
+> 않는다. port는 [`SOURCE_CHANGE_SPEC.md`](SOURCE_CHANGE_SPEC.md)와
+> [`GLOSSARY.md`](GLOSSARY.md)를 본다.
+
 스톡 소스가 어떻게 구성되어 있고 요청이 어떤 경로로 흐르는지 정리한 지도입니다.
-`file:line` 참조는 이 트리 기준이므로 바로 코드로 점프할 수 있습니다.
 
 - C 약 40 K LOC, 93개 `.c`/`.h` 파일, autotools 빌드.
 - 단일 프로세스, 다중 스레드, 이벤트 기반(libevent), 워커별 샤딩.

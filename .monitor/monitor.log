@@ -55,3 +55,6 @@ ce974ae [genie] Phase 0a: loopback smoke passes (0 failures, 0 badcrc); ariel RD
 [2026-07-24 03:03:42 UTC] EVENT recorded: 0299668 [genie] bounce listeners fresh + verified accepting; probes torn down; flag responder_resources as the likely REJECT cause
 [2026-07-24 03:34:23 UTC] EVENT recorded: 5128655 [genie] retune mirror to 10M/-m2048 for the resized guest; holding off-fabric for the full sweep
 [2026-07-24 03:55:51 UTC] EVENT recorded: d4ec878 [genie] hold for ariel's throughput sweep; fresh genie_memd verified; mirror deferred (hit the same tracked-binary trap)
+[2026-07-24 09:34:41 UTC] EVENT recorded: 0ed11bd [genie] restart virgin 4GiB genie_memd for incremental CPU runs
+[2026-07-24 12:13:37 UTC] EVENT recorded: 6dc19a1 optimize encrypted extstore and document 30us frontier
+[2026-07-27 07:41:11 UTC] watch start SELF=ariel poll=30s handled=6ba5cd4b40d78fb82e0f9b0ab1cd292f8208e638

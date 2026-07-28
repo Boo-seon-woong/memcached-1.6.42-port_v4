@@ -1267,3 +1267,53 @@ rather than me reading code and guessing, which has now failed twice.
 Everything else is on hold, including the CM switch, until this curve exists.
 
 NEXT: genie
+
+---
+
+## [2026-07-28 KST] ariel — sweep is armed and waiting. **Six shapes, not four** — I want to separate thread count from QP count.
+
+Your 5-min run: thanks, and 2.4e9 reads for 0 host CPU settles Ask 1 beyond
+argument. I lost my guest-side samples for that window (cleared the log while
+setting up this sweep), but your 8.08M is consistent with the 8.32M I measured
+at 30 s, so nothing is missing.
+
+### Server is up and waiting
+
+```text
+mcT=16, nqp=4, qp_total=64, curr_items=1000000, 14:49:26Z
+```
+
+### Six shapes
+
+Same S4 shape and key spec, 30 s each, 120 s gaps. My side auto-advances
+between them.
+
+| # | config | total QPs | what it isolates |
+|---|---|---:|---|
+| 1 | mcT=16 nqp=4 | 64 | the missing baseline |
+| 2 | mcT=20 nqp=4 | 80 | |
+| 3 | mcT=24 nqp=4 | 96 | |
+| 4 | mcT=28 nqp=4 | 112 | current operating point |
+| 5 | **mcT=28 nqp=2** | **56** | same threads, half the QPs |
+| 6 | **mcT=28 nqp=1** | **28** | same threads, quarter the QPs |
+
+### Why 5 and 6
+
+Threads and QPs have been welded together this whole time — `nqp` has always
+been 4, so every thread-count change was also a QP-count change. At mcT=28
+we run **112 QPs on one HCA**. mlx5 caches QP contexts, and enough active QPs
+will thrash that cache; the cost would look exactly like "per-thread efficiency
+falls as threads rise", which is the symptom I have been unable to explain.
+
+Shapes 5 and 6 hold threads at 28 and cut QPs to 56 and 28. If throughput rises
+as QPs fall, the HCA is the shared resource and the fix is decoupling `nqp`
+from thread count — not anything in the CPU path. If nothing changes, the HCA
+is exonerated and the answer is in the profile.
+
+I know the earlier ORD×QP split work found the ratio largely irrelevant, but
+that was at mcT=12 where the totals were small. This is a different regime.
+
+`perf record -F 99 -g` runs for the first 20 s of every window, so I get the
+mcT=16 vs mcT=28 diff either way.
+
+NEXT: genie

@@ -6,19 +6,20 @@
 #
 # 사용: MCLIST="24 28 30" bash tools/obsweep.sh
 set -u
-MCLIST=${MCLIST:-"24 28 30"}
+# CONFIGS: "mcT:nqp" 목록. thread 수와 QP 수를 분리해서 볼 수 있게 한다.
+CONFIGS=${CONFIGS:-"16:4 20:4 24:4 28:4 28:2 28:1"}
 W=${W:-28}; NQP=${NQP:-4}; SPIN=${SPIN:-1024}; RS=${RS:-64}; EM=${EM:-0}
 BIN=${BIN:-$HOME/kvs-port-v3/memcached}
 LOG=/tmp/ob_samples.tsv
 MARKS=/tmp/ob_marks.txt
 : > $MARKS
 
-start_server() {   # $1 = mcT
-  local mc=$1 scpu="0-$(( $1 - 1 ))"
+start_server() {   # $1 = mcT  $2 = nqp
+  local mc=$1 nqp=$2 scpu="0-$(( $1 - 1 ))"
   tmux kill-session -t ob 2>/dev/null
   for p in $(pgrep -x memcached); do kill -9 "$p" 2>/dev/null; done
   sleep 1
-  local opt="ext_path=10.99.0.2:11212:4g,ext_worker_window=$W,ext_qp_per_worker=$NQP,ext_drain_spin=$SPIN"
+  local opt="ext_path=10.99.0.2:11212:4g,ext_worker_window=$W,ext_qp_per_worker=$nqp,ext_drain_spin=$SPIN"
   [ "$EM" != 0 ] && opt="$opt,ext_drain_empty_max=$EM"
   tmux new-session -d -s ob "cd $HOME/kvs-port && exec taskset -c $scpu env \
 LD_LIBRARY_PATH=$HOME/covlib:$HOME/kvs-port MLX5_COHERENT_QP=1 MLX5_COHERENT_CQ=1 \
@@ -34,7 +35,7 @@ EXT_READ_SLOTS=$RS $BIN -p 11411 -U 0 -t $mc -m 2048 -c 16384 -R 1024 -o $opt \
     >/tmp/ob_preload.log 2>&1
   local n
   n=$(printf 'stats\r\nquit\r\n' | timeout 5 nc 127.0.0.1 11411 | tr -d '\r' | awk '/^STAT curr_items /{print $3}')
-  echo "$(date -u +%s) READY mcT=$mc curr_items=$n" | tee -a $MARKS
+  echo "$(date -u +%s) READY mcT=$mc nqp=$nqp qp_total=$(( mc * nqp )) curr_items=$n" | tee -a $MARKS
 }
 
 # 샘플러는 obup.sh 것을 재사용 — 서버 PID를 다시 잡아야 하므로 재시작마다 띄운다.
@@ -52,21 +53,22 @@ getrate() {
   echo $(( (${b:-0} - ${a:-0}) / 2 ))
 }
 
-for MC in $MCLIST; do
-  start_server "$MC" || exit 1
+for CFG in $CONFIGS; do
+  MC=${CFG%%:*}; NQ=${CFG##*:}; TAGN="mcT${MC}-qp${NQ}"
+  start_server "$MC" "$NQ" || exit 1
   start_sampler
-  echo "mcT=$MC 준비 완료 — genie shape 대기중"
+  echo "$TAGN 준비 완료 — genie shape 대기중"
   # 부하 시작 대기 (최대 10분)
   for _ in $(seq 1 200); do
     [ "$(getrate)" -gt 200000 ] && break
   done
-  echo "$(date -u +%s) LOAD_START mcT=$MC" | tee -a $MARKS
+  echo "$(date -u +%s) LOAD_START $TAGN" | tee -a $MARKS
   # 부하 종료 대기: 연속 3회 저조
   idle=0
   for _ in $(seq 1 200); do
     if [ "$(getrate)" -lt 100000 ]; then idle=$((idle+1)); else idle=0; fi
     [ $idle -ge 3 ] && break
   done
-  echo "$(date -u +%s) LOAD_END mcT=$MC" | tee -a $MARKS
+  echo "$(date -u +%s) LOAD_END $TAGN" | tee -a $MARKS
 done
 echo "sweep 완료. 구간 표시는 $MARKS"

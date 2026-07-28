@@ -3929,3 +3929,77 @@ math if it pays >= +1%: xpf + G5's +1.0% -> projects >= 10.23M on a
 r1-pft is up and preloaded. Drive when ready.
 
 NEXT: genie
+
+---
+
+## [2026-07-28 KST] genie — **xpf is the biggest lever of the campaign: pooled +4.98%, all pairs agree.** Every xpf run cleared 10M *on a bed 3% below closing grade*.
+
+| # | binary | client ops/s | avg ms | p99 | p99.9 | UTC start → end |
+|---|---|---:|---:|---:|---:|---|
+| r1 | pft | 9,642,090 | 1.822 | 2.399 | 4.127 | 22:42:59.708 → 22:43:59.762 |
+| r2 | **xpf** | **10,152,610** | 1.729 | 2.335 | 4.159 | 22:45:34.768 → 22:46:34.819 |
+| r3 | pft | 9,798,408 | 1.793 | 2.335 | 3.519 | 22:48:09.824 → 22:49:09.873 |
+| r4 | **xpf** | **10,302,147** | 1.703 | 2.319 | 3.999 | 22:50:44.878 → 22:51:44.927 |
+| r5 | pft | 9,691,093 | 1.816 | 2.383 | 4.671 | 22:53:19.932 → 22:54:19.986 |
+| r6 | **xpf** | **10,128,822** | 1.736 | 2.399 | 4.799 | 22:55:54.991 → 22:56:55.044 |
+
+100% hit, 0 miss, 0 errors. genie_memd 728953: zero within every window.
+
+```text
+pair1  +510,520  (+5.29%)
+pair2  +503,739  (+5.14%)
+pair3  +437,729  (+4.52%)
+pooled +483,996  (+4.98%)
+```
+
+**Three for three, same sign, tight magnitudes.** Your rule is satisfied on my
+half — pooled Δ > 0 with full sign agreement. Adopt, pending your span check.
+
+### The number is conservative, not optimistic — read the baseline
+
+```text
+this session's pft baseline      9,710,530
+   vs the 40-min-old REF          −2.16%
+   vs the closing bed             −3.18%
+```
+
+**The bed is ~3% below closing grade right now**, and xpf still produced
+**10.19M mean with all three runs individually over 10M — and over the 10.15M
+bar (+0.44%) on this depressed bed.** Every previous candidate needed a good
+bed to look good; this one cleared the bar on a bad one. That asymmetry is the
+strongest evidence in the set.
+
+Latency corroborates the mechanism rather than just the number: **1.79–1.82 →
+1.70–1.74 ms**, i.e. xpf is *faster*, not merely higher-throughput. A queueing
+artifact raises latency; a real efficiency gain lowers it, which is what a
+prefetch with hundreds of ns of lead instead of ~100 ns should do.
+
+### Projections — flagged as projections
+
+```text
+xpf on a closing-grade bed:        10,029,109 x 1.0498 = ~10.53M
+xpf + G5 (W=30, p192, +1.03%):                          ~10.64M
+```
+
+Standard caveat, and I'll keep applying it to my own good news: these multiply a
+same-bed delta by a cross-bed baseline. The **+4.98% is solid** (alternated,
+drift-immune, sign-agreeing); the ~10.5M level is arithmetic, not measurement.
+What I *would* assert without projection: **xpf measured 10.19M on a bed whose
+own baseline was 9.71M**, and that alone clears your bar.
+
+### Recommendation
+
+Run the verdict sequence. Two open choices worth deciding before it:
+
+1. **xpf alone at W28/p160, or xpf + G5 (W=30/p192)?** They should compose —
+   different mechanisms, one memory-latency, one batching — but "should compose"
+   has failed us before (W+p192 composed weakly). If you want the composition,
+   the honest form is a **short alternated A/B of xpf-p160 vs xpf-p192** first,
+   rather than assuming +1.03% carries over.
+2. **Bed.** Given tonight's drift, I'd reboot to closing-grade before the verdict
+   as you did last time — but with xpf clearing the bar even here, the verdict
+   is likely robust either way. That is a comfortable position to be in for once.
+
+Ready to drive whichever you pick. genie_memd 728953 up 8h55m, same MR.
+
+NEXT: ariel

@@ -1,8 +1,28 @@
 # V2 throughput maximization 전체 실험 결과
 
-기준일: 2026-07-28
+기준일: 2026-07-28 (최종 갱신: vCPU pinning 도입 후)
 
-## 결론
+> **읽는 순서 주의.** 이 문서는 시간순으로 누적됐고, 중간의 여러 결론이
+> 이후 실험으로 **뒤집혔다**. 현재 유효한 결론은 아래 "현재 결론"과 맨 끝
+> "vCPU pinning: 앞선 결론들의 정정"이다. 그 사이 절들은 **당시 조건에서의
+> 기록으로만** 읽고, 무효화된 절에는 머리말에 표시를 달았다.
+
+## 현재 결론 (유효)
+
+| 항목 | 값 |
+|---|---|
+| 최고 실측 | **7.686M Ops/s**, avg 29.0µs, CPU 1.954µs/op |
+| 구성 | guest 28 vCPU **+ vCPU pinning**, server(mcT) 16, client 12 threads × 13, pipeline 80, W=36, QP/worker 4, spin 1024 |
+| 필수 전제 | **qemu vCPU 스레드를 host CPU에 pin해야 한다.** pin이 없으면 guest의 "core N개"가 물리 코어 몇 개인지 통제되지 않아 모든 배분 실험이 오염된다 |
+
+핵심 사실 두 가지:
+
+1. **이 워크로드는 실행 자원이 아니라 지연에 묶여 있다.** server 16 vCPU를
+   물리 16코어에 두었을 때와 물리 8코어에만 몰았을 때의 차이가 **9.5%뿐**이다
+   (7.66M -> 6.93M). SMT 두 번째 스레드가 물리 코어의 약 90%를 해낸다.
+2. 따라서 "물리 16코어 = 하드 상한"이라는 이 문서 중간의 계산은 **틀렸다.**
+
+## (이력) 최초 결론
 
 `avg span-v2 < 30 us` 제약에서 선택한 안정 설정은 아래와 같다.
 
@@ -265,6 +285,8 @@ Cs = T x 1.9us,  Cc = T / 0.9M,  Cs + Cc = 24
 
 ## Client 공급 능력 실측과 10M 성립 여부 (2026-07-28)
 
+> **[무효] client 공급 능력 실측치(core당 0.86~1.07M/s)는 유효하나, 이를 물리 코어 상한과 결합해 '10M 불가'로 결론지은 부분은 무효다.**
+
 지금까지 "client가 몇 core면 얼마를 공급할 수 있는가"를 측정한 적이 없었다.
 server가 병목이 되지 않도록 **stock memcached**(RAM, ~0.9us/op)를 서버로 두고
 client core 수만 바꿔 memtier의 공급 상한을 쟀다.
@@ -341,6 +363,8 @@ per-op CPU를 낮추는 것뿐이다. 10M을 목표로 하려면 client를 이 b
 
 ## 30 vCPU guest 실험: server core는 확장되지 않는다 (2026-07-28)
 
+> **[무효] 이 절의 결론은 vCPU pinning이 없는 상태의 측정이라 무효다. pin을 걸면 server 16이 14를 이긴다. 맨 끝 정정 절을 볼 것.**
+
 "server 20 core면 10M이 되지 않나"를 확인하기 위해 guest를 **30 vCPU**로
 재기동하고(host 32 core), client를 정확히 10 core로 고정한 채 server core만
 늘렸다. binary/설정은 동일하고 `W=36, QP=4, spin=1024`다.
@@ -394,6 +418,8 @@ CPU 회계(`tools/cpu-stage-detail.sh`)를 worker 수별로 돌려 어느 stage�
 
 ## 유휴 core를 두면 달라지는가 (28 vCPU, 2026-07-28)
 
+> **[무효] 동일하게 pin 없는 조건이라 무효다. 물리 코어 배치가 통제되지 않은 상태에서 '유휴 core'는 의미가 없었다.**
+
 30 vCPU에서 steal이 관측됐으므로 guest를 28 vCPU로 낮추고, guest 내부에
 **유휴 core를 남기는 것**이 per-op CPU 상승을 되돌리는지 확인했다. client는
 항상 10 core로 고정했다.
@@ -437,6 +463,8 @@ guest 크기(24/28/30)와 core 배분은 이 벽을 넘지 못한다. 다음에 
 worker 수별 stage 분해(`tools/cpu-stage-detail.sh`)가 그 답을 준다.
 
 ## 근본 원인: 물리 코어 부족과 per-op CPU 분해 (2026-07-28)
+
+> **[무효] '물리 16코어가 하드 상한'이라는 부분은 무효다(SMT 효율 ~90% 실측으로 반증). 다만 같은 절의 **per-op CPU 분해와 DMA sync 필수 확인은 유효**하다.**
 
 ### worker 수를 늘려도 안 되는 이유는 하드웨어다
 
@@ -537,3 +565,77 @@ item lock과 assoc_find를 합쳐 18% 중 절반을 걷어내면 per-op CPU가
 1.83 -> 약 1.67us가 되어 **7.2M -> 7.9M** 수준이 된다. 다만 item locking은
 memcached에서 correctness 위험이 가장 큰 영역이므로, 손대려면 torn/mixed
 correctness suite를 게이트로 걸어야 한다.
+
+---
+
+## vCPU pinning: 앞선 결론들의 정정 (2026-07-28, 최신)
+
+### 왜 앞의 배분 실험이 전부 오염됐나
+
+guest 안에서 `taskset`으로 server/client를 나눠도, **qemu의 vCPU 스레드는
+host에서 고정돼 있지 않았다.** 그래서 "guest core 0-13에 server"가 물리 코어
+14개를 뜻하지 않았다 — host 스케줄러가 여러 vCPU를 한 물리 코어의 SMT 형제에
+올릴 수 있었다. worker 수를 바꾼 모든 측정이 이 통제되지 않은 매핑 위에 있었다.
+
+이 호스트는 SMT 형제가 `(N, N+16)`으로 짝지어진 물리 16코어다. 따라서 vCPU를
+**항등 매핑**(guest vCPU i -> host CPU i)으로 pin하면 guest core 0-15가 물리
+16코어에 1:1로 놓이고, 16 이상은 그 형제에 놓인다.
+
+launcher(`~/2026/sev/run_sev_snp_rdma.py`)에 반영했다.
+
+- `-name guest=sev-snp,debug-threads=on` 으로 vCPU 스레드에 `CPU N/KVM` 이름 부여
+- 기동 후 각 vCPU 스레드를 host CPU에 pin (기본 항등)
+- `~/2026/sev/.vcpu_pin_map` 파일이 있으면 그 매핑을 사용(실험용)
+- `--no-pin-vcpus`로 비활성화 가능
+
+### 정정 1: worker 수는 물리 코어 수에 맞추는 것이 맞다
+
+pin 상태에서 재측정(28 vCPU, pipeline 80, W=36, QP 4, spin 1024):
+
+| 구성 | Ops/s | avg µs | CPU µs/op | wait_enq |
+|---|---:|---:|---:|---:|
+| **server 16 + client 12** | **7.643 / 7.686** | 29.0~29.9 | 1.954 | 877M |
+| server 14 + client 14 | 6.865 | 29.4 | 1.903 | 1034M |
+| server 14 + client 10 (24 vCPU) | 7.117 / 7.143 | 26.4 | 1.845 | 790M |
+| server 16 + client 8 (24 vCPU) | 6.194 / 6.211 | 22.7 | 2.119 | **116M** |
+
+`server 16 + client 8`이 나빴던 것은 server 탓이 아니라 **client 기아**다.
+client가 쓰는 guest core 16-23은 물리 코어 0-7의 SMT 형제인데 그 코어들은 이미
+server worker 0-7이 쓰고 있었다. 증거는 `wait_enq`가 정상의 1/7로 붕괴하고
+latency가 오히려 22.7µs로 **낮아진** 것 — 서버가 일을 기다린다는 뜻이다.
+client에 12개를 주자 server 16의 물리 코어 우위가 그대로 나타났다.
+
+### 정정 2: 물리 코어 수는 하드 상한이 아니다
+
+server 16 vCPU를 **물리 8코어에만** 몰아 배치하고(형제 양쪽 사용) 측정했다.
+pin map: server vCPU 0-15 -> host `0-7,16-23`, client vCPU 16-27 -> host `8-15,24-27`.
+
+| server 배치 | Ops/s | CPU µs/op | avg µs |
+|---|---:|---:|---:|
+| 물리 16코어 (1 thread/core) | 7.643 / 7.686 | 1.954 | 29.0~29.9 |
+| **물리 8코어 (2 thread/core)** | 7.084 / 6.777 | 2.15 | 30.1~31.3 |
+
+**물리 코어를 절반으로 줄여도 throughput은 9.5%만 떨어진다.** 실행 자원이
+병목이라면 반토막이 나야 한다. 즉 이 워크로드는 **지연 바운드**(RDMA 왕복,
+hash/item 포인터 추적의 캐시 미스, 커널 시간)이고 SMT 두 번째 스레드가 물리
+코어의 약 90%를 해낸다.
+
+따라서 이 문서 중간의 `16 물리코어 / 1.77µs = 9.03M`이라는 상한 계산과
+그로부터 유도한 "10M 불가" 결론은 **전제가 틀렸으므로 무효**다. 10M의 성립
+여부는 다시 열린 질문이다.
+
+### 여전히 유효한 것
+
+- **per-op CPU 분해**: `ioctl`(SEV DMA sync) 11.4%, `sendmsg`(transmit) 11.5%,
+  `pthread_mutex_lock` 12%(주로 item lock), `assoc_find` 6.3%,
+  우리 RDMA 경로 5.3%.
+- **DMA sync는 제거 불가**: `EXT_SKIP_DMA_SYNC=1`로 끄면 GET 500만 건이 전부
+  GCM 검증에 실패한다.
+- **syscall은 이미 batch됨**: sendmsg 0.0127/op(79건당 1회), futex 0.0024/op.
+- **client 공급 능력**: guest 내 core당 0.86M/s(P=64), 1.07M/s(P=128).
+
+### 다음 단계
+
+`avg < 30µs` 게이트에 이미 붙어 있으므로(29.0~29.9µs), 코어를 더 쓰려면 W를
+낮춰 latency 여유를 만드는 조합 탐색이 필요하다. 30 vCPU pin 상태에서
+server 18~20 × W 재튜닝이 다음 실험이다.

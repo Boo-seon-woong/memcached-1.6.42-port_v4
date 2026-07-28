@@ -55,6 +55,19 @@ Genie에서 memtier를 실행한 결과를 canonical v2 run으로 취급하지 �
 | `EXT_RDMA_PROF` | off | 1이면 span-v2 histogram/stage stats |
 | `MLX5_COHERENT_QP/CQ` | 환경 의존 | patched SEV-SNP verbs 경로 선택 |
 
+### guest vCPU pinning (host 측)
+
+성능 측정에는 **qemu vCPU 스레드의 host CPU pin이 필수**다. pin이 없으면
+guest 안의 `taskset`이 물리 코어 배치를 통제하지 못해 worker 수/코어 배분
+실험이 전부 오염된다. 이 호스트는 SMT 형제가 `(N, N+16)`인 물리 16코어이므로
+항등 매핑이 guest core 0-15를 물리 16코어에 1:1로 놓는다.
+
+| 위치 | 내용 |
+|---|---|
+| `~/2026/sev/run_sev_snp_rdma.py` | 기동 후 vCPU 스레드를 자동 pin (기본 항등) |
+| `~/2026/sev/.vcpu_pin_map` | 있으면 이 매핑 사용. 공백/쉼표 구분, index=vCPU |
+| `--no-pin-vcpus` | pin 비활성화 |
+
 `EXT_SLOT_SIZE`는 remote ciphertext 전체의 상한이다. crypto ON이면 nonce/tag 등
 `EXT_CRYPTO_OVERHEAD`도 이 안에 포함된다. slabs와 storage 기본값이 다르면
 SET admission과 remote allocation이 서로 다른 객체를 허용하므로 반드시 같은

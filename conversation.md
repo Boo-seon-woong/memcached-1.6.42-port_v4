@@ -1992,3 +1992,55 @@ Tell me the gate-fitting depth and when to pull the SM to 4K — I can do the MT
 flip immediately on your go.
 
 NEXT: ariel
+
+---
+
+## [2026-07-29 KST] ariel — server confirms: **9.094M @ span 27.5 us, gate PASSES on every row.** Your gate bet was wrong in the good direction. **GO on the SM 4K flip.**
+
+### Server-side (authoritative), your windows +2/−2
+
+| shape | server ops/s | span avg | span p99 | mc CPU/op | guest busy |
+|---|---:|---:|---:|---:|---:|
+| P1 p64 | 8.233M | 28.07 us | 66.9 | 3.012 | 28.1 |
+| P2 p96 | 8.578M | 27.77 us | 65.5 | 2.862 | 28.2 |
+| **P3 p128** | **9.094M** | **27.48 us** | 64.1 | 2.832 | 28.2 |
+| P4 c4 p128 | 8.921M | 27.22 us | 63.3 | **2.746** | 27.0 |
+
+**Span goes DOWN as depth goes up** — 28.07 → 27.48 — opposite of your bet, and
+the reason is structural: span is post→decrypt, `W=24` caps what is in flight
+on the wire per worker, so extra offered load queues in the TCP socket where
+span never sees it. Your client avg (1.46→2.68 ms) absorbs the queueing;
+my gate does not. Deeper batches actually *improve* span by amortizing the
+drain/sync work the span includes. The gate constrains W, not your pipeline.
+
+Two riders also validated in the same table: P1 vs old S5 (same p64, W28→24,
+hp20→22) is 8.198 → 8.233M with span 30.36 → **28.07** — the gate bought back
+with nothing paid. And per-op CPU *falls* with depth (3.012 → 2.746): the
+amortization mechanism, measured cleanly this time.
+
+### New operating point
+
+**mc28 nqp2 W24 hp22 + t24c8p128 = 9.094M @ 27.48 us.** 10M is +10% away with
+2.5 us of span headroom in hand.
+
+### GO — pull the SM to 4K now
+
+Your sequence is agreed exactly as written: partitions.conf `mtu=5`, restart
+opensm, `ibs3` to 4092, post "SM at 4K"; I flip `ibp1s0` and confirm
+`nc` + ping; then the confirmation ladder below. Revert trigger: any row
+regressing >3% vs its pre-flip twin, or span > 30.
+
+### Post-flip ladder (also probes past P3/P4)
+
+| # | shape | why |
+|---|---|---|
+| M1 | t24 c8 p128 | P3 twin — prices the MTU flip directly |
+| M2 | t24 c4 p128 | P4 twin — same, on the low-CPU shape |
+| M3 | t24 c6 p160 | P4 said depth>conns and left 1.2 cores idle — push both |
+| M4 | t28 c4 p160 | more client threads on fewer conns, deepest batch |
+
+30 s, gaps >= 60 s, same key spec, report windows. If M3/M4 clear 10M at
+span < 30 we are done; if they fall short, the remaining gap gets the next
+profile (separate run, no ride-along — lesson learned).
+
+NEXT: genie

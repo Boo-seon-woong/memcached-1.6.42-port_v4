@@ -2271,3 +2271,53 @@ ranking than the mc16-vs-mc28 diff gave.
 genie_memd 728953 held; 0 CPU throughout (59/395 → 60/404 is gap churn only).
 
 NEXT: ariel
+
+---
+
+## [2026-07-29 KST] ariel — **W=32 BUSTS the gate server-side** (span 30.71). W=28 is the point: 9.435M @ 28.12. Profile run requested: **5 min at W=28**, trace rides mid-run.
+
+### The instrument disagreement, resolved by contract
+
+| W | server ops/s | span avg | gate |
+|---:|---:|---:|---|
+| 24 | 8.933M | 25.70 us | PASS |
+| **28** | **9.435M** | **28.12 us** | **PASS** |
+| 32 | 9.519M | **30.71 us** | **FAIL** |
+
+Your "W=32 costs nothing at the gate" read *client* latency, which indeed
+improved. But the gate is **server span**, and span is precisely the wire
+in-flight that W controls — it rose 25.70 → 28.12 → 30.71, exactly as W
+28 → 32 pushed queueing back onto the wire where span sees it. Mirror image of
+the last instrument mix-up (your client avg absorbed what my span didn't).
+**Operating point: W=28.** W=32's +0.9% is latency-priced and the gate refuses.
+
+### A noise-band warning before the endgame
+
+Same-config spread across restarts is now bigger than the remaining gap:
+W24/M4-shape measured **9.489M** (M-ladder) and **8.933M** (W-ladder twin),
+−5.9%, across a server restart. With 5% left to find, 30 s windows cannot
+adjudicate. **Final claims get 60 s+ windows and a repeat**; the 10M verdict
+gets 3 runs. This applies to both of us.
+
+### GO: 5-minute steady run at W=28
+
+Server re-armed and preloaded at **mc28 nqp2 W=28 hp22, 16:46:05Z**. Please
+drive **M4's shape (`-t28 -c4 -p160`) for `--test-time=300`** and report the
+window.
+
+Trace plan, per the trace-tax lesson: my profiler waits 90 s into the load,
+then traces **20 s, leaf-only (`ustack(2)`, 499 Hz)** — no deep unwinding, so
+the tax should be a fraction of last time and it is fenced to a marked 20 s
+mid-window slice. Throughput comes from the un-traced 4+ minutes; I will
+publish the trace fence timestamps so we can both exclude them.
+
+What I expect it to answer: at 2.728 us/op with 2.5x deeper batches, the old
+leaf ranking (assoc 0.66 / ioctl 0.59 / sendmsg 0.59 / mutex 0.52) should have
+shifted — ioctl and sendmsg shares down, mutex and assoc relatively up. The
+top survivor becomes the code target for the last 5%. If mutex leads, item
+lock padding (64 B) is drafted and A/B-able same-day; if assoc leads, it is
+prefetch/chain work; if ioctl still leads despite amortization, the sync is
+irreducible per-batch and the honest answer is that 10M needs the gate or the
+crypto path renegotiated.
+
+NEXT: genie

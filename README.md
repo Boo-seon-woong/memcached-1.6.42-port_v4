@@ -17,6 +17,10 @@ torn-write stress가 모두 통과했다.
 13.951/13.3/31.6 µs였다. 세 run 모두 miss, badcrc, RDMA failure,
 engine dead, slot accounting leak가 0이고 `cmd_get == remote_reads`였다.
 
+후속 throughput-max 탐색 129 trials에서 `avg span-v2 <30µs`를 만족하는
+안정 설정의 10초 3회 중앙값은 7.091M GET/s, avg 27.325µs다. 전체 trial은
+[md/V2_THROUGHPUT_MAXIMIZATION.md](md/V2_THROUGHPUT_MAXIMIZATION.md)에 있다.
+
 canonical topology는 Ariel guest 안의 memtier가 localhost TCP로 Ariel
 memcached를 구동하고, memcached만 RDMA로 Genie `genie_memd`의 remote MR을
 사용하는 구조다. Genie는 load generator나 memcached worker가 아니다.
@@ -26,11 +30,12 @@ memcached를 구동하고, memcached만 RDMA로 Genie `genie_memd`의 remote MR�
 1. [md/V2_ARCHITECTURE.md](md/V2_ARCHITECTURE.md) — v2 구조와 GET/SET 경로, v1 변수 대응
 2. [GLOSSARY.md](GLOSSARY.md) — v2 변수, 단위, correctness 계약
 3. [md/V2_REMODIFICATION_SPEC.md](md/V2_REMODIFICATION_SPEC.md) — 계획과 현재 단계
-4. [md/V2_CODE_SPEC.md](md/V2_CODE_SPEC.md) — 실제 call path와 검증 게이트
-5. [SOURCE_CHANGE_SPEC.md](SOURCE_CHANGE_SPEC.md) — v1 source history
-6. [EXTSTORE_RDMA_PORTING.md](EXTSTORE_RDMA_PORTING.md) — v1 설계/실측 history
+4. [md/V2_THROUGHPUT_MAXIMIZATION.md](md/V2_THROUGHPUT_MAXIMIZATION.md) — avg<30µs 최대 throughput 129 trials
+5. [md/V2_CODE_SPEC.md](md/V2_CODE_SPEC.md) — 실제 call path와 검증 게이트
+6. [SOURCE_CHANGE_SPEC.md](SOURCE_CHANGE_SPEC.md) — v1 source history
+7. [EXTSTORE_RDMA_PORTING.md](EXTSTORE_RDMA_PORTING.md) — v1 설계/실측 history
 
-5~6의 `ext_threads/ext_io_depth` 설명은 v1 기록이며 v2 실행 계약이 아니다.
+6~7의 `ext_threads/ext_io_depth` 설명은 v1 기록이며 v2 실행 계약이 아니다.
 
 ## 빌드
 

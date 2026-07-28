@@ -505,3 +505,35 @@ bounce/staging은 `/dev/snp_shared`의 decrypted·cache=wb 페이지이므로 SW
 - guest는 **24 vCPU로 되돌렸다**. 28/30은 하이퍼스레드만 늘려 손해다.
 - 성능 작업을 계속한다면 방향은 코어가 아니라 per-op CPU이고, 유저스페이스에서
   손댈 수 있는 것은 item lock과 assoc_find 정도(합쳐 10%)다.
+
+### syscall 인구조사: 이미 잘 묶여 있다 (mcT=14, P=80)
+
+| syscall | op당 | 해석 |
+|---|---:|---|
+| `sendmsg` | 0.0127 | 응답 79건당 1회. 11.5%는 syscall이 아니라 커널 복사 비용 |
+| `read` | 0.0127 | pipeline=80과 일치 |
+| `ioctl` | 0.0588 | DMA sync, 17 op당 1회 |
+| `epoll_wait` | 0.0028 | |
+| **`futex`** | **0.0024** | **거의 0 — mutex 경합이 futex까지 가지 않는다** |
+
+즉 batching으로 더 얻을 것은 없다. `sendmsg` 11.5%는 79건을 한 번에 복사하는
+비용이고 프로토콜을 바꾸지 않는 한 구조적이다.
+
+`pthread_mutex_lock` 12%는 futex가 0에 가까우므로 **userspace에서 해소되는
+비용**이다(glibc의 spin 구간 + `lock cmpxchg`). 프로파일상 주 호출자는
+`item_get`(2.19%)와 `item_remove`(1.51%)로 hash bucket lock이다.
+
+### 유저스페이스에서 남은 감축 여지
+
+| 대상 | 비중 | 판단 |
+|---|---:|---|
+| DMA sync ioctl | 11.4% | 불가 (실측으로 필수 확인) |
+| TCP transmit | 11.5% | 구조적 (이미 79:1 batching) |
+| item lock (`item_get`/`item_remove`) | 12% 중 상당 | **가능성 있음** — v2 stub은 GET 중 refcount 외 불변 |
+| `assoc_find` | 6.3% | 부분적 (hash 구조/지역성) |
+| 우리 RDMA 경로 | 5.3% | 이미 작음 |
+
+item lock과 assoc_find를 합쳐 18% 중 절반을 걷어내면 per-op CPU가
+1.83 -> 약 1.67us가 되어 **7.2M -> 7.9M** 수준이 된다. 다만 item locking은
+memcached에서 correctness 위험이 가장 큰 영역이므로, 손대려면 torn/mixed
+correctness suite를 게이트로 걸어야 한다.

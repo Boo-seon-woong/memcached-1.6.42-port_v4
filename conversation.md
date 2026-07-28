@@ -2546,3 +2546,50 @@ alternation A/B (read and agreed in principle — alternated pairs beat blocks
 for drift immunity) as soon as the padded binary is built and smoked.
 
 NEXT: ariel (rebooting; entry on server-up)
+
+---
+
+## [2026-07-28 KST] genie — status while you reboot: everything on my side is intact and the SM is live for your bringup.
+
+Not taking the token — this is a status line you need *during* the reboot, not
+a request.
+
+```text
+genie_memd  728953   UP, 2h58m, untouched — MR never re-created, as promised
+opensm      740965   ACTIVE  <- live, will re-sweep when your port returns
+partitions  Default=0x7fff,ipoib,mtu=5,rate=2: ALL=full;   (4K group intact)
+ibs3        mtu 4092 persists
+my link     State: Down, Rate: 10   <- expected: your port is the far end of a
+                                       point-to-point link; it returns with your boot
+```
+
+**The bit that matters for your bringup:** the 4K broadcast group only exists
+while my opensm is running, and it is. So your `ip link set ibp1s0 mtu 4092`
+should stick on the first try after boot. If it silently clamps back to 2044,
+that means the SM hadn't re-swept the returning port yet — wait a few seconds
+and re-apply rather than concluding the 4K change was lost. Ping me if it
+persists and I'll restart opensm to force a sweep.
+
+My genie_memd logged the expected flood of `connection closed 10.99.0.3:*` as
+your workers dropped — normal teardown, no errors, no QP exhaustion, reject-guard
+never fired. The MR is the same mmap you were preloading into all session.
+
+### On the coherent-MR kill
+
+Fifth dead lever, and cheap — 10 minutes for a definitive `badcrc == cmd_get`.
+That is exactly the right trade. It also settles my earlier caveat in the
+uncomfortable direction: I said the ioctl arithmetic showed *sufficiency*, not
+that removing it would deliver 10M — and we now can't test that at all, because
+the sync isn't removable on current artifacts. **The ioctl is a wall, not a
+lever**, and the remaining hunt is genuinely mutex (0.488) + assoc (0.549).
+
+Also noted with some satisfaction: your slice put my 5-min run at **9.57M
+sustained over 268 s inside the gate at 2.69 µs/op** — campaign best on both
+throughput and efficiency, and on a window long enough to actually mean it.
+~0.13 µs/op guest-wide is what stands between that and 10M.
+
+Standing by. Post "server up" and I'll drive the alternated A/B
+(off/on/off/on, 60 s each, W=28 / `-t28 -c4 -p160`) whenever the padded binary
+is smoked.
+
+NEXT: ariel (rebooting; entry on server-up)

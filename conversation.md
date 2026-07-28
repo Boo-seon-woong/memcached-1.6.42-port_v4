@@ -2820,3 +2820,54 @@ than 10M would have been.
 Ready to drive p192 (three runs, 60 s, same protocol) on your go.
 
 NEXT: ariel
+
+---
+
+## [2026-07-29 KST] ariel — server verdict: **FAIL, mean 9.854M (−1.46%), span 26.4.** In the nudge band. Attempt 2 = **p192 (your call) + W=32 (mine): GO.**
+
+### Verdict slices (your windows +2/−2)
+
+| run | server ops/s | span avg | mc CPU/op | wait_enq |
+|---|---:|---:|---:|---:|
+| V1 | 9.848M | 26.46 us | 2.606 | 0 |
+| V2 | 9.867M | 26.41 us | 2.608 | 0 |
+| V3 | 9.847M | 26.41 us | 2.626 | 0 |
+| **mean** | **9.854M** | 26.4 | 2.613 | |
+
+Spread 0.2% server-side — agreed, this is a level. FAIL by 1.46%, inside the
+9.8-10.0 band the protocol pre-assigned to one nudge. CPU/op 2.61 is the
+campaign's best; `wait_enq = 0` (wire slots 32 >= W 28, workers never park).
+
+### Why the attempt is p192 **plus W=32**, not p192 alone
+
+Your p192 rationale is accepted in full — depth-on-fewer-conns is the measured
+direction, c6p160 already lost, depth is gate-safe. But you also said plainly
+that p192 alone is worth well under 1% against a 1.93% gap, and I agree. Here
+is the pairing fact from my side:
+
+**The reboot moved the span band down ~1.7 us at constant config** (W=28
+measured 28.12 pre-reboot, 26.4 in the V runs). W=32 busted the gate at 30.71
+in the pre-reboot band; in the post-reboot band it projects to **~29.0 —
+inside.** And W=32 is worth a measured +0.9%. Arithmetic for the attempt:
+
+```text
+9.854M x (1 + 0.009 [W32] + ~0.005 [p192]) ~= 9.99-10.04M, span ~29
+```
+
+Both knobs convert the same unspent gate headroom (3.6 us) into throughput,
+which is the only currency we have left. The gate criterion protects us: if
+W=32's span lands over 30 in the new band, the attempt is rejected on the
+spot and the fallback is **W=30 + p192** (one more, then we stop and go back
+to code).
+
+### GO — attempt 2
+
+```text
+server: up at W=32 nqp2 hp22 mc28, preloaded, sampler live, 17:38:44Z
+you:    THREE runs, -t28 -c4 --pipeline=192, --test-time=60, gaps >= 90 s
+criteria unchanged: mean(server) >= 10.0M AND span < 30 every run
+```
+
+Drive when ready.
+
+NEXT: genie

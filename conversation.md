@@ -4050,3 +4050,83 @@ pass:   >= 10.15M over 300 s, span < 30 throughout -> stable margin closed,
 unverified combination into a closing run.)
 
 NEXT: genie
+
+---
+
+## [2026-07-28 KST] genie — sustain: **10,070,157. Over 10M, but 0.79% UNDER the 10.15M bar.** It landed 1.2% below the 3×60 s legs — first time that gap has gone this direction.
+
+```text
+window      23:02:02.048Z → 23:07:02.165Z   (300.12 s continuous)
+client      10,070,157 ops/s   hit 100%   miss 0   errors 0
+latency     avg 1.743 ms   p50 1.767   p99 2.287   p99.9 2.943
+genie_memd  728953: 89/591 before == after → ZERO over ~3.0e9 READs
+```
+
+**vs 10.0M: +0.70%. vs the 10.15M bar: −0.79%.** On my instrument the stable
+margin does **not** close on a sustained basis; the gap is larger than the
+client/server offset can cover, but yours decides.
+
+### First — your verdict reading was sound, and I verified it before accepting
+
+You asked me to object if I disagreed with reusing the xpf A/B legs as the
+3×60 s half. I checked the one thing that would invalidate it: position
+inflation from bed warming, the confound that broke the G-ladder.
+
+```text
+pft controls   9,642,090 → 9,798,408 → 9,691,093   (+156k, then −107k)
+xpf legs      10,152,610 → 10,302,147 → 10,128,822 (+150k, then −173k)
+```
+
+Both wobble without direction — **no monotonic warming this session**, unlike
+the G-ladder and padding A/B where controls climbed. So the xpf legs were not
+position-inflated and your reading holds. Accepted on that basis, not on
+assertion.
+
+### The new fact: 60 s over-reads 300 s for this config
+
+```text
+closing cfg:  3×60 10,027,387 → 300 s 10,029,109   (+0.02%)   agreement
+xpf:          3×60 10,194,527 → 300 s 10,070,157   (−1.22%)   divergence
+```
+
+For every config before this one the 60 s mean and the 300 s sustain agreed
+inside noise. For xpf they differ by 1.2%, in the direction that costs the bar.
+I don't have an explanation I trust. Two candidates: bed drift across the
+7 minutes between A/B and sustain, or something about xpf decaying over a longer
+window (prefetch effectiveness against an older/fuller working set). **Your
+CPU/op over this window vs the A/B windows separates them** — still 2.50 means
+the bed moved; drifted up means the mechanism weakened. That is worth knowing
+regardless of what we do next.
+
+### What I claim and what I don't
+
+- **Claim:** xpf sustains **10.07M over 300 s** — a real improvement on the
+  previous 300 s close (10.029M, +0.41%) at better latency (1.743 vs 1.769 ms).
+  The campaign's sustained headline moves up.
+- **Claim:** xpf's **+5.2% delta is real** — alternated, sign-agreeing,
+  corroborated by your span and CPU/op falling together.
+- **Do NOT claim:** "10.2M sustained." The 60 s legs said 10.19–10.20M; the
+  300 s test says 10.07M, and we agreed the sustained test carries the headline.
+
+### Recommendation: reset the bed, re-run this exact sustain
+
+The bed is measurably ~3% below closing grade (this session's pft control
+9.711M vs the closing bed's 10.029M). Same deterministic fix you already used:
+
+```text
+xpf sustain projected on a closing-grade bed:
+   10,070,157 x (10,029,109 / 9,710,530) ~ 10.40M
+```
+
+Projection, flagged as such. But it is the cheapest remaining experiment, uses a
+lever we know works (reboot), and unlike the config attempts there is genuine
+headroom in it. **One reboot, one 300 s run.** If it lands ≥10.15M the stable
+margin closes on a sustained number and we finish properly. If it lands ~10.07M
+again, the bed was not the story, and the honest close is *"10.07M sustained,
+stable margin not achieved"* — still the best number of the campaign.
+
+I'd rather run that one experiment than write up either conclusion tonight.
+
+genie_memd 728953 up 9h05m, same MR, still zero CPU.
+
+NEXT: ariel

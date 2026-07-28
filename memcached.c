@@ -246,6 +246,7 @@ static void settings_init(void) {
     settings.maxconns_fast = true;
     settings.idle_timeout = 0; /* disabled */
     settings.hashpower_init = 0;
+    settings.item_lock_power = 0;   /* 0 = derive from threadcount */
     settings.shutdown_command = false;
     settings.tail_repair_time = TAIL_REPAIR_TIME_DEFAULT;
     settings.flush_enabled = true;
@@ -1927,6 +1928,7 @@ void process_stat_settings(ADD_STAT add_stats, void *c) {
     APPEND_STAT("item_size_max", "%d", settings.item_size_max);
     APPEND_STAT("maxconns_fast", "%s", settings.maxconns_fast ? "yes" : "no");
     APPEND_STAT("hashpower_init", "%d", settings.hashpower_init);
+    APPEND_STAT("item_lock_power", "%d", item_lock_power_used());
     APPEND_STAT("slab_chunk_max", "%d", settings.slab_chunk_size_max);
     APPEND_STAT("tail_repair_time", "%d", settings.tail_repair_time);
     APPEND_STAT("flush_enabled", "%s", settings.flush_enabled ? "yes" : "no");
@@ -4653,6 +4655,7 @@ int main (int argc, char **argv) {
     enum {
         MAXCONNS_FAST = 0,
         HASHPOWER_INIT,
+        ITEM_LOCK_POWER,
         NO_HASHEXPAND,
         TAIL_REPAIR_TIME,
         HASH_ALGORITHM,
@@ -4700,6 +4703,7 @@ int main (int argc, char **argv) {
     char *const subopts_tokens[] = {
         [MAXCONNS_FAST] = "maxconns_fast",
         [HASHPOWER_INIT] = "hashpower",
+        [ITEM_LOCK_POWER] = "item_lock_power",
         [NO_HASHEXPAND] = "no_hashexpand",
         [TAIL_REPAIR_TIME] = "tail_repair_time",
         [HASH_ALGORITHM] = "hash_algorithm",
@@ -5113,6 +5117,13 @@ int main (int argc, char **argv) {
                         settings.hashpower_init);
                     goto error;
                 }
+                break;
+            case ITEM_LOCK_POWER:
+                if (subopts_value == NULL) {
+                    fprintf(stderr, "Missing numeric argument for item_lock_power\n");
+                    goto error;
+                }
+                settings.item_lock_power = atoi(subopts_value);
                 break;
             case NO_HASHEXPAND:
                 start_assoc_maint = false;

@@ -115,6 +115,10 @@ static void thread_libevent_ionotify(evutil_socket_t fd, short which, void *arg)
  * without first locking and removing from the LRU.
  */
 
+unsigned int item_lock_power_used(void) {
+    return item_lock_hashpower;
+}
+
 void item_lock(uint32_t hv) {
     mutex_lock(&item_locks[hv & hashmask(item_lock_hashpower)]);
 }
@@ -1132,6 +1136,10 @@ void memcached_thread_init(int nthreads, void *arg) {
     } else {
         /* 32k buckets. just under the hashpower default. */
         power = 15;
+    }
+
+    if (settings.item_lock_power > 0) {
+        power = settings.item_lock_power;
     }
 
     if (power >= hashpower) {

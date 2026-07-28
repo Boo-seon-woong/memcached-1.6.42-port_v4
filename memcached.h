@@ -459,7 +459,8 @@ struct settings {
     bool sasl;              /* SASL on/off */
     bool maxconns_fast;     /* Whether or not to early close connections */
     bool ssl_enabled; /* indicates whether SSL is enabled */
-    int hashpower_init;     /* Starting hash power level */
+    int hashpower_init;
+    int item_lock_power;    /* item lock table size = 2^N; 0 = derive from -t */     /* Starting hash power level */
     bool shutdown_command; /* allow shutdown command */
     int tail_repair_time;   /* LRU tail refcount leak repair time */
     unsigned int ext_drain_spin; /* v2 P2a: post-batch CQ drain spins */
@@ -954,6 +955,7 @@ void STATS_UNLOCK(void);
 #define THR_STATS_LOCK(t) pthread_mutex_lock(&t->stats.mutex)
 #define THR_STATS_UNLOCK(t) pthread_mutex_unlock(&t->stats.mutex)
 void threadlocal_stats_reset(void);
+unsigned int item_lock_power_used(void);
 void threadlocal_stats_aggregate(struct thread_stats *stats);
 void slab_stats_aggregate(struct thread_stats *stats, struct slab_stats *out);
 void thread_setname(pthread_t thread, const char *name);

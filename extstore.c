@@ -62,6 +62,13 @@ static inline void prof_record(uint32_t *hist, uint64_t *count, uint64_t *sum,
  * (unencrypted) memory, so the read-bounce and write-staging pools must come
  * from /dev/snp_shared. On non-TEE hosts that device is absent, so fall back to
  * anonymous mmap (keeps the genie loopback path working). §9 / P-3(a). */
+/* SEV bounce/staging come from /dev/snp_shared (decrypted, cache=wb), so the
+ * NIC DMAs into them directly rather than through SWIOTLB. On x86 that path is
+ * cache-coherent and the SYNC advise is a no-op cost. Left ON by default; set
+ * EXT_SKIP_DMA_SYNC=1 to measure/skip it. Correctness is self-checking: if the
+ * sync is in fact required, GCM tag verification fails and badcrc fires. */
+static int g_skip_dma_sync = 0;
+
 static char *dma_alloc(size_t sz) {
     int fd = open("/dev/snp_shared", O_RDWR);
     if (fd >= 0) {
@@ -305,6 +312,11 @@ void *extstore_init(struct extstore_conf_file *fh, struct extstore_conf *cf,
     pthread_mutex_init(&e->stats_mutex, NULL);
     atomic_store(&e->dead, 0);
     if (getenv("EXT_RDMA_PROF")) { g_prof_on = 1; prof_calibrate(); }
+    { const char *v = getenv("EXT_SKIP_DMA_SYNC");
+      if (v && atoi(v)) {
+        g_skip_dma_sync = 1;
+        fprintf(stderr, "extstore: DMA sync advise DISABLED (snp_shared direct)\n");
+      } }
     return e;
 }
 
@@ -747,7 +759,8 @@ int extstore_worker_post_write(void *worker, obj_io *io) {
     uint64_t t_sync_start = g_prof_on ? prof_rdtsc() : 0;
     if (g_prof_on && io->t_start && io->t_end >= io->t_start)
         w->prof_w_crypto_ns += (uint64_t)((io->t_end - io->t_start) * g_ns_per_cycle);
-    int adv = ibv_advise_mr(e->pd, IBV_ADVISE_MR_ADVICE_SYNC_FOR_DEVICE,
+    int adv = g_skip_dma_sync ? 0
+            : ibv_advise_mr(e->pd, IBV_ADVISE_MR_ADVICE_SYNC_FOR_DEVICE,
                             IBV_ADVISE_MR_FLAG_FLUSH, &sg, 1);
     static _Atomic int w_dev_warned;
     if (adv && !atomic_exchange(&w_dev_warned, 1))
@@ -816,7 +829,7 @@ int extstore_worker_drain(void *worker, int budget) {
             sync_sg[nsync++] = (struct ibv_sge){ .addr = (uintptr_t)io->buf,
                 .length = io->len, .lkey = e->wbounce_mr->lkey };
     }
-    if (nsync) {
+    if (nsync && !g_skip_dma_sync) {
         int adv = ibv_advise_mr(e->pd, IBV_ADVISE_MR_ADVICE_SYNC_FOR_CPU,
                                 IBV_ADVISE_MR_FLAG_FLUSH, sync_sg, nsync);
         static _Atomic int w_advise_warned;

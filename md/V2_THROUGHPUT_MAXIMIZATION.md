@@ -435,3 +435,73 @@ throughput은 어떤 조합에서도 6.8~7.5M을 벗어나지 않았다. core를
 guest 크기(24/28/30)와 core 배분은 이 벽을 넘지 못한다. 다음에 답해야 할
 질문은 **"worker 수가 늘 때 per-op CPU를 올리는 것이 무엇인가"** 하나이고,
 worker 수별 stage 분해(`tools/cpu-stage-detail.sh`)가 그 답을 준다.
+
+## 근본 원인: 물리 코어 부족과 per-op CPU 분해 (2026-07-28)
+
+### worker 수를 늘려도 안 되는 이유는 하드웨어다
+
+host는 **AMD EPYC 9124 — 물리 16 코어, SMT2, 논리 32**다. L3는 64MiB가 4
+인스턴스(CCX당 16MiB)인데 guest는 8MiB 1개짜리 플랫 토폴로지로 본다.
+
+| 구성 | 총 thread | 물리 코어당 |
+|---|---:|---:|
+| server 14 + client 10 | 24 | 1.5 |
+| server 18 + client 10 | 28 | 1.75 |
+| server 20 + client 10 | 30 | 1.9 |
+
+**16 thread를 넘으면 늘어나는 것은 코어가 아니라 하이퍼스레드다.** 두 worker가
+한 물리 코어의 L1/L2와 실행 유닛을 나눠 쓰므로 각자 느려진다. 이것이 모든
+관측을 설명한다: core당 처리량 0.53 -> 0.38M, 유휴 core 무효, drain spin 무효,
+그리고 `assoc_find`(메모리 지연에 민감한 lock 없는 포인터 추적)가 6.29% ->
+12.93%로 정확히 2배가 된 것.
+
+따라서 현 상한은 소프트웨어 한계가 아니다:
+
+```text
+16 물리코어 / 1.772us/op = 9.03M/s   (서버가 칩 전체를 독점할 때)
+client가 약 1/3을 가져가면          ~7.5M   <- 실측과 일치
+```
+
+### per-op CPU 분해 (mcT=14, 프로파일 hz=499)
+
+| stage | caller | 비중 |
+|---|---|---:|
+| `ioctl` | `execute_ioctl` = `ibv_advise_mr` | **11.41%** |
+| `sendmsg` | `transmit` | 11.48% |
+| `pthread_mutex_lock` | `item_get` 2.19 + `item_remove` 1.51 (item lock) | 12.04% 중 3.7%+ |
+| `assoc_find` | (lock 없음) | 6.29% |
+| `__read` | TCP 수신 | 4.86% |
+| `worker_post` + `mlx5_poll_cq_v1` | RDMA 경로 | 5.27% |
+
+RDMA 경로 자체는 5% 남짓이다. 비용은 SEV DMA sync, TCP, item lock에 있다.
+
+### DMA sync는 제거할 수 없다 (실측)
+
+bounce/staging은 `/dev/snp_shared`의 decrypted·cache=wb 페이지이므로 SWIOTLB를
+타지 않고 NIC이 직접 쓴다. x86 DMA가 캐시 코히런트라면 `SYNC_FOR_CPU` advise가
+불필요할 수 있다는 가설을 `EXT_SKIP_DMA_SYNC`로 검증했다.
+
+결과: sync를 끄면 **GET 500만 건이 전부 실패**한다(badcrc/miss). 기준선은
+7.204M/s, bad=0으로 정상이다. 즉 이 advise는 장식이 아니라 데이터 가시성에
+필수이며, v1 selftest가 남긴 경고("SWIOTLB sync missing from mlx5_ib")와
+일치한다. **11.4%는 SEV 기밀 컴퓨팅의 비용이고 유저스페이스에서 제거할 수
+없다** — 없애려면 v1이 보류한 coherent-MR 커널 트랙이 필요하다.
+
+### 남은 감축 후보
+
+| 대상 | 비중 | 성격 |
+|---|---:|---|
+| DMA sync ioctl | 11.4% | 커널 트랙(coherent-MR) 없이는 불가 |
+| TCP transmit | 11.5% | 구조적. client가 같은 박스에 있는 한 존재 |
+| item lock (`item_get`/`item_remove`) | 3.7%+ | **v2에서 재검토 여지 있음** — stub은 GET 중 refcount 외에는 불변 |
+| `assoc_find` | 6.3% | hash 구조. 코어를 늘릴수록 악화 |
+
+### 결론
+
+- 이 호스트에서 **10M은 성립하지 않는다**: `10M x 1.6us/op = 16 코어`이므로
+  per-op CPU를 1.772 -> 1.6 이하로 낮추고 **동시에 client를 박스 밖으로 완전히
+  빼야** 겨우 도달한다. client가 온보드면 서버 몫이 11~12 코어라 1.15us/op가
+  필요하며 비현실적이다.
+- guest는 **24 vCPU로 되돌렸다**. 28/30은 하이퍼스레드만 늘려 손해다.
+- 성능 작업을 계속한다면 방향은 코어가 아니라 per-op CPU이고, 유저스페이스에서
+  손댈 수 있는 것은 item lock과 assoc_find 정도(합쳐 10%)다.

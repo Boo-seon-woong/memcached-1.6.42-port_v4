@@ -794,6 +794,7 @@ int storage_read_config(void *conf, char **subopt) {
                 fprintf(stderr, "could not parse argument to ext_threads\n");
                 return 1;
             }
+            /* v2: 0 = worker-inline only (no IO threads spawned) */
             break;
         case EXT_IO_DEPTH:
             if (subopts_value == NULL) {

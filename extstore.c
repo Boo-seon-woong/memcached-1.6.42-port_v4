@@ -159,6 +159,7 @@ struct store_engine {
     /* v2 (P2a): worker-inline READ path */
     struct store_worker **workers;
     unsigned int worker_count, w_nqp, w_window;
+    bool io_thread_spawn;
     char *wbounce_base;
     struct ibv_mr *wbounce_mr;
     char *wstaging_base;                 /* P2b */
@@ -536,7 +537,11 @@ void *extstore_init(struct extstore_conf_file *fh, struct extstore_conf *cf,
     e->page_size = cf->page_size;
     e->slot_size = cf->slot_size;
     e->read_slots = cf->read_slots > 64 ? 64 : cf->read_slots;
-    e->io_threadcount = cf->io_threadcount;
+    /* v2 (P2b): ext_threads=0 means "no IO threads at all" — READ and WRITE
+     * are both worker-inline now. One QP is still connected so the engine can
+     * learn pd/raddr/rkey; it is simply never polled. */
+    e->io_thread_spawn = (cf->io_threadcount > 0);
+    e->io_threadcount = cf->io_threadcount ? cf->io_threadcount : 1;
     e->io_depth = cf->io_depth ? cf->io_depth : 64;
     pthread_mutex_init(&e->mutex, NULL);
     pthread_mutex_init(&e->stats_mutex, NULL);
@@ -608,9 +613,13 @@ void *extstore_init(struct extstore_conf_file *fh, struct extstore_conf *cf,
     e->stats.page_size = e->page_size;
     e->stats.pages_free = e->page_count;
 
-    for (unsigned int i = 0; i < e->io_threadcount; i++) {
-        if (pthread_create(&e->io_threads[i].tid, NULL, extstore_io_thread,
-                &e->io_threads[i])) { *res = EXTSTORE_INIT_THREAD_FAIL; goto fail; }
+    if (e->io_thread_spawn) {
+        for (unsigned int i = 0; i < e->io_threadcount; i++) {
+            if (pthread_create(&e->io_threads[i].tid, NULL, extstore_io_thread,
+                    &e->io_threads[i])) { *res = EXTSTORE_INIT_THREAD_FAIL; goto fail; }
+        }
+    } else {
+        fprintf(stderr, "extstore: no IO threads (worker-inline READ/WRITE)\n");
     }
     return e;
 fail:

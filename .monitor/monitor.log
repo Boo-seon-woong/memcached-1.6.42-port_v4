@@ -61,3 +61,4 @@ ce974ae [genie] Phase 0a: loopback smoke passes (0 failures, 0 badcrc); ariel RD
 [2026-07-28 01:36:31 UTC] watch start SELF=ariel poll=30s handled=778e78db9d3eaf78059ef266920b6d06f80bf2f7
 [2026-07-28 03:06:29 UTC] EVENT: non-ariel commit(s) — waking agent:
 9373c60 [genie] hold virgin genie_memd :11212 (4 GiB) for G-base gate; HCA released
+[2026-07-28 03:40:24 UTC] watch start SELF=ariel poll=30s handled=89e298ebcfd4dd1225859c072a659b161d9fc02d

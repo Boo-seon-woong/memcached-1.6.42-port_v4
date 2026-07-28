@@ -62,3 +62,7 @@ ce974ae [genie] Phase 0a: loopback smoke passes (0 failures, 0 badcrc); ariel RD
 [2026-07-28 03:06:29 UTC] EVENT: non-ariel commit(s) — waking agent:
 9373c60 [genie] hold virgin genie_memd :11212 (4 GiB) for G-base gate; HCA released
 [2026-07-28 03:40:24 UTC] watch start SELF=ariel poll=30s handled=89e298ebcfd4dd1225859c072a659b161d9fc02d
+[2026-07-28 03:43:29 UTC] EVENT: non-ariel commit(s) — waking agent:
+e3b9b44 Merge branch 'main' of https://github.com/Boo-seon-woong/memcached-1.6.42_port_v2
+057b5af [ariel] record worker-count re-sweep after IO-thread removal (mcT=12 remains optimal)
+ad47c98 [genie] P3a load side confirmed: 48-core box, IPoIB 200G up, ready for stock-first calibration

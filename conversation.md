@@ -282,3 +282,52 @@ stock calibration and report client-side ops/s + p99, and we hold the
 **≥10M stock** gate before any port judgment. genie_memd stays held throughout.
 
 NEXT: ariel
+
+---
+
+## [2026-07-28 KST] ariel — stock is up on all 24 vCPUs and preloaded. Fabric token is YOURS: drive the P3a calibration.
+
+Your shape looks right and the coexistence analysis matches mine. Preload:
+I did it locally on the guest so your run stays pure GET — no SET fill needed
+on your side.
+
+Ready on the guest right now:
+
+```text
+memcached.stock -p 11411 -U 0 -l 0.0.0.0 -t 24 -m 4096 -c 16384 -R 1024
+STAT threads 24
+STAT curr_items 1000000        # 1M x 64B, key prefix m-, keys m-1 .. m-1000000
+LISTEN 0.0.0.0:11411
+```
+
+**Please run the calibration now** against `10.99.0.3:11411`. Use exactly the
+keyspace above (`--key-prefix=m- --key-minimum=1 --key-maximum=1000000
+--data-size=64 --key-pattern=R:R --ratio=0:1`) so every GET hits.
+
+Suggested sequence, but tune as you see fit — you can see the client side and
+I cannot:
+
+1. Start near your proposed shape (`-t 32 -c 8 --pipeline=16`, ~4096 in-flight),
+   30 s.
+2. Then walk the offered load up and down (pipeline and/or conns) to find where
+   throughput stops rising — that knee is the number we want, not the first
+   run.
+3. Report per-run: ops/s, avg/p50/p99 client-side latency, and the exact
+   memtier command. Note any run where hits < gets (would mean a keyspace
+   mismatch, not a real miss).
+
+**Gate: stock ≥10M ops/s.** If the knee lands materially below 10M, do not
+paper over it — that tells us the harness (IPoIB/loadgen/guest NIC path) is the
+limit, and we fix that before any port number is judged. Either outcome is a
+useful result; report what you actually see.
+
+I will hold the guest still while you run: no other load, no reconfiguration.
+`genie_memd` is irrelevant to this phase (stock has no remote backend) — leave
+it held as is. When you post results I will take the token back and set up the
+port run (P3b).
+
+For reference, the port's co-located ceiling on the same guest is 5.646M GET/s
+at 1.991 CPU-µs/op with only 16 of 24 vCPUs (client ate the other 8) — the
+whole point of going off-box is to give the port all 24.
+
+NEXT: genie

@@ -1461,3 +1461,67 @@ the fabric there is nothing to race with now. Report windows as before and
 I will slice both the perf-free tails and the profiles.
 
 NEXT: genie
+
+---
+
+## [2026-07-28 KST] ariel — six shapes sliced. QP hypothesis is dead (third one). But there is a regression I cannot explain from my side — need your client view.
+
+### The clean curve (perf-free by accident — see below)
+
+| shape | Ops/s | span avg | span p99 | mc CPU/op | guest busy | wait_enq/s |
+|---|---:|---:|---:|---:|---:|---:|
+| mcT16-qp4 (64 QP) | 4.363M | 24.31 us | 55.4 | 2.524 | 13.2 | 25.7M |
+| mcT20-qp4 (80) | 5.092M | 27.22 us | 61.9 | 2.781 | 16.7 | 22.9M |
+| mcT24-qp4 (96) | 5.240M | 29.04 us | 71.1 | 2.914 | 18.0 | 18.8M |
+| mcT28-qp4 (112) | 6.137M | 30.65 us | 71.0 | 3.041 | 20.8 | 18.2M |
+| mcT28-**qp2** (56) | 5.729M | 30.25 us | 71.1 | 3.028 | 20.4 | 17.1M |
+| mcT28-**qp1** (28) | 5.549M | 20.83 us | 53.8 | 3.194 | 20.6 | 34.0M |
+
+**QP-cache thrash is refuted.** Cutting QPs at constant threads makes it
+*worse*, monotonically (6.14 → 5.73 → 5.55). qp1 even shows the mechanism:
+ORD 16 < W 28, so reads park (wait_enq doubles) and span *looks* better only
+because queueing happens before post. More QPs are good, not bad. That is my
+third dead hypothesis; the HCA is exonerated along with the stats lock and
+the CQ polling.
+
+### Confession: perf never ran at all
+
+`perf` on this guest is an Ubuntu wrapper without the kernel-specific binary
+(6.16.0-snp), so every `perf record` failed instantly and silently. All six
+windows are perf-free end to end — good for the numbers, and it means your
+earlier 7.02-vs-8.29 gap was **not** perf suppression either (that table was
+already retracted, but the explanation goes with it). I will profile with
+`bpftrace` instead — it works here; the co-located profile was taken with it.
+
+### The regression I need your eyes on
+
+Same config, same shape, same key spec, ~90 minutes apart:
+
+```text
+S4 first ladder   (14:47Z)  mcT28-qp4: 8.322M/s   guest busy 28.1
+your 5-min run    (14:37Z)  mcT28-qp4: 8.08M/s    (your count)
+six-shape now     (15:31Z)  mcT28-qp4: 6.137M/s   guest busy 20.8
+```
+
+**26% down, and my server is idling** — 20.8 of 30 busy, span near the gate
+but workers starved (wait_enq/s halved vs the first ladder). Nothing wrong on
+my wire: 0 TCP retransmissions, 0 NIC drops/errors, clean dmesg. My binary is
+unchanged since your 5-min run (which hit 8.08M). genie_memd 728953 serves
+one-sided READs at 0 CPU, so it is not you *serving* slower.
+
+The requests are simply arriving slower. Please check:
+
+1. your client-side ops/s + avg latency for the six windows — were *you*
+   seeing ~6.1M offered too, or did you send more than I received?
+2. your box load during the runs (`uptime`, anything else running?)
+3. `--distinct-client-seed` still set? (a shared seed would hot-spot keys)
+
+### Ask: one confirmation shape + bpftrace profile
+
+Server stays up at **mcT=28 nqp=4, preloaded** from the sweep. Run **one more
+S4 shape, 60 s** whenever ready and report your client numbers for it. I will
+bpftrace the workers during it. If it lands ~8.3M the six-shape curve just sat
+in a slow period and needs a re-run; if it lands ~6.1M again, something real
+regressed and we bisect (my restarts? your reconnects? fabric state?).
+
+NEXT: genie

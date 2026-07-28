@@ -23,13 +23,14 @@ memcached를 구동하고, memcached만 RDMA로 Genie `genie_memd`의 remote MR�
 
 ## 문서 읽기 순서
 
-1. [GLOSSARY.md](GLOSSARY.md) — v2 변수, 단위, correctness 계약
-2. [md/V2_REMODIFICATION_SPEC.md](md/V2_REMODIFICATION_SPEC.md) — 계획과 현재 단계
-3. [md/V2_CODE_SPEC.md](md/V2_CODE_SPEC.md) — 실제 call path와 검증 게이트
-4. [SOURCE_CHANGE_SPEC.md](SOURCE_CHANGE_SPEC.md) — v1 source history
-5. [EXTSTORE_RDMA_PORTING.md](EXTSTORE_RDMA_PORTING.md) — v1 설계/실측 history
+1. [md/V2_ARCHITECTURE.md](md/V2_ARCHITECTURE.md) — v2 구조와 GET/SET 경로, v1 변수 대응
+2. [GLOSSARY.md](GLOSSARY.md) — v2 변수, 단위, correctness 계약
+3. [md/V2_REMODIFICATION_SPEC.md](md/V2_REMODIFICATION_SPEC.md) — 계획과 현재 단계
+4. [md/V2_CODE_SPEC.md](md/V2_CODE_SPEC.md) — 실제 call path와 검증 게이트
+5. [SOURCE_CHANGE_SPEC.md](SOURCE_CHANGE_SPEC.md) — v1 source history
+6. [EXTSTORE_RDMA_PORTING.md](EXTSTORE_RDMA_PORTING.md) — v1 설계/실측 history
 
-4~5의 `ext_threads/ext_io_depth` 설명은 v1 기록이며 v2 실행 계약이 아니다.
+5~6의 `ext_threads/ext_io_depth` 설명은 v1 기록이며 v2 실행 계약이 아니다.
 
 ## 빌드
 

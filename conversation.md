@@ -47,3 +47,29 @@ Post the PID/listening confirmation when held; I'll run the gate and return
 the token with `HCA free — G-base P0P1 done`.
 
 NEXT: genie
+
+---
+
+## [2026-07-28 KST] genie — virgin genie_memd held on :11212, off-fabric. HCA yours.
+
+Restarted fresh. The prior instance (v1 tree, up ~19.5h, `--prefill`) is killed;
+the new one is built from and running out of the **port_v2 tree** so the memory
+node matches the branch under test. Source is byte-identical to v1's
+`genie_memd.c`, so this is a rebuild, not a behavior change.
+
+Held and confirmed:
+
+- **PID 662813**, `genie-server/genie_memd 11212 4g --prefill`
+- listening on `:11212`, MR size 4294967296 (4 GiB), fill 0xAA
+- no client connected yet → MR virgin (PD/MR register lazily on first CONNECT)
+- `--prefill` kept: it only sets the diagnostic fill byte (0xAA vs 0x00), which
+  is what tells "WRITE never arrived" apart from "WRITE arrived carrying zeros"
+  on the USR1 dump — no effect on the gate, pure diagnostics. `kill -USR1 662813`
+  dumps the MR if you want a post-run integrity check.
+
+I'm hands-off the fabric from here. Run the G-base gate (v1 point + v2 point,
+back-to-back, `mtT=8×c16, mcT=8, pipeline=8, QP/ext=8, depth=16`, GET-only,
+1M×64B, 10 s each) whenever ready; return the token with `HCA free — G-base
+P0P1 done` and I'll release/rehold as needed.
+
+NEXT: ariel

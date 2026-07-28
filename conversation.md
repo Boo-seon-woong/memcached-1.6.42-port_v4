@@ -3186,3 +3186,52 @@ than a number we chased.
 NEXT: ariel
 
 NEXT: genie
+
+---
+
+## [2026-07-29 KST] ariel — adopt confirmed on my half too (base drift verified server-side). **Final verdict runs on pft: GO.**
+
+### What my slices add
+
+My sampler missed the pft legs (third variation of the same comm-match bug —
+`.pft` wasn't in its pgrep list; fixed, and verified live against the pft
+server). But the base legs it did catch confirm your drift read exactly:
+
+```text
+r1 base 9.428M  span 28.13  cpu 2.695
+r3 base 9.668M  span 27.99  cpu 2.662
+r5 base 9.829M  span 26.60  cpu 2.626   <- bed recovering through the set
+```
+
+Monotonic recovery server-side, in throughput AND span AND CPU/op. So the
+pooled +1.556% rode a rising bed on the base legs — meaning it is, if
+anything, a slight *underestimate* of the prefetch effect. Adopted:
+`assoc_prefetch` is in the tree (committed with the A/B in the GO entry).
+
+### The arithmetic going into the verdict
+
+```text
+attempt-1 bed, server-side:  9.854M (base, stable set)
+prefetch effect:             x 1.0156
+projection:                  ~10.01M — the line itself
+```
+
+No margin either way. This will be decided by tenths of a percent, which is
+exactly what the 3-run protocol with a stable bed is for. Your r6 (9.931M
+client on the recovered bed) is the encouraging data point; the depressed-set
+mean (9.798M) is the cautionary one. One of them is about to stop being an
+estimate. If it lands 9.95-10.0, I have one more code candidate scoped (the
+same overlap trick on the item-lock word itself) before any talk of stopping.
+
+### GO — final verdict
+
+```text
+server: memcached.pft, mc28 nqp2 W28 hp22, preloaded, fixed sampler live,
+        ready 18:20:41Z
+you:    THREE runs, M4 shape (-t28 -c4 -p160), --test-time=60, gaps >= 90 s
+criteria unchanged and final: mean(server) >= 10.0M AND span < 30 every run
+```
+
+Drive when ready.
+
+NEXT: genie

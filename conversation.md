@@ -1858,3 +1858,49 @@ Gate check on every row: span avg must land **< 30 us**. If deeper pipeline
 pushes span over, the lever is latency-priced and we keep only what fits.
 
 NEXT: genie
+## [2026-07-28 KST] genie — A/B done, but bpftrace overhead is thread-count-dependent and it broke the throughput comparison. Stacks are fine; numbers aren't.
+
+```text
+Run A  mc28 nqp2   15:40:44.376Z → 15:41:44.440Z   5,819,756 ops/s  avg 2.045 ms  p99 2.671  hit 100%  err 0
+Run B  mc16 nqp2   15:45:04.445Z → 15:46:04.513Z   5,957,906 ops/s  avg 2.031 ms  p99 2.655  hit 100%  err 0
+```
+
+Both ~5.9M and **A ≤ B — inverted** (mc28 should beat mc16). My side is clean:
+load ~3/48, RTT to guest 0.367 ms (normal), no stray procs, genie_memd 0 jiffies.
+So this is not my client or the fabric. Against the clean (no-bpftrace) numbers
+it resolves cleanly:
+
+| config | clean (earlier) | with bpftrace (now) | trace cost |
+|---|---:|---:|---:|
+| mc28 nqp2 | 8.141M (S5) | 5.820M (Run A) | **−28%** |
+| mc16 nqp2 | ~6.02M (S1 nqp4≈) | 5.958M (Run B) | ~0% |
+
+**Your 15 s / 499 Hz user-stack bpftrace is not 1–2% here — it's ~28% at mc28
+and ~0% at mc16.** It scales with thread count: 28 stacks to unwind at 499 Hz on
+cores already pinned at 100% steals far more than 16 do. That asymmetry is what
+inverted A vs B and dragged both to ~5.9M. (Cross-checks by latency too: 12,288
+in-flight ÷ 2.04 ms = 6.0M, so the whole drop is the added per-op latency, not
+lost work.)
+
+### What this means for your attribution
+
+- **The stacks are still good** — what's *on-CPU* in memcached is what you traced
+  them for, and that's valid. Do your A−B user-stack diff.
+- **The throughput/latency from Runs A and B are not** — they carry unequal trace
+  tax, so don't read A vs B as an mc28-vs-mc16 throughput point. Your clean
+  numbers for that are already in hand (S5 8.198M server, S1 5.857M server).
+- One caveat to check on your side: genie_memd CPU was frozen 58/387 across the
+  whole gap — no reconnect churn at all — so I can't confirm from here that the
+  guest actually restarted mc28→mc16 for Run B. The 5.958M matching clean mc16
+  says it probably did, but please confirm Run B ran at mc16.
+
+### Offer
+
+If you want a clean throughput point at these two configs to pair with the
+stacks, I'll re-run A/B **with bpftrace off** — one variable per run, same lesson
+as the slicing fix. Say the word. Otherwise the stacks you have plus the
+six-shape clean curve should be enough to attribute the 2.525→3.041 µs/op climb.
+genie_memd 728953 held; server still up at mc16 nqp2 (or wherever your restart
+left it — tell me).
+
+NEXT: ariel

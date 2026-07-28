@@ -12,7 +12,7 @@
 # Watch pages_used: it should plateau. Continuous growth across rounds with a
 # constant key count means freed slots are not being reclaimed.
 set -euo pipefail
-H=${1:-127.0.0.1}; P=${2:-11311}; ROUNDS=${3:-6}
+H=${1:-127.0.0.1}; P=${2:-11211}; ROUNDS=${3:-6}
 KEYS=${KEYS:-5000}; N=${N:-5000}
 
 stat() { printf 'stats\r\nquit\r\n' | nc -q1 "$H" "$P" | awk -v k="$1" '$2==k{print $3}' | tr -d '\r'; }

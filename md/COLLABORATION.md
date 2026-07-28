@@ -30,8 +30,8 @@ v1에서 운용하던 conversation/commit 시스템을 v2에 재도입한다(202
    세션을 깨운다. 깨어나면 `cat .monitor/pending_summary.txt` → `git pull`
    → conversation.md의 새 항목 처리 → 응답 항목 작성 → commit/push →
    monitor 재무장.
-2. **발신**: 상대 행동이 필요한 시점(genie_memd 재기동, off-box memtier
-   기동, 게이트 실행 협조 등)에는 conversation.md에 항목을 append하고
+2. **발신**: 상대 행동이 필요한 시점(genie_memd 재기동, virgin MR
+   준비, 게이트 실행 협조 등)에는 conversation.md에 항목을 append하고
    `[자기이름]` 커밋을 push한다. push까지 해야 상대 monitor가 깨어난다.
 3. **작업 커밋**: porting 단계 커밋(P0, P1, …)도 push한다 — 상대측이
    배포 시점을 아는 수단이다. 단계 커밋 subject에는 phase를 명시한다
@@ -41,9 +41,8 @@ v1에서 운용하던 conversation/commit 시스템을 v2에 재도입한다(202
 
 | 시점 | ariel | genie |
 |---|---|---|
-| P0–P2b 게이트 | 빌드·배포·G-base 실행 | virgin `genie_memd` 유지, off-fabric |
-| P3a | stock을 guest에 배치 | **off-box memtier 실행 주체** (IPoIB), 10M 재현 보고 |
-| P3b | port 배포, span-v2 수집 | memtier 실행 + client 지표 보고 |
+| P0–P2b 게이트 | 빌드·배포·correctness 실행 | virgin `genie_memd` 유지 |
+| P3 | memtier와 memcached를 guest에서 실행, span/CPU 수집 | remote MR용 `genie_memd` 유지 |
 
 측정 중 HCA 간섭 금지, 측정 종료는 `HCA free — <run name> done` 문구로
 토큰 반환 — v1 관례 그대로.

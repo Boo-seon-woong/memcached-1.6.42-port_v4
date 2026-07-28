@@ -13,11 +13,11 @@
 | P1: remote-only slab 2-class | 구현 완료 | extstore 사용 시에만 stub/transient 2-class, 일반 모드는 stock class 유지 |
 | P2a: GET worker-inline | 구현 완료 | worker 소유 QP/CQ/bounce, 같은 worker에서 post/drain/decrypt |
 | P2b: SET worker-inline + IO thread 삭제 | 구현 완료 | 구형 queue/thread/QP/global staging 경로가 소스에서 삭제됨 |
-| P2c: co-located 게이트 | 기존 실측 통과 | 5.646M GET/s, 1.991 CPU µs/op; 아래 측정 계약 참조 |
-| P3: off-box 최종 판정 | 미실행 | 이번 소스 정리 후 새 hardware run 필요 |
+| P2c: co-located 게이트 | clean binary 실측 통과 | 3회 중앙값 5.797M GET/s, 1.943 CPU µs/op |
+| P3: hardware 최종 확인 | 완료 | smoke/mixed/torn 및 3회 GET-only correctness 0 |
 
-“구현 완료”는 source/build/local unit 기준이다. 실제 Ariel↔Genie RDMA 무결성과
-성능은 P3 실행 전까지 완료로 주장하지 않는다.
+source 구현뿐 아니라 아래 SHA-256 binary의 Ariel↔Genie RDMA 무결성과
+성능을 실제 hardware에서 확인했다.
 
 ## 2. 실제 자원 소유 모델
 
@@ -121,7 +121,7 @@ extstore_prof_read_count = cmd_get
 span-v2 READ 경계는 post 직전부터 CQE, `SYNC_FOR_CPU`, decrypt 완료까지다.
 memtier latency는 client end-to-end이므로 span-v2와 같은 열로 직접 비교하지 않는다.
 
-## 6. 검증 상태와 다음 게이트
+## 6. 검증 상태와 결과
 
 이번 정리에서 확인한 것:
 
@@ -130,18 +130,25 @@ memtier latency는 client end-to-end이므로 span-v2와 같은 열로 직접 �
 - 일반(non-extstore) slab class 선택: stock 경로 유지
 - legacy symbol scan: `store_iothr|extstore_io_thread|extstore_submit|
   extstore_staging_get|extstore_delete|io_threadcount|io_depth` 0건
-- 실제 RDMA smoke/mixed/torn/off-box: 미실행
+- actual RDMA selftest: 256 B WRITE/READ 일치
+- remote-only smoke: 200 SET, 100 GET, delete 후 objects/bytes/curr_items 0
+- mixed-size: 6 rounds, 5,000 keys, badcrc/leak 0
+- torn stress: 80,000 remote READ, retry/badcrc/miss 0
+- GET-only 3회: miss/badcrc/RDMA failure/engine dead/leak 0,
+  `extstore_prof_read_count == cmd_get`
 
 삭제된 eviction, chunked remote object, flash extstore 옵션에 의존하는 upstream
 테스트는 v2 호환 테스트가 아니다. 목록과 사유는 `t/SKIPPED_V2.list`에 둔다.
 
-기존 P2b 동작 실측은 `mcT=12, W=16, pipeline=64, spin=1024`에서
-5.646M GET/s, 1.991 CPU µs/op, correctness 0이었다. 당시 IO thread는 이미
-요청을 처리하지 않았지만 초기화용 legacy QP와 dead code가 남아 있었다.
-이번 완전 삭제 후에는 아래 순서로 다시 판정한다.
+완전 삭제 binary SHA-256은
+`2f1e283f2f527f9a5e3bd2973114cfb130342964d3df05dc35075d1335abd43c`다.
+`mcT=12, W=16, pipeline=64, spin=1024`, 1M×64 B keyspace에서 10초씩
+3회 측정한 중앙값은 5.797M GET/s, span avg/p50/p99
+13.951/13.3/31.6 µs, server CPU 1.943 µs/op다.
 
-1. Genie virgin MR + `EXT_SELFTEST=1`.
-2. 1M SET preload 후 `curr_items=1000000`, slot/correctness counters 0.
-3. GET/mixed/torn smoke.
-4. 같은 boot에서 v1 보정점과 v2 co-located 점.
-5. off-box stock ≥10M/s 보정 후 v2 최종 캠페인.
+canonical topology는 Ariel guest의 memtier와 memcached가 localhost TCP로
+통신하고, memcached만 Genie의 MR에 RDMA를 수행한다. Genie에서 memtier를
+실행하는 off-box 경로와 10M gate는 현재 v2 시스템의 검증 계약이 아니다.
+
+repository가 과거 build object를 tracked하므로 검증 전에는
+`make clean && make -j"$(nproc)"`를 사용하고 실행 binary hash를 남긴다.

@@ -4,8 +4,8 @@
 
 ## 결론
 
-계획했던 구조 변경 P0~P2b는 source 수준에서 완료됐다. 남은 일은 새 코드의
-Ariel↔Genie smoke와 성능 재측정(P3)이지, IO thread 삭제 구현이 아니다.
+계획했던 구조 변경 P0~P2b는 source 수준에서 완료됐고, clean binary의
+Ariel↔Genie correctness와 co-located 성능 재측정도 완료됐다.
 
 v2의 목적은 값이 remote에만 존재한다는 전제를 코드 구조에 반영하는 것이다.
 client↔memcached TCP와 AES-256-GCM 계약은 유지하며, flash extstore에서 물려받은
@@ -28,12 +28,11 @@ LRU/eviction/IO-thread handoff를 제거한다.
 | 단계 | 결과 | 남은 게이트 |
 |---|---|---|
 | P0 | LRU maintainer/crawler/slab mover와 관련 옵션 제거 | 삭제 기능 의존 test는 skip 사유 유지 |
-| P1 | remote-only 2-class, slot 기본값 256으로 통일 | hardware에서 slot ±1 B 경계 확인 |
-| P2a | GET worker-inline, worker당 QP fan-out 1..4 | hardware READ correctness |
-| P2b | SET worker-inline, legacy IO thread/QP/queue/global staging 완전 삭제 | hardware SET/mixed/torn correctness |
-| P2c | 기존 co-located 게이트 통과(5.646M/s, 1.991 CPU µs/op) | 완전 삭제 tree에서 재측정 |
-| P3a | 미실행 | off-box stock ≥10M/s 보정 |
-| P3b | 미실행 | v2 ≥10M/s @ avg <30µs 판정 |
+| P1 | remote-only 2-class, slot 기본값 256으로 통일 | mixed-size와 slot 회계 통과; exact ±1 B 경계는 별도 |
+| P2a | GET worker-inline, worker당 QP fan-out 1..4 | 80,000 torn-stress READ 포함 correctness 통과 |
+| P2b | SET worker-inline, legacy IO thread/QP/queue/global staging 완전 삭제 | smoke/mixed/torn correctness 통과 |
+| P2c | 완전 삭제 binary 3회 co-located 측정 완료 | 5.797M/s, 1.943 CPU µs/op 중앙값 |
+| P3 | 현재 topology 최종 확인 완료 | 별도 loadgen topology 확장은 현재 범위 밖 |
 
 ## 이번 정리에서 해결한 문제
 
@@ -47,7 +46,8 @@ QP 수는 정확히 `workers × ext_qp_per_worker`다.
 이 삭제가 보장하는 것은 dead resource와 초기화 비용 제거, ownership 단순화다.
 기존 inline 경로가 이미 요청당 queue/cond/eventfd를 우회했으므로, 완전 삭제만의
 추가 CPU/op 이득은 작을 가능성이 높다. 다만 1.991 CPU µs/op 수준의 기존 결과는
-off-box에서 worker 수를 늘릴 수 있는 throughput headroom을 이미 보여준다.
+worker 수나 client 배치를 바꿀 때 throughput 개선 여지가 있음을 보여준다.
+완전 삭제 binary의 실측 중앙값은 1.943 CPU µs/op다.
 
 ### Slot 기본값
 
@@ -93,25 +93,43 @@ canonical 도구:
   `tools/torn-repro.sh`: correctness
 - `tools/test-v2.sh`: local 호환 테스트
 
+canonical topology:
+
+```text
+Ariel guest memtier --localhost TCP--> Ariel guest memcached
+                                     --one-sided RDMA--> Genie genie_memd MR
+```
+
+Genie는 remote memory server만 실행한다. Genie에서 memtier를 실행하는
+off-box 계획은 이 시스템의 역할 분리와 맞지 않으므로 v2 게이트에서 제외한다.
+
 각 run은 binary SHA-256, server command, server/memtier raw text, 시작/종료 stats,
 CSV를 남긴다. CSV의 `server_get_s`는 port와 stock 모두 `cmd_get/seconds`,
 `remote_get_s`는 port의 검증된 remote completion 기준이다. RDMA readiness는
 TCP port open이 아니라 server log의 `genie_connect OK`와
 `extstore selftest: OK`로 판정한다.
 
-## 최종 게이트
+## 최종 실측
 
-P3a에서 동일 off-box 경로의 stock local-memory가 10M GET/s를 재현하지 못하면
-port 성능을 판정하지 않는다. 경로/loadgen 병목을 먼저 해결한다.
+binary SHA-256:
+`2f1e283f2f527f9a5e3bd2973114cfb130342964d3df05dc35075d1335abd43c`
 
-P3b 성공 조건:
+3회 10초 GET-only 결과:
 
-```text
-remote GET >= 10M/s
-span-v2 avg < 30us
-miss = badcrc = RDMA failure = engine_dead = slot_acct_leak = 0
-prof_read_count = cmd_get
-```
+| run | `cmd_get/10s` | span avg | p50 | p99 | server CPU |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 5,700,288.8/s | 14.114 µs | 13.4 µs | 32.3 µs | 1.972882 µs/op |
+| 2 | 5,797,294.4/s | 13.951 µs | 13.3 µs | 31.6 µs | 1.942113 µs/op |
+| 3 | 5,812,638.8/s | 13.791 µs | 13.3 µs | 31.2 µs | 1.943179 µs/op |
+| median | 5,797,294.4/s | 13.951 µs | 13.3 µs | 31.6 µs | 1.943179 µs/op |
+
+모든 run에서 miss, badcrc, RDMA read/write failure, engine dead,
+slot accounting leak가 0이고 `extstore_prof_read_count == cmd_get`였다.
+일부 memtier final summary가 progress count와 불일치해 throughput은 계약대로
+server count를 10초로 나눈 값만 사용한다.
+
+raw artifact:
+`/home/seonung/rdma-results/memcached-port-v2-4d3b2d1/`
 
 날짜가 다른 절대 throughput은 직접 순위화하지 않는다. 같은 run/boot 안의 상대
 비교와 retained raw artifact만 근거로 사용한다.

@@ -4,6 +4,7 @@ set -euo pipefail
 
 MODE=${MODE:-port}
 REPO=${REPO:-"$(cd "$(dirname "$0")/.." && pwd)"}
+V2_LIBS=${V2_LIBS:-"$HOME/covlib:$HOME/kvs-port:$REPO"}
 MT=${MT:-"$HOME/memtier/memtier_benchmark"}
 PORT_BIN=${PORT_BIN:-"$REPO/memcached"}
 NATIVE_BIN=${NATIVE_BIN:-"$REPO/memcached.stock"}
@@ -181,7 +182,7 @@ run_profile_window() {
 
 if [[ "$MODE" == port ]]; then
     RUN_BIN=$PORT_BIN
-    SERVER_CMD="cd $REPO && exec taskset -c $SERVER_CPUS env LD_LIBRARY_PATH=$HOME/covlib:$REPO MLX5_COHERENT_QP=1 MLX5_COHERENT_CQ=1 EXT_RDMA_PROF=1 EXT_SELFTEST=1 EXT_CRYPTO_KEY=$REPO/ext.key EXT_SLOT_SIZE=256 EXT_READ_SLOTS=64 $PORT_BIN -p 11211 -U 0 -t $MC_THREADS -m 2048 -c 8192 -R 1024 -o ext_path=10.99.0.2:11212:4g,ext_worker_window=$WORKER_WINDOW,ext_qp_per_worker=$QP_PER_WORKER,ext_drain_spin=$DRAIN_SPIN"
+    SERVER_CMD="cd $REPO && exec taskset -c $SERVER_CPUS env LD_LIBRARY_PATH=$V2_LIBS MLX5_COHERENT_QP=1 MLX5_COHERENT_CQ=1 EXT_RDMA_PROF=1 EXT_SELFTEST=1 EXT_CRYPTO_KEY=$REPO/ext.key EXT_SLOT_SIZE=256 EXT_READ_SLOTS=64 $PORT_BIN -p 11211 -U 0 -t $MC_THREADS -m 2048 -c 8192 -R 1024 -o ext_path=10.99.0.2:11212:4g,ext_worker_window=$WORKER_WINDOW,ext_qp_per_worker=$QP_PER_WORKER,ext_drain_spin=$DRAIN_SPIN"
 elif [[ "$MODE" == native ]]; then
     RUN_BIN=$NATIVE_BIN
     SERVER_CMD="cd $REPO && exec taskset -c $SERVER_CPUS env LD_LIBRARY_PATH=$REPO $NATIVE_BIN -p 11211 -U 0 -t $MC_THREADS -m 2048 -c 8192 -R 1024"
@@ -226,7 +227,7 @@ tr "\0" " " < /proc/"$MCPID"/cmdline | tee "$OUT/server-command.txt"
 printf "\n" | tee -a "$OUT/server-command.txt"
 sha256sum "/proc/$MCPID/exe" | tee "$OUT/server-sha256.txt"
 
-taskset -c "$CLIENT_CPUS" env LD_LIBRARY_PATH="$HOME/memtier:$REPO" "$MT" \
+taskset -c "$CLIENT_CPUS" env LD_LIBRARY_PATH="$HOME/memtier:$V2_LIBS" "$MT" \
     -s 127.0.0.1 -p 11211 -P memcache_text --threads="$MT_THREADS" --clients="$MT_CLIENTS" \
     --pipeline=8 -d 64 --key-prefix=m- --key-minimum=1 --key-maximum=1000000 \
     --key-pattern=P:P --ratio=1:0 -n "$PRELOAD_PER_CLIENT" --hide-histogram \
@@ -237,7 +238,7 @@ mc_stats "$OUT/stats-after-preload.txt"
 
 RATE_ARGS=()
 [[ -n "$RATE_LIMIT" ]] && RATE_ARGS=(--rate-limiting="$RATE_LIMIT")
-taskset -c "$CLIENT_CPUS" env LD_LIBRARY_PATH="$HOME/memtier:$REPO" "$MT" \
+taskset -c "$CLIENT_CPUS" env LD_LIBRARY_PATH="$HOME/memtier:$V2_LIBS" "$MT" \
     -s 127.0.0.1 -p 11211 -P memcache_text --threads="$MT_THREADS" --clients="$MT_CLIENTS" \
     --pipeline="$PIPELINE" -d 64 --key-prefix=m- --key-minimum=1 --key-maximum=1000000 \
     --key-pattern=R:R --ratio=0:1 --test-time="$LOAD_SECONDS" --hide-histogram \

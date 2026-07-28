@@ -3,6 +3,7 @@
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
+V2_LIBS=${V2_LIBS:-"$HOME/covlib:$HOME/kvs-port:$ROOT"}
 PORT_BIN=${PORT_BIN:-"$ROOT/memcached"}
 STOCK_BIN=${STOCK_BIN:-"$ROOT/memcached.stock"}
 MT=${MT:-"$HOME/memtier/memtier_benchmark"}
@@ -58,7 +59,7 @@ start_server() {
         [[ -x "$PORT_BIN" && -r "$KEY_FILE" ]] ||
             { echo "missing PORT_BIN or 32-byte KEY_FILE" >&2; return 1; }
         cmd=(taskset -c "$SERVER_CPUS" env
-            "LD_LIBRARY_PATH=$HOME/covlib:$ROOT"
+            "LD_LIBRARY_PATH=$V2_LIBS"
             MLX5_COHERENT_QP=1 MLX5_COHERENT_CQ=1
             "EXT_CRYPTO_KEY=$KEY_FILE" EXT_SELFTEST=1
             EXT_SLOT_SIZE=256 EXT_READ_SLOTS=64 EXT_RDMA_PROF=1
@@ -92,7 +93,7 @@ start_server() {
 memtier() {
     local pipeline=$1 pattern=$2 ratio=$3 out=$4
     shift 4
-    taskset -c "$CLIENT_CPUS" env "LD_LIBRARY_PATH=$HOME/memtier:$ROOT" "$MT"         -s 127.0.0.1 -p 11211 -P memcache_text         --threads="$MT_THREADS" --clients="$MT_CLIENTS" --pipeline="$pipeline"         -d "$VALUE_SIZE" --key-prefix=m- --key-minimum=1 --key-maximum="$KEYS"         --key-pattern="$pattern" --ratio="$ratio" --hide-histogram "$@"         >"$out" 2>&1
+    taskset -c "$CLIENT_CPUS" env "LD_LIBRARY_PATH=$HOME/memtier:$V2_LIBS" "$MT"         -s 127.0.0.1 -p 11211 -P memcache_text         --threads="$MT_THREADS" --clients="$MT_CLIENTS" --pipeline="$pipeline"         -d "$VALUE_SIZE" --key-prefix=m- --key-minimum=1 --key-maximum="$KEYS"         --key-pattern="$pattern" --ratio="$ratio" --hide-histogram "$@"         >"$out" 2>&1
 }
 
 run_point() {

@@ -331,3 +331,48 @@ at 1.991 CPU-µs/op with only 16 of 24 vCPUs (client ate the other 8) — the
 whole point of going off-box is to give the port all 24.
 
 NEXT: genie
+
+---
+
+## [2026-07-28 KST] ariel — canonical Ariel-local load validation complete; prior off-box P3 plan withdrawn.
+
+Topology correction: Genie is remote memory only. The canonical v2 path is
+Ariel guest memtier → localhost TCP → Ariel guest memcached → RDMA → Genie
+`genie_memd`. The preceding P3a/P3b request to run memtier on Genie was based
+on an incorrect topology assumption and must not be executed.
+
+The first plain `make` only relinked stale tracked object files, so that run
+was discarded. I rebuilt with `make clean && make -j`, passed `testapp` 56/56,
+and deployed the verified binary:
+
+```text
+SHA-256 2f1e283f2f527f9a5e3bd2973114cfb130342964d3df05dc35075d1335abd43c
+genie_connect OK
+extstore selftest: OK (256 bytes written and read back)
+extstore: no IO threads (worker-inline READ/WRITE)
+```
+
+Correctness passed:
+
+- remote-only smoke: 200 SET / 100 GET, delete accounting returned to zero
+- mixed-size: 6 rounds × 5,000 keys, badcrc/leak 0
+- torn stress: 80,000 remote READ, retry/badcrc/miss 0
+
+Three 10-second GET-only runs at mcT=12, memtier 8×16, pipeline=64,
+W=16, QP/worker=1, spin=1024 produced a canonical server-count median of
+5,797,294.4 GET/s, span avg/p50/p99 13.951/13.3/31.6 us, and server CPU
+1.943179 us/op. Every run had misses, badcrc, RDMA failures, engine-dead, and
+slot-accounting leak equal to zero, with `cmd_get == extstore_prof_read_count`.
+The server count is authoritative because two memtier final summaries did not
+match their own 10-second progress totals.
+
+Raw artifacts are retained under:
+
+```text
+/home/seonung/rdma-results/memcached-port-v2-4d3b2d1/
+```
+
+HCA free — full-delete v2 validation done. Genie may stop `genie_memd` when
+convenient; no off-box memtier action is needed.
+
+NEXT: genie

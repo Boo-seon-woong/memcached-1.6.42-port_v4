@@ -6,15 +6,20 @@ remote-only port다. client protocol은 TCP 그대로이며 local hash에는
 
 ## 현재 상태
 
-P0~P2b source 구현은 완료됐다. GET과 SET은 모두 memcached worker가 자기
+P0~P2b 구현과 clean-binary Ariel↔Genie 검증은 완료됐다. GET과 SET은 모두 memcached worker가 자기
 QP/CQ/bounce/staging으로 처리하며 extstore IO thread와 구형 submit queue는
-삭제됐다. clean build와 `testapp` 56/56은 통과했다.
+삭제됐다. clean build, `testapp` 56/56, remote-only smoke, mixed-size,
+torn-write stress가 모두 통과했다.
 
-기존 P2b 동작 실측은 `mcT=12, window=16, pipeline=64, drain_spin=1024`에서
-5.646M GET/s, 1.991 server CPU µs/op, correctness 0이었다. 그 측정 당시에도
-요청은 전부 inline이었지만 unused bootstrap QP와 dead code가 남아 있었다.
-이번 완전 삭제 tree의 Ariel↔Genie smoke와 off-box 성능은 아직 재실행하지
-않았으므로 기존 수치를 새 binary의 결과로 간주하면 안 된다.
+완전 삭제 binary `2f1e283f...abd43c`의 3회 측정 중앙값은
+`mcT=12, window=16, pipeline=64, drain_spin=1024`에서
+5.797M GET/s, 1.943 server CPU µs/op, span-v2 avg/p50/p99
+13.951/13.3/31.6 µs였다. 세 run 모두 miss, badcrc, RDMA failure,
+engine dead, slot accounting leak가 0이고 `cmd_get == remote_reads`였다.
+
+canonical topology는 Ariel guest 안의 memtier가 localhost TCP로 Ariel
+memcached를 구동하고, memcached만 RDMA로 Genie `genie_memd`의 remote MR을
+사용하는 구조다. Genie는 load generator나 memcached worker가 아니다.
 
 ## 문서 읽기 순서
 
@@ -30,10 +35,15 @@ QP/CQ/bounce/staging으로 처리하며 extstore IO thread와 구형 submit queu
 
 ```bash
 ./configure
+make clean
 make -j"$(nproc)"
 ./testapp
 ./tools/test-v2.sh
 ```
+
+이 repository에는 과거 생성물이 tracked돼 있어 plain `make`만 실행하면
+변경된 source 대신 오래된 object를 relink할 수 있다. 검증 binary는 반드시
+`make clean` 뒤 빌드하고 SHA-256을 보존한다.
 
 upstream 전체 `make test`에는 v2가 의도적으로 제거한 eviction, chunked
 remote object, flash extstore 옵션 테스트가 포함된다. v2 호환 suite와 skip
@@ -42,7 +52,7 @@ remote object, flash extstore 옵션 테스트가 포함된다. v2 호환 suite�
 ## v2 실행 예
 
 ```bash
-LD_LIBRARY_PATH="$HOME/covlib:$PWD" \
+LD_LIBRARY_PATH="$HOME/covlib:$HOME/kvs-port:$PWD" \
 MLX5_COHERENT_QP=1 MLX5_COHERENT_CQ=1 \
 EXT_CRYPTO_KEY="$PWD/ext.key" EXT_SELFTEST=1 \
 EXT_SLOT_SIZE=256 EXT_READ_SLOTS=64 EXT_RDMA_PROF=1 \
@@ -58,6 +68,8 @@ ext_qp_per_worker=1,ext_drain_spin=1024
 canonical 실행 도구는 `tools/config-matrix-10s.sh`와
 `tools/cpu-stage-detail.sh`다. 결과는 binary hash, 정확한 command,
 server/memtier raw text, stats 시작/종료, CSV를 함께 보존한다.
+두 도구 모두 memtier와 memcached를 Ariel guest에서 분리된 CPU set으로
+실행하며 Genie에는 `genie_memd`만 요구한다.
 
 ---
 

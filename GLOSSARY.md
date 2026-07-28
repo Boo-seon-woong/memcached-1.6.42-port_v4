@@ -22,6 +22,18 @@
 삭제된 v1 용어: `ext_threads`, `ext_io_depth`, extstore IO thread,
 global staging condvar. v2 명령이나 결과 CSV에 이 축을 다시 넣지 않는다.
 
+## 배치 topology
+
+```text
+Ariel guest: memtier -> localhost TCP -> memcached worker
+                                         |
+                                         +-> RDMA -> Genie genie_memd MR
+```
+
+load generator와 memcached worker는 Ariel에 있고 Genie는 remote MR만
+제공한다. Genie의 `genie_memd` process를 memtier 실행 대상으로 해석하거나
+Genie에서 memtier를 실행한 결과를 canonical v2 run으로 취급하지 않는다.
+
 ## 설정
 
 | 이름 | 기본값 | 범위/설명 |
@@ -114,3 +126,6 @@ stats-after-preload.txt
 stats-final.txt
 results.csv
 ```
+
+2026-07-28 clean full-delete run은
+`/home/seonung/rdma-results/memcached-port-v2-4d3b2d1/`에 보존돼 있다.

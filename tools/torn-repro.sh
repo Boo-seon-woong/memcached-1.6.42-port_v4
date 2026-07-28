@@ -1,18 +1,17 @@
 #!/usr/bin/env bash
-# Reproduce the P-1a torn-read data loss under write load, and measure whether a
-# fix closes it. Reads that fail their AAD tag because an in-place overwrite
-# replaced the slot are answered to the client as misses, for data that exists.
+# Stress the old P-1a torn-read window under mixed read/write load and verify
+# that new-slot publish prevents AAD failures and lost reads.
 #
 # A bash client cannot hit the window (tried, 4800 reads, nothing) — the race
 # needs memtier's request rate, which is why this exists as a tool rather than a
 # one-liner in the channel.
 #
-#   ./tools/torn-repro.sh [host] [port]        # defaults 127.0.0.1 11311
+#   ./tools/torn-repro.sh [host] [port]        # defaults 127.0.0.1 11211
 #
 # PASS = badcrc_from_extstore stays 0 across the mixed phase.
 # Any nonzero delta is a read that was silently answered as a miss.
 set -euo pipefail
-H=${1:-127.0.0.1}; P=${2:-11311}
+H=${1:-127.0.0.1}; P=${2:-11211}
 KEYS=${KEYS:-20000}; N=${N:-20000}; D=${D:-64}
 
 stat() { printf 'stats\r\nquit\r\n' | nc -q1 "$H" "$P" | awk -v k="$1" '$2==k{print $3}' | tr -d '\r'; }
@@ -28,7 +27,7 @@ sleep 2
 b0=$(stat badcrc_from_extstore); r0=$(stat extstore_read_retries)
 m0=$(stat get_misses);           g0=$(stat get_extstore)
 
-echo "== mixed 1:1 (reads racing in-place overwrites) =="
+echo "== mixed 1:1 (reads racing new-slot publication) =="
 memtier_benchmark -s "$H" -p "$P" -P memcache_text --hide-histogram \
   -c 4 -t 2 -n "$N" --ratio=1:1 -d "$D" --key-maximum="$KEYS" --key-pattern=R:R \
   2>&1 | grep -E '^Gets|^Sets'

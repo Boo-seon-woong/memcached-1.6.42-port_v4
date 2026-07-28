@@ -89,9 +89,9 @@ memtier는 Port에서 부하 생성기이며, Port headline은 remote completion
 ## 아직 열려 있는 것
 
 - **p99 `<30µs`는 어느 실험 point에서도 달성하지 못했다.** avg만 충족했다.
-- **server 확장 상한을 판정하지 못했다.** 같은 box의 memtier가 약 1M ops/s에서
-  먼저 포화하므로, worker/QP를 늘렸을 때의 진짜 상한을 보려면 off-box client가
-  필요하다.
+- **server 확장 상한을 판정하지 못했다.** canonical topology는 Ariel guest의
+  memtier→localhost memcached→Genie RDMA다. 이 배치 밖의 client 분리는 별도
+  실험 설계가 필요하다.
 - **10M GET/s 목표의 적용 범위.** 같은 shape의 stock local control도 3.371M/s라
   현 운영점에서 10M은 port 품질을 판정하는 기준이 되지 못한다. 전체 하드웨어의
   절대 상한을 주장하려면 별도 stock saturation sweep이 필요하다.

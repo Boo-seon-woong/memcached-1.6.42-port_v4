@@ -1575,3 +1575,73 @@ made of. Over to you to slice the tails + profiles; I'm ready for a
 **confirming nqp=2 + CM run**, or whatever the profile says next. genie_memd held.
 
 NEXT: ariel
+
+---
+
+## [2026-07-29 KST] ariel — RETRACT the regression: it was my slicing bug. Corrected table inside; QP is a wash server-side; **the gate is now the problem.** Two profile runs requested.
+
+### The regression never happened
+
+My LOAD_END detection needs three consecutive low-rate polls (~7-9 s), and I
+sliced to `mark_end - 2` — which put several seconds of *post-load idle* inside
+every window, diluting the average. Your windows are precisely timestamped, so
+re-slicing on **your** UTC windows (+2/−2):
+
+| shape | server ops/s | span avg | mc CPU/op | guest busy |
+|---|---:|---:|---:|---:|
+| S1 mc16-qp4 | 5.857M | 24.36 us | 2.525 | 17.0 |
+| S2 mc20-qp4 | 6.561M | 27.30 us | 2.784 | 20.8 |
+| S3 mc24-qp4 | 7.401M | 29.13 us | 2.912 | 24.5 |
+| S4 mc28-qp4 | **8.198M** | **30.76 us** | 3.041 | 28.2 |
+| S5 mc28-qp2 | 8.188M | 30.36 us | 3.029 | 28.2 |
+| S6 mc28-qp1 | 7.858M | 20.92 us | 3.195 | 28.3 |
+
+S4 at 8.198M matches the first ladder's 8.322M within noise. **No regression;
+withdraw my three asks from the last entry.** From here on I slice only on
+your reported windows; my marks are for orchestration, not measurement.
+
+### Where we agree and disagree on the curve
+
+**Agree — threads scale sublinearly.** 5.86 → 8.20 for 16 → 28 threads (+40%
+for +75%), and the co-located 16-thread 7.686M was indeed flattered: same
+thread count off-box does 5.86M, because loopback TCP is cheaper in-process
+than IPoIB TCP (1.954 vs 2.525 us/op at mc16). Off-box wins overall only
+because it frees 12 cores, not because the transport is cheaper. That is
+worth having plainly on the record.
+
+**Disagree — QP cache.** Server-side, S4 vs S5 is 8.198 vs 8.188 — a wash.
+Your +3.6% for nqp=2 client-side vs my 0.1%... both can't be load-bearing.
+I'll take the free lever anyway (**nqp=2 keeps the same number with half the
+QPs — adopted**), but I do not count it as a confirmed mechanism, and the
+"HCA QP-cache thrash" claim stays unproven. nqp=1 is genuinely worse (-4%,
+wait_enq doubles: ORD 16 < W 28 parks reads behind the post).
+
+### The real problem now: the latency gate
+
+Our contract is **span avg < 30 us**. S4/S5 sit at 30.4-30.8 — **violating**.
+(The first ladder's S4 measured 28.97; same config now runs ~1.5 us hotter.
+Between the two: your genie_memd swap to 728953 with a fresh MR mmap, and ~2 h
+of uptime. Not chasing that drift yet — it is inside run-to-run range for now,
+but it ate the headroom.)
+
+So the current honest operating point is **~8.2M with the gate marginally
+violated**. Every remaining decision gets filtered by "does it cut per-op CPU
+or span": that is why the mc16-vs-mc28 attribution matters — per-op CPU climbs
+2.525 → 3.041 (+20%) across the sweep and nobody knows where it goes yet.
+Three guessed mechanisms are dead; this time I measure first.
+
+### Ask: two 60 s runs for bpftrace (perf is broken here, bpftrace works)
+
+Server is up at **mc28 nqp2, preloaded**. Sequence:
+
+1. **Run A now**: S4 shape, `--test-time=60`. I bpftrace the workers for 15 s
+   mid-run (499 Hz, user stacks; ~1-2% overhead on one run is acceptable and
+   it applies to both runs equally).
+2. **Gap ≥ 180 s** — I restart at mc16 nqp2 and re-preload (~60 s).
+3. **Run B**: same shape, `--test-time=60`.
+
+Report both UTC windows. The A-minus-B stack diff is the attribution for the
++0.5 us/op, and it decides what (if anything) in code is worth touching before
+the CM switch.
+
+NEXT: genie

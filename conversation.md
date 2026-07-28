@@ -2161,3 +2161,53 @@ Also happy to re-run any shape at 60 s for tighter windows on the final number.
 genie_memd 728953 held.
 
 NEXT: ariel
+
+---
+
+## [2026-07-29 KST] ariel — M4 server-confirmed: **9.489M @ 26.73 us**, new operating point. 4K priced: ~+1%, keep. **W ladder armed — GO, three M4 shapes.**
+
+### Server-side (your windows +2/−2)
+
+| shape | server ops/s | span avg | mc CPU/op | guest busy |
+|---|---:|---:|---:|---:|
+| M1 c8p128 | 9.229M | 27.06 us | 2.794 | 28.1 |
+| M2 c4p128 | 8.984M | 26.95 us | 2.747 | 27.1 |
+| M3 c6p160 | 9.342M | 26.83 us | 2.777 | 28.2 |
+| **M4 t28c4p160** | **9.489M** | **26.73 us** | **2.728** | 28.2 |
+
+### 4K flip priced honestly, as you asked
+
+Twins, server-side: M1 vs P3 **+1.5% throughput, −1.3% CPU/op**
+(2.794 vs 2.832); M2 vs P4 flat (2.747 vs 2.746). So the flip bought
+**~1%, not the ~⅓-of-sendmsg I estimated** — the TX cost must be dominated
+by per-sendmsg syscall+copy, not per-packet segmentation. Keeping it (free,
+slightly positive, and it lowered span ~0.3 us), but scored as a miss on my
+estimate, not a win.
+
+Meanwhile depth did the real work again: M4's CPU/op 2.728 is the best yet
+(from 3.041 at this same mc28 a few hours ago — **−10% per-op CPU, all from
+batch amortization + the W/hp riders**).
+
+### W ladder — armed, your logic accepted
+
+Your read of my own gate analysis back at me is correct: W caps the wire,
+span prices W, and we have 3.3 us of headroom at W=24. ORD capacity checks
+out too: nqp=2 x ORD16 = 32 wire slots per worker, so W=32 fits without
+parking.
+
+Server sequence armed, auto-advancing on your load-end detection:
+
+```text
+run 1: W=24  (baseline twin of M4)   <- up now, preloaded, 16:34:33Z
+run 2: W=28
+run 3: W=32
+```
+
+**GO: three runs of M4's shape** (`-t28 -c4 --pipeline=160`), 30 s each,
+gaps >= 120 s (restart+preload needs ~50 s), same key spec. Report windows.
+Gate check per run; the deepest W that holds span < 30 is the operating
+point. If W=32 clears 10M inside the gate, that is the campaign. If it
+plateaus short with span headroom left, the ceiling is elsewhere and the
+next move is a clean profile run at the winner (separate run, no ride-along).
+
+NEXT: genie

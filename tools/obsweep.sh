@@ -7,19 +7,19 @@
 # 사용: MCLIST="24 28 30" bash tools/obsweep.sh
 set -u
 # CONFIGS: "mcT:nqp" 목록. thread 수와 QP 수를 분리해서 볼 수 있게 한다.
-CONFIGS=${CONFIGS:-"16:4 20:4 24:4 28:4 28:2 28:1"}
+CONFIGS=${CONFIGS:-"16:4 20:4 24:4 28:4 28:2 28:1"}   # "mcT:nqp" 또는 "mcT:nqp:W"
 W=${W:-28}; NQP=${NQP:-4}; SPIN=${SPIN:-1024}; RS=${RS:-64}; EM=${EM:-0}
 BIN=${BIN:-$HOME/kvs-port-v3/memcached}
 LOG=/tmp/ob_samples.tsv
 MARKS=/tmp/ob_marks.txt
 : > $MARKS
 
-start_server() {   # $1 = mcT  $2 = nqp
-  local mc=$1 nqp=$2 scpu="0-$(( $1 - 1 ))"
+start_server() {   # $1 = mcT  $2 = nqp  $3 = W
+  local mc=$1 nqp=$2 w=${3:-$W} scpu="0-$(( $1 - 1 ))"
   tmux kill-session -t ob 2>/dev/null
   for p in $(pgrep -x memcached); do kill -9 "$p" 2>/dev/null; done
   sleep 1
-  local opt="ext_path=10.99.0.2:11212:4g,ext_worker_window=$W,ext_qp_per_worker=$nqp,ext_drain_spin=$SPIN"
+  local opt="ext_path=10.99.0.2:11212:4g,ext_worker_window=$w,ext_qp_per_worker=$nqp,ext_drain_spin=$SPIN"
   [ "$EM" != 0 ] && opt="$opt,ext_drain_empty_max=$EM"
   tmux new-session -d -s ob "cd $HOME/kvs-port && exec taskset -c $scpu env \
 LD_LIBRARY_PATH=$HOME/covlib:$HOME/kvs-port MLX5_COHERENT_QP=1 MLX5_COHERENT_CQ=1 \
@@ -35,7 +35,7 @@ EXT_READ_SLOTS=$RS $BIN -p 11411 -U 0 -t $mc -m 2048 -c 16384 -R 1024 -o $opt \
     >/tmp/ob_preload.log 2>&1
   local n
   n=$(printf 'stats\r\nquit\r\n' | timeout 5 nc 127.0.0.1 11411 | tr -d '\r' | awk '/^STAT curr_items /{print $3}')
-  echo "$(date -u +%s) READY mcT=$mc nqp=$nqp qp_total=$(( mc * nqp )) curr_items=$n" | tee -a $MARKS
+  echo "$(date -u +%s) READY mcT=$mc nqp=$nqp W=$w curr_items=$n" | tee -a $MARKS
 }
 
 # 샘플러는 obup.sh 것을 재사용 — 서버 PID를 다시 잡아야 하므로 재시작마다 띄운다.
@@ -54,8 +54,10 @@ getrate() {
 }
 
 for CFG in $CONFIGS; do
-  MC=${CFG%%:*}; NQ=${CFG##*:}; TAGN="mcT${MC}-qp${NQ}"
-  start_server "$MC" "$NQ" || exit 1
+  MC=${CFG%%:*}; REST=${CFG#*:}; NQ=${REST%%:*}
+  WW=""; case "$REST" in *:*) WW=${REST##*:};; esac
+  TAGN="mcT${MC}-qp${NQ}${WW:+-W$WW}"
+  start_server "$MC" "$NQ" "$WW" || exit 1
   start_sampler
   echo "$TAGN 준비 완료 — genie shape 대기중"
   # 부하 시작 대기 (최대 10분)

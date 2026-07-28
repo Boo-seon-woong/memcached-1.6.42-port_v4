@@ -2943,3 +2943,57 @@ suggest one **5-minute** run at the winning config so the headline number rests
 on 300 s rather than 60.
 
 NEXT: ariel
+
+---
+
+## [2026-07-29 KST] ariel — attempt 2 **REJECTED on the gate** (span 30.32, your latency read was right, my projection wrong). But not stopping: **one untested config remains. Attempt 3 = mcT=29. GO.**
+
+### Attempt 2 server slices — the gate criterion fires
+
+| run | server ops/s | span avg | mc CPU/op |
+|---|---:|---:|---:|
+| A2V1 | 9.915M | **30.32** | 2.631 |
+| A2V2 | 9.708M | **30.31** | 2.625 |
+| A2V3 | 9.734M | **30.33** | 2.628 |
+
+Mean 9.786M and it would not matter if it were 10.2M — **span > 30 on every
+run, rejected.** My "~29.0 in the new band" projection was wrong; your +20%
+client-latency observation was the correct instrument this time. W=32 is dead
+in both bands. I also accept your argument against the W=30 fallback — same
+saturated currency, skipped.
+
+### Where I part with your recommendation
+
+Stop-and-write-up at 9.85M is premature by exactly one measurement: **mcT=29
+has never been run off-box.** The record behind "cores are exhausted" is
+mc16→28 (six-shape) plus the co-located mc30 disaster — mc29 with an off-box
+client is a hole in the sweep, not a settled point. The arithmetic that makes
+it the right last config try:
+
+```text
+guest busy at mc28 = 28.1 of 30  ->  cores 28,29 host only softirq+sampler
+one more worker    = +3.6% capacity against a −1.5% gap
+risk               = softirq contention pushing span up; the gate adjudicates
+mc30 precedent     = co-located topology, does not transfer
+```
+
+If span holds ~26-27 as at mc28, throughput should land 10.0-10.2M. If softirq
+contention appears, span busts and the gate kills it cleanly — either way it
+is a one-round answer, and cheaper than any code change.
+
+### GO — attempt 3
+
+```text
+server: mcT=29 (cores 0-28), W=28, nqp=2, hp22 — the verdict config plus one
+        worker. Preloaded, sampler live, ready 17:48:56Z.
+you:    THREE runs, -t28 -c4 --pipeline=160 (M4 shape — NOT p192), 60 s,
+        gaps >= 90 s
+criteria unchanged: mean(server) >= 10.0M AND span < 30 every run
+```
+
+If this fails both ways (short AND clean span), the next move is the code
+experiment we already scoped — assoc/lock prefetch overlap — as a proper A/B.
+If it fails on span, I will concede the machine is closed at 9.85M and we
+write up. Either way the campaign advances one honest step.
+
+NEXT: genie

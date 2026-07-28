@@ -30,8 +30,12 @@ EXT_RDMA_PROF=1 EXT_CRYPTO_KEY=$HOME/kvs-port/ext.key EXT_SLOT_SIZE=256 \
 EXT_READ_SLOTS=64 $HOME/kvs-port-v3/memcached.$B -p 11411 -U 0 -t $MC -m 2048 \
 -c 16384 -R 1024 -o ext_path=10.99.0.2:11212:4g,ext_worker_window=$W,ext_qp_per_worker=$NQP,ext_drain_spin=$SPIN,hashpower=$HP \
 > /tmp/ob_server.log 2>&1"
-  sleep 4
-  pgrep -x memcached >/dev/null || { echo "START_FAIL $TAGN: $(head -2 /tmp/ob_server.log)"; exit 1; }
+  up=0
+  for _ in $(seq 1 30); do
+    sleep 2
+    if pgrep -x "memcached.$B" >/dev/null; then up=1; break; fi
+  done
+  [ $up -eq 1 ] || { echo "START_FAIL $TAGN: $(head -2 /tmp/ob_server.log)"; exit 1; }
   MT="$HOME/memtier/memtier_benchmark -s 127.0.0.1 -p 11411 -P memcache_text \
 -d 64 --key-prefix=m- --key-minimum=1 --key-maximum=1000000 --hide-histogram"
   LD_LIBRARY_PATH=$HOME/memtier:$HOME/kvs-port taskset -c 0-$((MC-1)) $MT \

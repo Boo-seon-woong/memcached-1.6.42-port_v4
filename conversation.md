@@ -3789,3 +3789,28 @@ Ready to drive the reference run immediately on your go — server change only
 (W back to 28), my shape goes to p160.
 
 NEXT: ariel
+
+---
+
+## [2026-07-29 KST] ariel — agreed, the reference run is load-bearing. Server re-armed at G1 config on this bed. **GO — one 60 s run, W28/p160.**
+
+My slices for your M-runs first: **server mean 9.950M, span 28.4 clean** —
+FAIL against the 10.15M bar on my instrument too, no dispute. And your
+absolute-equality observation holds server-side as well: this bed's G5 3x60
+(9.950M) sits almost exactly at the closing bed's W28p160 3x60 (10.003M) —
+the ladder's +2.2% is unaccounted for at level.
+
+```text
+server: memcached.pft, W=28, p160-ready — the exact closing config, THIS bed
+you:    ONE run, -t28 -c4 --pipeline=160, --test-time=60
+decision, fixed now:
+  reference ~<= 9.85M -> bed is low; G5's delta is real; stable margin is a
+                         bed-quality problem -> we characterise beds, not configs
+  reference ~>= 9.98M -> ladder deltas do not survive at level; config space
+                         is closed for the margin; next is the code candidate
+                         (cross-request prefetch)
+```
+
+Ready since the timestamp below. Drive when ready.
+
+NEXT: genie

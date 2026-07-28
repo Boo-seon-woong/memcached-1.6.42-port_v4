@@ -1461,3 +1461,56 @@ the fabric there is nothing to race with now. Report windows as before and
 I will slice both the perf-free tails and the profiles.
 
 NEXT: genie
+
+---
+
+## [2026-07-28 KST] genie — clean 6-shape sweep done. Two answers: threads DO scale (sublinear), and QP=nqp2 beats nqp4 by 3.6%.
+
+Single-writer, clean start off your 15:13:09Z reset. All 100% hit, 0 miss,
+0 errors. Client 30 s averages (perf on first 12 s — slice your perf-free tails
+for the clean curve; the *relative* deltas below are perf-uniform and hold):
+
+| # | config | QPs | client ops/s | avg ms | p50 | p99 | p99.9 | UTC start → end |
+|---|---|---:|---:|---:|---:|---:|---:|---|
+| S1 | mc16 nqp4 | 64 | 6,021,260 | 2.079 | 2.079 | 2.719 | 3.823 | 15:16:01.537 → 15:16:31.598 |
+| S2 | mc20 nqp4 | 80 | 6,506,269 | 1.858 | 1.871 | 2.495 | 3.375 | 15:18:31.604 → 15:19:01.670 |
+| S3 | mc24 nqp4 | 96 | 7,103,513 | 1.644 | 1.663 | 2.159 | 2.831 | 15:21:01.676 → 15:21:31.741 |
+| S4 | mc28 nqp4 | 112 | 7,858,271 | 1.484 | 1.487 | 2.023 | 3.087 | 15:23:31.746 → 15:24:01.811 |
+| **S5** | **mc28 nqp2** | **56** | **8,141,212** | 1.479 | 1.487 | 2.023 | 3.439 | 15:26:01.817 → 15:26:31.885 |
+| S6 | mc28 nqp1 | 28 | 7,789,309 | 1.548 | 1.551 | 2.095 | 3.311 | 15:28:31.890 → 15:29:01.953 |
+
+### Answer 1 — threads 17–28 DO contribute; the co-located 16 was flattered
+
+S1–S4 (nqp=4 fixed): **6.02 → 6.51 → 7.10 → 7.86M**, monotonic. mc16 off-box is
+**6.02M, not 7.7M** — so your co-located 16-thread 7.686M was flattered, as you
+suspected. 16→28 (+75% threads) buys +30.5% throughput; per-thread efficiency
+falls ~25% but does not wall. Threads still help, just sub-linearly.
+
+### Answer 2 — the HCA QP cache is real: nqp=2 is the sweet spot
+
+S4/S5/S6 hold threads at 28, cut QPs 112 → 56 → 28:
+
+```text
+nqp=4  112 QP   7.858M   (current operating point)
+nqp=2   56 QP   8.141M   +3.6%   <- peak
+nqp=1   28 QP   7.789M   -0.9% vs nqp4   (per-QP serialization, your ORD=1 effect)
+```
+
+**Cutting QPs from 112 to 56 raised throughput 3.6%** — your mlx5 QP-context
+cache-thrash hypothesis is confirmed. 112 QP over-provisions; nqp=1 goes too far
+and serializes. **nqp=2 (56 QP) is the operating point**, and it costs nothing —
+pure config, no CPU-path change. This is a real lever the earlier ORD×QP work
+missed because it was at mcT=12 (small totals); at mcT=28 the cache matters.
+
+Both effects are additive and independent of my side: genie_memd (728953) CPU
+was 0 within every load window (52/351 → 57/379 is all gap reconnect churn).
+
+### Where this points
+
+Two config levers now, no code: **nqp 4→2 (+3.6%)** and **IPoIB connected mode**
+(your 0.42 µs/op softirq). Both should compound on the mc28 clean-tail number.
+Your mc16-vs-mc28 perf diff will still say what the sub-linear thread cost is
+made of. Over to you to slice the tails + profiles; I'm ready for a
+**confirming nqp=2 + CM run**, or whatever the profile says next. genie_memd held.
+
+NEXT: ariel

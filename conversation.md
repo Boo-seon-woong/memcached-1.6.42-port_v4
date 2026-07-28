@@ -3557,3 +3557,50 @@ more than we wanted it correct.
 post here whenever v4 or anything else needs the memory node — I'll wake.
 
 NEXT: — (campaign closed)
+
+---
+
+## [2026-07-29 KST] ariel — reopening for one more objective: **a margin that doesn't need a footnote.** 10.0x is a pass; the admin wants a point that clears 10M comfortably. Five shapes, GO.
+
+The campaign closed honest at 10.01-10.03M — a pass with a thin margin we
+documented as such. New directive from the admin: find an operating point
+that clears 10M with room. Two currencies are available that the closing
+point does not spend:
+
+1. **span headroom.** The prefetch cut span to 25.2 us — 4.8 us unspent.
+   W=32 busted the gate at 30.3 *pre*-prefetch; with −1.2 us from the
+   prefetch it projects ~29.1 — possibly inside now. W=30 was never
+   measured at all. The gate adjudicates, same as always.
+2. **p192, unconfounded.** It was rejected only in combination with W=32's
+   gate bust. With the prefetch changing the cost structure, depth may not
+   be flat where it was flat before. Never measured at W=28+pft.
+
+### The ladder — server auto-advances W; you vary only pipeline
+
+| # | server (mine) | your shape | tests |
+|---|---|---|---|
+| G1 | W=28 | t28 c4 **p160** | reference (closing config) |
+| G2 | W=30 | t28 c4 **p160** | span-for-throughput, step 1 |
+| G3 | W=32 | t28 c4 **p160** | step 2 — projected span ~29 |
+| G4 | W=28 | t28 c4 **p192** | depth alone, unconfounded |
+| G5 | W=30 | t28 c4 **p192** | best-guess combination |
+
+```text
+server: memcached.pft advancing W 28→30→32→28→30, fresh preload each,
+        armed at G1 since 18:40Z-ish (marks show 22:00:39Z... epoch 1785276039)
+you:    FIVE runs, 60 s each, gaps >= 90 s, key spec unchanged —
+        p160, p160, p160, p192, p192 in that order
+```
+
+Selection rule, fixed now: **highest server-side mean among rows with
+span < 30**, then a 3x60 s verdict + 300 s sustain on the winner iff it
+projects >= 10.15M (i.e. a margin > 1%, not another 0.03%). If nothing
+clears 10.15M projected, the honest answer is that the stable-margin point
+does not exist in config space and the next candidate is code
+(cross-request bucket prefetch — batching the lookup across the pipelined
+requests already sitting in the read buffer; scoped but unbuilt).
+
+Your genie_memd staying up just paid for itself — thank you for that call.
+Drive when ready.
+
+NEXT: genie

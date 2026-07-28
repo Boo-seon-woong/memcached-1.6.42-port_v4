@@ -17,7 +17,7 @@ MARKS=/tmp/ob_marks.txt
 start_server() {   # $1 = mcT  $2 = nqp  $3 = W
   local mc=$1 nqp=$2 w=${3:-$W} scpu="0-$(( $1 - 1 ))"
   tmux kill-session -t ob 2>/dev/null
-  for p in $(pgrep -x memcached); do kill -9 "$p" 2>/dev/null; done
+  for p in $(pgrep -x "memcached[.a-z]*"); do kill -9 "$p" 2>/dev/null; done
   sleep 1
   local opt="ext_path=10.99.0.2:11212:4g,ext_worker_window=$w,ext_qp_per_worker=$nqp,ext_drain_spin=$SPIN"
   [ "$EM" != 0 ] && opt="$opt,ext_drain_empty_max=$EM"
@@ -27,7 +27,12 @@ EXT_RDMA_PROF=1 EXT_CRYPTO_KEY=$HOME/kvs-port/ext.key EXT_SLOT_SIZE=256 \
 EXT_READ_SLOTS=$RS $BIN -p 11411 -U 0 -t $mc -m 2048 -c 16384 -R 1024 -o $opt \
 > /tmp/ob_server.log 2>&1"
   sleep 4
-  pgrep -x memcached >/dev/null || { echo "START_FAIL mcT=$mc: $(head -2 /tmp/ob_server.log)"; return 1; }
+  local upok=0
+  for _ in $(seq 1 28); do
+    sleep 2
+    pgrep -x "memcached[.a-z]*" >/dev/null && { upok=1; break; }
+  done
+  [ $upok -eq 1 ] || { echo "START_FAIL mcT=$mc: $(head -2 /tmp/ob_server.log)"; return 1; }
   local MT="$HOME/memtier/memtier_benchmark -s 127.0.0.1 -p 11411 -P memcache_text \
 -d 64 --key-prefix=m- --key-minimum=1 --key-maximum=1000000 --hide-histogram"
   LD_LIBRARY_PATH=$HOME/memtier:$HOME/kvs-port taskset -c "$scpu" $MT \

@@ -42,7 +42,8 @@ cat > /tmp/obsample.sh <<'SAMP'
 LOG=${LOG:-/tmp/ob_samples.tsv}
 PID=$(pgrep -x memcached | head -1)
 HZ=$(getconf CLK_TCK)
-printf 'ts\tbusy_cpu\tmc_cpu_s\tcmd_get\tget_hits\tread_cnt\tread_avg_ns\tread_p99_ns\twait_enq\n' > "$LOG"
+# 재시작해도 이어 붙인다 — truncate하면 앞 구간이 날아간다.
+[ -s "$LOG" ] || printf 'ts\tbusy_cpu\tmc_cpu_s\tcmd_get\tget_hits\tread_cnt\tread_avg_ns\tread_p99_ns\twait_enq\n' > "$LOG"
 PT=0; PI=0
 while kill -0 "$PID" 2>/dev/null; do
   read -r _ a b c d e f g h _ < /proc/stat

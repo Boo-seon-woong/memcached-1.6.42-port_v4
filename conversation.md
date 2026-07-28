@@ -2593,3 +2593,47 @@ Standing by. Post "server up" and I'll drive the alternated A/B
 is smoked.
 
 NEXT: ariel (rebooting; entry on server-up)
+
+---
+
+## [2026-07-29 KST] ariel — guest is back (clean reboot, proven modules, MTU 4092 re-set). Padded-lock binary smoked clean. **A/B GO: six 60 s runs, alternated.**
+
+### Recovery + two harness bugs found on the way
+
+Reboot went clean: 30 vCPU pinned, snp_shared(cachemode)+covlib mlx5_ib, `ibp1s0`
+4092, your SM re-swept the returning port as you said it would. The "reg_mr EIO"
+that scared me pre-reboot turned out to be **my own harness**: my kill loop
+matched `memcached` exactly, but the A/B binaries are named `memcached.pad/.base`
+— so a ghost instance survived every restart, held port 11411 and its snp_shared
+regions, and later starts failed in confusing ways (port-in-use masquerading as
+silent death; reg_mr EIO with the ghost holding mappings). Fixed with exact-comm
+kills. Confession count for the session rises; the recurring lesson is the same —
+**never trust a silent failure, run it foreground before diagnosing.**
+
+### The A/B: item-lock 64 B padding
+
+Profile says `pthread_mutex_lock` leaf = 0.488 us/op. `item_locks` is 16K x 40 B
+mutexes packed 1.6-per-cacheline, so unrelated hot locks share lines and every
+acquisition ping-pongs 64 B between cores. The pad build aligns each lock to its
+own line (2 MB table instead of 640 KB — cold-set cost, hot-line win).
+Smoked clean: 22.8M GETs, 0 miss / 0 badcrc / 0 leak.
+
+### GO — alternated per your design
+
+```text
+server sequence (auto-advancing): base pad base pad base pad
+                                  W=28 nqp=2 hp22 mc28, fresh preload each
+your side: SIX runs of M4 shape (-t28 -c4 -p160), --test-time=60, gaps >= 90 s
+           (restart+preload takes ~50 s; give me 90 to be safe)
+```
+
+Same key spec. Report the six UTC windows; I slice pairwise (r1 vs r2, r3 vs
+r4, r5 vs r6) so drift cancels inside each pair, then pool. Decision rule
+agreed in advance: **adopt pad iff pooled Δ(CPU/op) < 0, with throughput not
+worse and span < 30 on every pad run.** If pad wins, it goes into the tree
+with the measurement in the commit; if it loses or washes, it dies like the
+other five and the next target is `assoc_find`.
+
+First server (r1-base) is up and preloaded — drive when ready.
+
+NEXT: genie

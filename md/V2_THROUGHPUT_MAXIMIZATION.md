@@ -338,3 +338,56 @@ co-located 상한은 **약 7.3~7.5M Ops/s**이고, 늘릴 방법은 core 재배�
 per-op CPU를 낮추는 것뿐이다. 10M을 목표로 하려면 client를 이 box 밖으로
 빼서 24 core 전부를 server에 주어야 하며, 그 경우에도 `10M x 1.9us = 19 core`가
 필요하므로 성립 가능하다(현 CPU/op 기준 여유 5 core).
+
+## 30 vCPU guest 실험: server core는 확장되지 않는다 (2026-07-28)
+
+"server 20 core면 10M이 되지 않나"를 확인하기 위해 guest를 **30 vCPU**로
+재기동하고(host 32 core), client를 정확히 10 core로 고정한 채 server core만
+늘렸다. binary/설정은 동일하고 `W=36, QP=4, spin=1024`다.
+
+먼저 오염 검사: 30 vCPU 안에서 24 vCPU 시절 최고 설정(server 14 / client 10)을
+그대로 재현하면 7.153M/s, CPU 1.841us/op, steal 0.1s로 24 vCPU 범위
+(7.04~7.45M) 안이다. guest 확대 자체는 결과를 오염시키지 않았다.
+
+| server cores | Ops/s | avg us | CPU us/op | core당 | steal |
+|---:|---:|---:|---:|---:|---:|
+| 14 | 7.153 | 25.77 | 1.841 | 0.511M | 0.1s |
+| 16 | 7.078 | 26.66 | 2.126 | 0.442M | 0.2s |
+| 18 | 7.492 | 28.00 | 2.257 | 0.416M | 0.5s |
+| 20 (P=128, 4회) | 7.801 / 7.717 / 7.350 / 7.049 | 27.7 / 32.1 / 32.3 / 32.6 | 2.34~2.66 | 0.377M | 0.5~2.4s |
+
+**core를 14에서 20으로 43% 늘려도 throughput은 7.1~7.5M로 평평하다.**
+대신 CPU/op가 1.841 -> 2.5us로 36% 오르고, core당 처리량은 0.532 -> 0.377M
+(**-29%**)로 떨어진다. 늘린 core가 나빠진 효율에 정확히 상쇄된다.
+
+server 20 / client 10 / P=128에서 한 번 7.801M(avg 27.7us, PASS)이 나왔으나
+반복 4회 중 3회가 avg 32us로 게이트를 벗어났다(중앙값 7.53M / avg 32.2us).
+분산 6%를 감안하면 24 vCPU의 7.45M(avg 26.4us, PASS)보다 나은 지점이 아니다.
+
+### 함의: 10M 계획의 전제가 무너진다
+
+앞 절에서 `10M = server 19 core x 1.9us/op`로 계산했지만, 그 계산은
+**core당 0.53M이 유지된다**는 가정 위에 있었다. 실측은 그 가정을 부정한다.
+현 코드로는 20 core에서도 7.5M 언저리이며, core를 더 준다고 10M에 접근하지
+않는다.
+
+따라서 이전에 검토한 두 방향의 기대값을 모두 하향해야 한다.
+
+- guest 30 vCPU(20 server / 10 client): **실측 7.5M** — 예측 10.6M과 크게 다름
+- guest 21 vCPU + client를 host로: server 21 core가 근거였으나 core당 효율이
+  이미 무너지는 구간이므로 11.1M은 성립하지 않는다. 경로(virtio) 작업을 하기
+  전에 **server 확장성부터 고쳐야 한다**.
+
+### 다음에 볼 것
+
+병목은 core 수도 client 공급도 아니고 **worker 수가 늘 때 per-op CPU가 오르는
+현상** 자체다. 후보:
+
+- memcached 내부 공유 자원 경합(hash/stats lock 등)이 worker 수에 따라 증가
+- SEV-SNP guest의 vCPU 확장 비용
+- host oversubscription(30 vCPU on 32 core)의 steal — 20 core 지점에서 2.4s
+  까지 관측됐으나 18 core(0.5s)에서도 이미 효율이 78%로 떨어져 있어 steal만으로
+  설명되지 않는다
+
+CPU 회계(`tools/cpu-stage-detail.sh`)를 worker 수별로 돌려 어느 stage가 늘어나는지
+분해하는 것이 다음 단계다.

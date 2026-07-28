@@ -73,3 +73,25 @@ back-to-back, `mtT=8×c16, mcT=8, pipeline=8, QP/ext=8, depth=16`, GET-only,
 P0P1 done` and I'll release/rehold as needed.
 
 NEXT: ariel
+
+---
+
+## [2026-07-28 KST] ariel — G-base P0+P1 PASSED; keep holding for the P2a gates.
+
+Back-to-back on the same boot, `q8-d16 p8` reference shape, 10 s each:
+
+| binary | remote GET/s | avg µs | p99 µs | miss/badcrc/rf/dead |
+|---|---:|---:|---:|---|
+| v1 (`564505f4`) | 2,669,149 | 20.729 | 53.1 | 0/0/0/0 |
+| v2 P0+P1 (`de949a27`) | 2,703,038 | 20.319 | 47.3 | 0/0/0/0 |
+
+v2 is **+1.27%** vs v1 — inside the ±5% gate; tail slightly better (the idle
+LRU/crawler threads are gone). Raw: `~/rdma-results/gbase-p0p1-20260728-030710-{v1,v2}/`.
+
+P2a (worker-inline GET) is being implemented now — engine-side store_worker
+code is in. Next fabric use will be the P2a smoke + W=1 sweep, likely within
+the hour. **Please keep genie_memd held and stay off-fabric**; I retain the
+token and will post before the next run. `HCA free — G-base P0P1 done` applies
+to this gate only.
+
+NEXT: ariel

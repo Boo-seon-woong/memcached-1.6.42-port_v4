@@ -60,6 +60,10 @@ struct extstore_conf_file {
     struct extstore_conf_file *next;
 };
 
+/* v2 (P2a): worker-inline READ path. */
+#define EXT_QP_MAX 4          /* ext_qp_per_worker upper bound */
+#define EXT_ORD_LIMIT 16      /* HCA max_qp_rd_atom; matches initiator_depth */
+
 enum obj_io_mode {
     OBJ_IO_READ = 0,
     OBJ_IO_WRITE,
@@ -83,6 +87,7 @@ struct _obj_io {
     enum obj_io_mode mode;
     obj_io_cb cb;
     unsigned char retries; /* read retry count (torn-read / tag fail) */
+    unsigned char wqp;     /* v2: which worker QP carries this op (drain acct) */
     /* EXT_RDMA_PROF span v2: READ pre-post through post-decrypt;
      * WRITE pre-encrypt through CQE. t_end is an intermediate boundary. */
     uint64_t t_start, t_end;
@@ -109,6 +114,17 @@ void *extstore_init(struct extstore_conf_file *fh, struct extstore_conf *cf, enu
 int extstore_alloc(void *ptr, unsigned int len, unsigned int bucket, struct ext_loc *out);
 void extstore_free_loc(void *ptr, const struct ext_loc *loc);
 int extstore_submit(void *ptr, obj_io *io);
+
+/* v2 (P2a) worker-inline READ API. All *_worker functions touch only the
+ * calling worker's resources (shared-nothing; see md/V2_CODE_SPEC.md P2a).
+ * prepare/create run in the MAIN thread before conns are dispatched. */
+int extstore_workers_prepare(void *ptr, unsigned int nworkers,
+                             unsigned int nqp, unsigned int window);
+void *extstore_worker_create(void *ptr, unsigned int worker_id);
+int extstore_worker_submit(void *worker, obj_io *chain);
+int extstore_worker_drain(void *worker, int budget);
+unsigned int extstore_worker_outstanding(void *worker);
+void *extstore_worker_current(void); /* set during drain; for retry re-post */
 /* Staging slots for the write path (ciphertext source for RDMA WRITE). */
 char *extstore_staging_get(void *ptr);
 void extstore_staging_put(void *ptr, char *slot);

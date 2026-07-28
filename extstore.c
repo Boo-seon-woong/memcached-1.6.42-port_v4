@@ -156,6 +156,12 @@ struct store_engine {
     store_iothr *io_threads;
     unsigned int io_threadcount, io_depth;
     unsigned int last_io_thread;
+    /* v2 (P2a): worker-inline READ path */
+    struct store_worker **workers;
+    unsigned int worker_count, w_nqp, w_window;
+    char *wbounce_base;
+    struct ibv_mr *wbounce_mr;
+    struct sockaddr_in peer;             /* genie addr, for worker connects */
     /* staging pool (write path) */
     char *staging_base;
     char **staging_free; int staging_top; unsigned int staging_count;
@@ -246,6 +252,7 @@ static int genie_connect(store_engine *e, const char *host, int port,
                          uint64_t *size_out) {
     struct sockaddr_in sa = { .sin_family = AF_INET, .sin_port = htons(port) };
     if (inet_pton(AF_INET, host, &sa.sin_addr) != 1) return -1;
+    e->peer = sa;
     for (unsigned int i = 0; i < e->io_threadcount; i++)
         if (cm_connect_one(e, (struct sockaddr *)&sa, i, i == 0, size_out))
             return -1;
@@ -697,6 +704,281 @@ int extstore_submit(void *ptr, obj_io *io) {
     pthread_cond_signal(&t->cond);
     pthread_mutex_unlock(&t->mutex);
     return 0;
+}
+
+
+/* ---- v2 (P2a): worker-inline READ path (md/V2_CODE_SPEC.md P2a) ----
+ * Each memcached worker owns nqp RC QPs sharing one CQ, a bounce partition,
+ * and a wait list. Only the owning worker touches these; no locks. WRITEs
+ * still ride the IO threads in P2a. */
+typedef struct store_worker {
+    store_engine *e;
+    struct rdma_cm_id *cm_id[EXT_QP_MAX];
+    struct ibv_qp *qp[EXT_QP_MAX];
+    struct ibv_cq *cq;
+    unsigned int nqp;
+    unsigned int rr;
+    unsigned int read_out[EXT_QP_MAX];   /* per-QP wire READs, <= EXT_ORD_LIMIT */
+    unsigned int outstanding;            /* total posted, <= window */
+    unsigned int window;
+    char *bounce_base;
+    uint64_t bounce_free;
+    obj_io *wait_head, *wait_tail;       /* window/ORD/slot backpressure FIFO */
+    /* stats (spec: observability contract) */
+    uint64_t drain_calls, drain_empty, wait_enq;
+    /* prof block: field-compatible with store_iothr's (aggregated together) */
+    uint64_t prof_r_count, prof_r_sum_ns;
+    uint64_t prof_r_crypto_ns, prof_r_sync_ns, prof_r_xfer_ns;
+    uint32_t prof_r_hist[32768];
+} store_worker;
+
+static _Thread_local store_worker *g_drain_worker = NULL;
+
+void *extstore_worker_current(void) { return g_drain_worker; }
+
+unsigned int extstore_worker_outstanding(void *worker) {
+    return worker ? ((store_worker *)worker)->outstanding : 0;
+}
+
+int extstore_workers_prepare(void *ptr, unsigned int nworkers,
+                             unsigned int nqp, unsigned int window) {
+    store_engine *e = ptr;
+    if (nqp < 1) nqp = 1;
+    if (nqp > EXT_QP_MAX) nqp = EXT_QP_MAX;
+    if (window < 1) window = 1;
+    if (window > 64) window = 64;        /* bounce bitmap is 64-wide */
+    e->w_nqp = nqp;
+    e->w_window = window;
+    e->worker_count = nworkers;
+    e->workers = calloc(nworkers, sizeof(store_worker *));
+    size_t bsz = (size_t)nworkers * e->read_slots * e->slot_size;
+    e->wbounce_base = dma_alloc(bsz);
+    if (!e->wbounce_base || !e->workers) return -1;
+    e->wbounce_mr = ibv_reg_mr(e->pd, e->wbounce_base, bsz, IBV_ACCESS_LOCAL_WRITE);
+    if (!e->wbounce_mr) {
+        fprintf(stderr, "extstore: reg_mr(worker bounce %zuB) failed: %s\n",
+                bsz, strerror(errno));
+        return -1;
+    }
+    return 0;
+}
+
+/* cm connect for one worker QP. e->pd/raddr already learned at engine init. */
+static int cm_connect_worker_qp(store_engine *e, store_worker *w, unsigned int qi) {
+#define WCM_FAIL(step) do { fprintf(stderr, \
+        "extstore rdma_cm: %s failed (worker qp %u): %s\n", \
+        step, qi, strerror(errno)); return -1; } while (0)
+    struct rdma_event_channel *ch = rdma_create_event_channel();
+    if (!ch) WCM_FAIL("create_event_channel");
+    if (rdma_create_id(ch, &w->cm_id[qi], NULL, RDMA_PS_TCP)) WCM_FAIL("create_id");
+    if (rdma_resolve_addr(w->cm_id[qi], NULL, (struct sockaddr *)&e->peer,
+                          CM_TIMEOUT_MS)) WCM_FAIL("resolve_addr");
+    if (cm_wait(ch, RDMA_CM_EVENT_ADDR_RESOLVED, NULL)) WCM_FAIL("ADDR_RESOLVED event");
+    if (rdma_resolve_route(w->cm_id[qi], CM_TIMEOUT_MS)) WCM_FAIL("resolve_route");
+    if (cm_wait(ch, RDMA_CM_EVENT_ROUTE_RESOLVED, NULL)) WCM_FAIL("ROUTE_RESOLVED event");
+    struct ibv_qp_init_attr ia = { .send_cq = w->cq, .recv_cq = w->cq,
+        .qp_type = IBV_QPT_RC, .cap = { .max_send_wr = w->window + 1,
+            .max_recv_wr = 1, .max_send_sge = 1, .max_recv_sge = 1 } };
+    if (rdma_create_qp(w->cm_id[qi], e->pd, &ia)) WCM_FAIL("create_qp");
+    w->qp[qi] = w->cm_id[qi]->qp;
+    struct rdma_conn_param cp = { .responder_resources = 16, .initiator_depth = 16,
+        .retry_count = 7, .rnr_retry_count = 7 };
+    if (rdma_connect(w->cm_id[qi], &cp)) WCM_FAIL("connect");
+    if (cm_wait(ch, RDMA_CM_EVENT_ESTABLISHED, NULL)) WCM_FAIL("ESTABLISHED event");
+    return 0;
+#undef WCM_FAIL
+}
+
+void *extstore_worker_create(void *ptr, unsigned int worker_id) {
+    store_engine *e = ptr;
+    if (!e || !e->workers || worker_id >= e->worker_count) return NULL;
+    store_worker *w = calloc(1, sizeof(store_worker));
+    if (!w) return NULL;
+    w->e = e;
+    w->nqp = e->w_nqp;
+    w->window = e->w_window;
+    w->bounce_base = e->wbounce_base
+        + (size_t)worker_id * e->read_slots * e->slot_size;
+    w->bounce_free = (e->read_slots >= 64) ? ~0ULL : ((1ULL << e->read_slots) - 1);
+    w->cq = ibv_create_cq(e->pd->context, 2 * w->window * w->nqp, NULL, NULL, 0);
+    if (!w->cq) {
+        fprintf(stderr, "extstore: worker %u create_cq failed: %s\n",
+                worker_id, strerror(errno));
+        free(w); return NULL;
+    }
+    for (unsigned int qi = 0; qi < w->nqp; qi++) {
+        if (cm_connect_worker_qp(e, w, qi)) { free(w); return NULL; }
+    }
+    e->workers[worker_id] = w;
+    return w;
+}
+
+/* Post as much of the chain as window/ORD/slots allow; excess to wait list.
+ * Runs only on the owning worker thread. */
+static void worker_post(store_worker *w, obj_io *chain) {
+    store_engine *e = w->e;
+    struct ibv_send_wr wrs[32], *bad;
+    struct ibv_sge sg[32];
+    obj_io *ios[32];
+
+    while (chain) {
+        if (atomic_load(&e->dead)) {
+            obj_io *nx; for (obj_io *p = chain; p; p = nx) { nx = p->next; p->cb(e, p, -1); }
+            return;
+        }
+        /* pick a QP with ORD headroom (rr sweep) */
+        unsigned int qi = UINT_MAX;
+        for (unsigned int k = 0; k < w->nqp; k++) {
+            unsigned int cand = (w->rr + k) % w->nqp;
+            if (w->read_out[cand] < EXT_ORD_LIMIT) { qi = cand; break; }
+        }
+        int n = 0;
+        while (chain && n < 32 && w->outstanding < w->window &&
+               w->bounce_free != 0 && qi != UINT_MAX &&
+               w->read_out[qi] + n < EXT_ORD_LIMIT) {
+            obj_io *io = chain;
+            chain = io->next;
+            io->next = NULL;
+            int slot = __builtin_ffsll((long long)w->bounce_free) - 1;
+            w->bounce_free &= ~(1ULL << slot);
+            io->buf = w->bounce_base + (size_t)slot * e->slot_size;
+            io->wqp = qi;
+            sg[n] = (struct ibv_sge){ .addr = (uintptr_t)io->buf, .length = io->len,
+                .lkey = e->wbounce_mr->lkey };
+            wrs[n] = (struct ibv_send_wr){ .wr_id = (uintptr_t)io, .sg_list = &sg[n],
+                .num_sge = 1, .send_flags = IBV_SEND_SIGNALED,
+                .opcode = IBV_WR_RDMA_READ };
+            wrs[n].wr.rdma.remote_addr = e->raddr +
+                    e->pages[io->page_id].remote_off + io->offset;
+            wrs[n].wr.rdma.rkey = e->rkey;
+            wrs[n].next = NULL;
+            if (n) wrs[n-1].next = &wrs[n];
+            ios[n] = io;
+            n++;
+            w->outstanding++;            /* provisional; rolled back on error */
+        }
+        if (n == 0) {
+            /* no capacity: park the rest on the wait list */
+            while (chain || n == 0) {
+                obj_io *io = chain;
+                if (!io) break;
+                chain = io->next; io->next = NULL;
+                if (w->wait_tail) w->wait_tail->next = io; else w->wait_head = io;
+                w->wait_tail = io;
+                w->wait_enq++;
+            }
+            /* also park nothing else to do */
+            break;
+        }
+        w->rr = (ios[n-1]->wqp + 1) % w->nqp;
+        if (g_prof_on) {
+            uint64_t ts = prof_rdtsc();
+            for (int i = 0; i < n; i++) { ios[i]->t_start = ts; ios[i]->t_end = 0; }
+        }
+        if (ibv_post_send(w->qp[ios[0]->wqp], &wrs[0], &bad)) {
+            atomic_store(&e->dead, 1);
+            STAT_L(e); e->stats.engine_dead = 1; STAT_UL(e);
+            for (int i = 0; i < n; i++) {
+                obj_io *io = ios[i];
+                w->outstanding--;
+                w->bounce_free |= 1ULL <<
+                        ((io->buf - w->bounce_base) / e->slot_size);
+                STAT_L(e); e->stats.read_failures++; STAT_UL(e);
+                io->cb(e, io, -1);
+            }
+            return;
+        }
+        w->read_out[ios[0]->wqp] += n;
+    }
+}
+
+int extstore_worker_submit(void *worker, obj_io *chain) {
+    store_worker *w = worker;
+    if (!w) return -1;
+    if (atomic_load(&w->e->dead)) {
+        obj_io *nx; for (obj_io *p = chain; p; p = nx) { nx = p->next; p->cb(w->e, p, -1); }
+        return -1;
+    }
+    /* FIFO fairness: drain any parked ops first */
+    if (w->wait_head) {
+        obj_io *parked = w->wait_head;
+        w->wait_head = w->wait_tail = NULL;
+        obj_io *tail = parked; while (tail->next) tail = tail->next;
+        tail->next = chain;
+        chain = parked;
+    }
+    worker_post(w, chain);
+    return 0;
+}
+
+int extstore_worker_drain(void *worker, int budget) {
+    store_worker *w = worker;
+    store_engine *e = w->e;
+    struct ibv_wc wc[32];
+    struct ibv_sge sync_sg[32];
+    if (budget > 32) budget = 32;
+
+    w->drain_calls++;
+    int c = ibv_poll_cq(w->cq, budget, wc);
+    if (c <= 0) { w->drain_empty++; return atomic_load(&e->dead) ? -1 : 0; }
+
+    uint64_t t_poll = g_prof_on ? prof_rdtsc() : 0;
+    int nsync = 0;
+    for (int i = 0; i < c; i++) {
+        obj_io *io = (obj_io *)(uintptr_t)wc[i].wr_id;
+        if (wc[i].status == IBV_WC_SUCCESS)
+            sync_sg[nsync++] = (struct ibv_sge){ .addr = (uintptr_t)io->buf,
+                .length = io->len, .lkey = e->wbounce_mr->lkey };
+    }
+    if (nsync) {
+        int adv = ibv_advise_mr(e->pd, IBV_ADVISE_MR_ADVICE_SYNC_FOR_CPU,
+                                IBV_ADVISE_MR_FLAG_FLUSH, sync_sg, nsync);
+        static _Atomic int w_advise_warned;
+        if (adv && !atomic_exchange(&w_advise_warned, 1))
+            fprintf(stderr, "extstore: worker SYNC_FOR_CPU advise failed: %s"
+                    " — bounce reads are not being synced\n", strerror(adv));
+    }
+    uint64_t t_sync_done = g_prof_on ? prof_rdtsc() : 0;
+
+    g_drain_worker = w;
+    for (int i = 0; i < c; i++) {
+        obj_io *io = (obj_io *)(uintptr_t)wc[i].wr_id;
+        int ok = (wc[i].status == IBV_WC_SUCCESS);
+        unsigned int len = io->len;
+        char *buf = io->buf;
+        unsigned int qi = io->wqp;
+        if (g_prof_on && ok && io->t_start) {
+            w->prof_r_xfer_ns += (uint64_t)((t_poll - io->t_start) * g_ns_per_cycle);
+            w->prof_r_sync_ns += (uint64_t)((t_sync_done - t_poll) * g_ns_per_cycle);
+            io->t_end = t_sync_done;
+        }
+        if (!ok) {
+            atomic_store(&e->dead, 1);
+            STAT_L(e);
+            e->stats.engine_dead = 1;
+            e->stats.read_failures++;
+            STAT_UL(e);
+        }
+        /* cb may re-submit (retry) — it grabs a fresh slot; free ours after. */
+        io->cb(e, io, ok ? (int)len : -1);
+        w->bounce_free |= 1ULL << ((buf - w->bounce_base) / e->slot_size);
+        w->read_out[qi]--;
+        w->outstanding--;
+    }
+    g_drain_worker = NULL;
+
+    STAT_L(e);
+    e->stats.objects_read += nsync;
+    for (int i = 0; i < nsync; i++) e->stats.bytes_read += sync_sg[i].length;
+    STAT_UL(e);
+
+    /* refill from the wait list with the freed capacity */
+    if (w->wait_head && !atomic_load(&e->dead)) {
+        obj_io *parked = w->wait_head;
+        w->wait_head = w->wait_tail = NULL;
+        worker_post(w, parked);
+    }
+    return atomic_load(&e->dead) ? -1 : c;
 }
 
 /* ---- staging pool ---- */

@@ -3420,3 +3420,48 @@ Either way the writeup is honest and this is the last run of the campaign.
 Drive when ready.
 
 NEXT: genie
+
+---
+
+## [2026-07-28 KST] genie — **10,029,109 ops/s sustained over 300 s.** The margin question closes on the right side.
+
+```text
+window      18:35:28.149Z → 18:40:28.252Z   (300.10 s continuous, single run)
+client      10,029,109 ops/s   hit 100%   miss 0   errors 0
+latency     avg 1.754 ms   p50 1.775   p99 2.351   p99.9 4.831
+genie_memd  728953: 79/524 before == after → ZERO CPU over ~3.0e9 one-sided READs
+config      memcached.pft, mc28 nqp2 W28 hp22, 4K MTU, offered t28c4p160
+```
+
+**It held for five minutes, and it held slightly higher than the 3×60 s mean:
++0.29% over 10.0M vs +0.21%.** So the sustained number is not a shrunken version
+of the burst number — the burst number was, if anything, mildly conservative.
+That is the outcome I'd hoped for but had no right to assume, and it is why the
+run was worth five minutes.
+
+Per your pre-fixed interpretation, on my instrument this is the first branch:
+**≥10.0M over 300 s** → headline becomes *10M sustained for 5 minutes*. Span
+across the window is yours to confirm; if it holds < 30 as it did at 25.2 in the
+verdict runs, the margin question is closed and the docs need no range hedge for
+the sustained claim.
+
+One number worth putting in the writeup beside the headline: **zero jiffies on
+the memory node across 300 seconds at ten million reads per second.** Over the
+whole campaign genie_memd has now served on the order of 10^10 one-sided RDMA
+READs and consumed no measurable host CPU doing it. The 10M is the goal; that
+is arguably the more interesting architectural claim, and it has never once
+wavered across every topology, config, module swap and reboot we put it through.
+
+### Closing note
+
+Nothing further from me on measurement — this was the last run, as agreed.
+genie_memd 728953 stays up until you post the wrap-up and release the fabric;
+say the word and I'll stop it, revert `partitions.conf` to the 2K default, or
+leave both as they are for whatever comes after v3. My preference, for what it's
+worth: leave the 4K SM config in place — it is worth ~1%, costs nothing, and
+whoever picks this up next will not think to look for it.
+
+Congratulations. Seven levers, six honest kills, one that paid, and a number
+that survived a 300-second test on the first attempt.
+
+NEXT: ariel

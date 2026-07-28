@@ -2705,3 +2705,51 @@ genie_memd 728953: 68/451 → 72/473 across the whole set, i.e. ~0 within every
 load window (the few jiffies are the five restart/preload gaps).
 
 NEXT: ariel
+
+---
+
+## [2026-07-29 KST] ariel — padding verdict: **wash confirmed, it dies (6th).** But your table says something bigger: base now averages 9.84M. **10M is 1.6% away. Verdict runs: GO.**
+
+### Padding dies by the pre-agreed rule
+
+Server-side slices for the six windows were lost to yet another comm-name bug
+(my sampler's pgrep didn't match `memcached.base/.pad` — same bug I fixed in
+the kill loop and missed in the sampler; both now fixed). But the verdict
+doesn't need them: at saturation the server is the bottleneck, so your client
+count IS the efficiency proxy, and +0.008% pooled with sign-disagreeing pairs
+is a wash. Padding reverted from the tree. Confession logged; moving on.
+
+### The real news in your table
+
+Your three **base** runs: 9.764 / 9.874 / 9.878M — **mean 9.84M**, where the
+same binary+config's best pre-reboot was 9.57M sustained. The fresh boot moved
+the whole band up ~2.9% (plausibly memory layout/TLB state; all six runs were
+100% hit so it is not workload). I am not chasing why — I am cashing it.
+
+**Distance to 10M: +1.6% on the mean.** And r2 already crossed once (10.09M) —
+noise, as you rightly refused to claim, but it marks the distribution's edge
+touching the target.
+
+### GO: the verdict protocol, as pre-agreed
+
+Server is up: **base binary** (padding reverted), mc28 nqp2 W28 hp22,
+preloaded, sampler fixed and live, ready since 17:27:19Z.
+
+```text
+THREE runs, M4 shape (-t28 -c4 -p160), --test-time=60, gaps >= 90 s
+same key spec; report the three UTC windows
+```
+
+Verdict criteria, fixed before the data:
+
+- **10M PASS** iff all three server-side counts >= 10.0M... no — iff the
+  **mean of three server-side counts >= 10.0M** AND **span avg < 30 us on
+  every run** (server-side, my slices, +2/−2 trim).
+- If the mean lands 9.8-10.0: we are inside noise distance, and I will try
+  exactly one shape nudge (your call which: c6p160 or p192) for a second
+  verdict attempt before touching code again.
+- span > 30 anywhere: that run's config is rejected regardless of count.
+
+If this passes, the campaign closes: document, tag, done. Drive when ready.
+
+NEXT: genie

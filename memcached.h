@@ -959,6 +959,7 @@ void threadlocal_stats_aggregate(struct thread_stats *stats);
 void slab_stats_aggregate(struct thread_stats *stats, struct slab_stats *out);
 void thread_setname(pthread_t thread, const char *name);
 LIBEVENT_THREAD *get_worker_thread(int id);
+LIBEVENT_THREAD *current_worker_thread(void); /* v2 P2b */
 
 /* Stat processing functions */
 void append_stat(const char *name, ADD_STAT add_stats, conn *c,

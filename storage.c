@@ -61,6 +61,15 @@ typedef struct {
     int ret;
 } store_wait;
 
+/* v2 (P2b): inline path never initialises mutex/cond — the writer spins on
+ * `done` and reaps the completion from its own drain on the same thread. */
+static void storage_store_done_inline_cb(void *e, obj_io *io, int ret) {
+    (void)e;
+    store_wait *w = io->data;
+    w->ret = ret;
+    w->done = 1;
+}
+
 static void storage_store_done_cb(void *e, obj_io *io, int ret) {
     (void)e;
     store_wait *w = io->data;
@@ -570,7 +579,14 @@ int storage_store_item(void *e, item *it, item **hdr_out, uint32_t hv) {
         return -1;
     }
 
-    char *slot = extstore_staging_get(e);
+    /* v2 (P2b): SET runs inline on the calling worker — its own staging
+     * partition, its own QP, and a bounded spin on its own CQ. The synchronous
+     * STORED contract is unchanged; only the wait mechanism differs (cond ->
+     * drain). See md/V2_CODE_SPEC.md P2b. */
+    LIBEVENT_THREAD *wt = current_worker_thread();
+    void *w = (wt != NULL) ? wt->ext_worker : NULL;
+    char *slot = (w != NULL) ? extstore_worker_staging_get(w)
+                             : extstore_staging_get(e);
     if (slot == NULL) {
         extstore_free_loc(e, &loc);
         do_item_remove(hdr_it);
@@ -598,7 +614,8 @@ int storage_store_item(void *e, item *it, item **hdr_out, uint32_t hv) {
     }
     uint64_t prof_crypto_done = extstore_prof_stamp();
     if (sealed != (int)rlen) {
-        extstore_staging_put(e, slot);
+        if (w != NULL) extstore_worker_staging_put(w, slot);
+        else extstore_staging_put(e, slot);
         extstore_free_loc(e, &loc);
         do_item_remove(hdr_it);
         return -1;
@@ -613,24 +630,37 @@ int storage_store_item(void *e, item *it, item **hdr_out, uint32_t hv) {
     }
 
     store_wait wait = {0};
-    pthread_mutex_init(&wait.mutex, NULL);
-    pthread_cond_init(&wait.cond, NULL);
     obj_io io = {
         .data = &wait, .next = NULL, .buf = slot,
         .page_version = loc.page_version, .len = rlen, .offset = loc.offset,
         .page_id = loc.page_id, .mode = OBJ_IO_WRITE,
-        .cb = storage_store_done_cb,
+        .cb = (w != NULL) ? storage_store_done_inline_cb : storage_store_done_cb,
         .t_start = prof_start, .t_end = prof_crypto_done,
     };
-    extstore_submit(e, &io);
 
-    pthread_mutex_lock(&wait.mutex);
-    while (!wait.done)
-        pthread_cond_wait(&wait.cond, &wait.mutex);
-    pthread_mutex_unlock(&wait.mutex);
-    pthread_cond_destroy(&wait.cond);
-    pthread_mutex_destroy(&wait.mutex);
-    extstore_staging_put(e, slot);
+    if (w != NULL) {
+        if (extstore_worker_post_write(w, &io) != 0) {
+            wait.done = true; wait.ret = -1;
+        }
+        /* Spin on our own CQ until this WRITE completes. GET completions
+         * reaped here are parked and flushed by the drain caller, so no
+         * re-entrancy (R6). Exit is completion or engine death. */
+        while (!wait.done) {
+            if (extstore_worker_drain(w, 32) < 0) break;
+        }
+        extstore_worker_staging_put(w, slot);
+    } else {
+        pthread_mutex_init(&wait.mutex, NULL);
+        pthread_cond_init(&wait.cond, NULL);
+        extstore_submit(e, &io);
+        pthread_mutex_lock(&wait.mutex);
+        while (!wait.done)
+            pthread_cond_wait(&wait.cond, &wait.mutex);
+        pthread_mutex_unlock(&wait.mutex);
+        pthread_cond_destroy(&wait.cond);
+        pthread_mutex_destroy(&wait.mutex);
+        extstore_staging_put(e, slot);
+    }
 
     if (wait.ret != (int)rlen) {
         extstore_free_loc(e, &loc);

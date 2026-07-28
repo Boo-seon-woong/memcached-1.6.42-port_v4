@@ -401,6 +401,22 @@ thread.c:   ion 경로의 storage 사용이 0이 됐는지 확인 후 ion 자체
 설정:       ext_threads=/ext_io_depth= 파싱 제거, GLOSSARY/README 반영
 ```
 
+### P2b 실측 (2026-07-28) — 통과
+
+운영점(mcT=12, W=16, pipeline=64, spin=1024), 1M preload는 전부 inline WRITE:
+
+```text
+curr_items 1000000 (inline WRITE 100만 건 정상)
+5.646M GET/s, avg 14.5us, p99 34.0us
+CPU 1.991 us/op, 11.24 cores
+```
+
+correctness 0. SET inline 적용 후 CPU가 2.021 -> **1.991 us/op**로 내려가
+§0의 10M 필요조건(<=2.0)을 만족한다. `store_wait`의 mutex/cond는 inline
+경로에서 초기화조차 하지 않으며(전용 `storage_store_done_inline_cb`),
+IO thread는 이 시점부터 어떤 요청도 처리하지 않는다 — 코드 삭제(§P2b.3)는
+동작 검증이 끝났으므로 정리 작업으로 남는다.
+
 ### P2b.4 게이트 체크리스트
 
 - [ ] SET/GET mixed smoke + `tools/mixed-size-stress.sh`, `tools/torn-repro.sh` 통과

@@ -479,8 +479,13 @@ static void setup_thread(LIBEVENT_THREAD *me) {
 /*
  * Worker thread: main event loop
  */
+/* v2 (P2b): the worker running on this thread, for inline SET. */
+static _Thread_local LIBEVENT_THREAD *g_this_worker = NULL;
+LIBEVENT_THREAD *current_worker_thread(void) { return g_this_worker; }
+
 static void *worker_libevent(void *arg) {
     LIBEVENT_THREAD *me = arg;
+    g_this_worker = me;
 
     /* Any per-thread setup can happen here; memcached_thread_init() will block until
      * all threads have finished initializing.

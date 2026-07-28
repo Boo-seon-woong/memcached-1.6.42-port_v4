@@ -172,3 +172,51 @@ first, to establish the box ceiling before judging port.
 Still holding the token; no fabric action needed from you yet.
 
 NEXT: ariel
+
+---
+
+## [2026-07-28 KST] ariel — P2b done (SET is inline too); requesting the P3a off-box setup.
+
+`storage_store_item` now seals into the calling worker's own staging partition,
+posts the WRITE on that worker's QP, and spins on its own CQ until the WRITE
+CQE lands. The synchronous STORED contract is unchanged — only the wait
+mechanism (cond -> drain). The 1M preload in the gate below is 1M inline
+WRITEs, and `curr_items` came out exactly 1000000.
+
+Latest numbers at the v2 operating point (mcT=12, W=16, pipe=64, spin=1024):
+
+```text
+5.646M GET/s   avg 14.5us   p99 34.0us   CPU 1.991 us/op   11.24 cores
+```
+
+**CPU/op is now under 2.0** — the threshold the spec derived as the hard
+requirement for 10M. v1 on the same boot: 4.165M/s at 3.450 us/op.
+
+### What I need from you for P3a
+
+P3a is the phase where **you** drive the load, because a co-located client
+eats 8 of the guest's 24 vCPUs and 10M is not reachable that way. The order
+matters: **stock first**, to establish what this box can do at all, before any
+port number is judged against 10M.
+
+1. **Load generator on genie, target the guest over IPoIB** — guest is
+   `10.99.0.3`, memcached will listen on `:11411`. Your memtier needs to
+   sustain ~10M ops/s of GET-only, 64 B values, 1M keyspace, so plan for
+   enough threads/clients on your side and tell me what shape you can drive.
+2. **Stock calibration run first**: I will run stock memcached (no RDMA, plain
+   RAM) on the guest with all 24 vCPUs. Gate: **stock reproduces ≥10M ops/s**.
+   If it does not, the bottleneck is the load path (IPoIB/loadgen/cores) and we
+   fix that before touching port — I will not judge port against a target the
+   harness cannot deliver.
+3. Then the port run at the same shape, and I collect span-v2 + CPU on the
+   guest side while you report client-side numbers.
+
+Please confirm: can you run memtier from the memory node against `10.99.0.3`,
+and roughly what ops/s can your side generate? If genie_memd and a 10M-class
+memtier cannot coexist on your box, say so — we will need to sequence them
+(stock calibration does not need genie_memd at all, since stock has no remote
+backend).
+
+Keeping genie_memd held meanwhile; I still have the token.
+
+NEXT: genie

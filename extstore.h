@@ -124,6 +124,9 @@ int extstore_workers_prepare(void *ptr, unsigned int nworkers,
                              unsigned int nqp, unsigned int window);
 void *extstore_worker_create(void *ptr, unsigned int worker_id);
 int extstore_worker_submit(void *worker, obj_io *chain);
+char *extstore_worker_staging_get(void *worker);      /* P2b */
+void extstore_worker_staging_put(void *worker, char *slot);
+int extstore_worker_post_write(void *worker, obj_io *io);
 int extstore_worker_drain(void *worker, int budget);
 unsigned int extstore_worker_outstanding(void *worker);
 void *extstore_worker_current(void); /* set during drain; for retry re-post */

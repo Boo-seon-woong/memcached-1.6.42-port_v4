@@ -161,6 +161,9 @@ struct store_engine {
     unsigned int worker_count, w_nqp, w_window;
     char *wbounce_base;
     struct ibv_mr *wbounce_mr;
+    char *wstaging_base;                 /* P2b */
+    struct ibv_mr *wstaging_mr;
+    unsigned int w_staging_slots;
     struct sockaddr_in peer;             /* genie addr, for worker connects */
     /* staging pool (write path) */
     char *staging_base;
@@ -723,6 +726,9 @@ typedef struct store_worker {
     unsigned int window;
     char *bounce_base;
     uint64_t bounce_free;
+    char *staging_base;                  /* P2b: WRITE source partition */
+    uint64_t staging_free;
+    unsigned int staging_slots;
     obj_io *wait_head, *wait_tail;       /* window/ORD/slot backpressure FIFO */
     /* stats (spec: observability contract) */
     uint64_t drain_calls, drain_empty, wait_enq;
@@ -730,6 +736,9 @@ typedef struct store_worker {
     uint64_t prof_r_count, prof_r_sum_ns;
     uint64_t prof_r_crypto_ns, prof_r_sync_ns, prof_r_xfer_ns;
     uint32_t prof_r_hist[32768];
+    uint64_t prof_w_count, prof_w_sum_ns;
+    uint64_t prof_w_crypto_ns, prof_w_sync_ns, prof_w_xfer_ns;
+    uint32_t prof_w_hist[32768];
 } store_worker;
 
 static _Thread_local store_worker *g_drain_worker = NULL;
@@ -758,6 +767,19 @@ int extstore_workers_prepare(void *ptr, unsigned int nworkers,
     if (!e->wbounce_mr) {
         fprintf(stderr, "extstore: reg_mr(worker bounce %zuB) failed: %s\n",
                 bsz, strerror(errno));
+        return -1;
+    }
+    /* P2b: per-worker staging partition (WRITE source), 64-slot bitmap cap. */
+    e->w_staging_slots = e->staging_count / nworkers;
+    if (e->w_staging_slots > 64) e->w_staging_slots = 64;
+    if (e->w_staging_slots < 1) e->w_staging_slots = 1;
+    size_t ssz = (size_t)nworkers * e->w_staging_slots * e->slot_size;
+    e->wstaging_base = dma_alloc(ssz);
+    if (!e->wstaging_base) return -1;
+    e->wstaging_mr = ibv_reg_mr(e->pd, e->wstaging_base, ssz, IBV_ACCESS_LOCAL_WRITE);
+    if (!e->wstaging_mr) {
+        fprintf(stderr, "extstore: reg_mr(worker staging %zuB) failed: %s\n",
+                ssz, strerror(errno));
         return -1;
     }
     return 0;
@@ -800,6 +822,11 @@ void *extstore_worker_create(void *ptr, unsigned int worker_id) {
     w->bounce_base = e->wbounce_base
         + (size_t)worker_id * e->read_slots * e->slot_size;
     w->bounce_free = (e->read_slots >= 64) ? ~0ULL : ((1ULL << e->read_slots) - 1);
+    w->staging_slots = e->w_staging_slots;
+    w->staging_base = e->wstaging_base
+        + (size_t)worker_id * e->w_staging_slots * e->slot_size;
+    w->staging_free = (w->staging_slots >= 64) ? ~0ULL
+                                               : ((1ULL << w->staging_slots) - 1);
     w->cq = ibv_create_cq(e->pd->context, 2 * w->window * w->nqp, NULL, NULL, 0);
     if (!w->cq) {
         fprintf(stderr, "extstore: worker %u create_cq failed: %s\n",
@@ -892,6 +919,61 @@ static void worker_post(store_worker *w, obj_io *chain) {
     }
 }
 
+/* P2b: worker-private staging slot (no lock; owner-only). */
+char *extstore_worker_staging_get(void *worker) {
+    store_worker *w = worker;
+    if (!w || w->staging_free == 0) return NULL;
+    int slot = __builtin_ffsll((long long)w->staging_free) - 1;
+    w->staging_free &= ~(1ULL << slot);
+    return w->staging_base + (size_t)slot * w->e->slot_size;
+}
+
+void extstore_worker_staging_put(void *worker, char *slot) {
+    store_worker *w = worker;
+    if (!w || !slot) return;
+    w->staging_free |= 1ULL << ((slot - w->staging_base) / w->e->slot_size);
+}
+
+/* P2b: post one WRITE inline. WRITE is exempt from ORD (READ-only limit) but
+ * still counts against the worker window. Returns 0 on post. */
+int extstore_worker_post_write(void *worker, obj_io *io) {
+    store_worker *w = worker;
+    store_engine *e = w->e;
+    if (atomic_load(&e->dead)) return -1;
+    unsigned int qi = w->rr % w->nqp;
+    struct ibv_sge sg = { .addr = (uintptr_t)io->buf, .length = io->len,
+        .lkey = e->wstaging_mr->lkey };
+    /* push the sealed bytes to the device before the NIC reads them */
+    uint64_t t_sync_start = g_prof_on ? prof_rdtsc() : 0;
+    if (g_prof_on && io->t_start && io->t_end >= io->t_start)
+        w->prof_w_crypto_ns += (uint64_t)((io->t_end - io->t_start) * g_ns_per_cycle);
+    int adv = ibv_advise_mr(e->pd, IBV_ADVISE_MR_ADVICE_SYNC_FOR_DEVICE,
+                            IBV_ADVISE_MR_FLAG_FLUSH, &sg, 1);
+    static _Atomic int w_dev_warned;
+    if (adv && !atomic_exchange(&w_dev_warned, 1))
+        fprintf(stderr, "extstore: worker SYNC_FOR_DEVICE advise failed: %s\n",
+                strerror(adv));
+    if (g_prof_on) {
+        uint64_t ts = prof_rdtsc();
+        w->prof_w_sync_ns += (uint64_t)((ts - t_sync_start) * g_ns_per_cycle);
+        io->t_end = ts;
+    }
+    struct ibv_send_wr *bad, wr = { .wr_id = (uintptr_t)io, .sg_list = &sg,
+        .num_sge = 1, .send_flags = IBV_SEND_SIGNALED, .opcode = IBV_WR_RDMA_WRITE };
+    wr.wr.rdma.remote_addr = e->raddr + e->pages[io->page_id].remote_off + io->offset;
+    wr.wr.rdma.rkey = e->rkey;
+    wr.next = NULL;
+    io->wqp = qi;
+    if (ibv_post_send(w->qp[qi], &wr, &bad)) {
+        atomic_store(&e->dead, 1);
+        STAT_L(e); e->stats.engine_dead = 1; e->stats.write_failures++; STAT_UL(e);
+        return -1;
+    }
+    w->outstanding++;
+    w->rr = (qi + 1) % w->nqp;
+    return 0;
+}
+
 int extstore_worker_submit(void *worker, obj_io *chain) {
     store_worker *w = worker;
     if (!w) return -1;
@@ -926,7 +1008,7 @@ int extstore_worker_drain(void *worker, int budget) {
     int nsync = 0;
     for (int i = 0; i < c; i++) {
         obj_io *io = (obj_io *)(uintptr_t)wc[i].wr_id;
-        if (wc[i].status == IBV_WC_SUCCESS)
+        if (io->mode == OBJ_IO_READ && wc[i].status == IBV_WC_SUCCESS)
             sync_sg[nsync++] = (struct ibv_sge){ .addr = (uintptr_t)io->buf,
                 .length = io->len, .lkey = e->wbounce_mr->lkey };
     }
@@ -944,25 +1026,38 @@ int extstore_worker_drain(void *worker, int budget) {
     for (int i = 0; i < c; i++) {
         obj_io *io = (obj_io *)(uintptr_t)wc[i].wr_id;
         int ok = (wc[i].status == IBV_WC_SUCCESS);
+        int is_read = (io->mode == OBJ_IO_READ);
         unsigned int len = io->len;
         char *buf = io->buf;
         unsigned int qi = io->wqp;
         if (g_prof_on && ok && io->t_start) {
-            w->prof_r_xfer_ns += (uint64_t)((t_poll - io->t_start) * g_ns_per_cycle);
-            w->prof_r_sync_ns += (uint64_t)((t_sync_done - t_poll) * g_ns_per_cycle);
-            io->t_end = t_sync_done;
+            if (is_read) {
+                w->prof_r_xfer_ns += (uint64_t)((t_poll - io->t_start) * g_ns_per_cycle);
+                w->prof_r_sync_ns += (uint64_t)((t_sync_done - t_poll) * g_ns_per_cycle);
+                io->t_end = t_sync_done;
+            } else {
+                prof_record(w->prof_w_hist, &w->prof_w_count, &w->prof_w_sum_ns,
+                            t_poll - io->t_start);
+                w->prof_w_xfer_ns += (uint64_t)((t_poll - io->t_end) * g_ns_per_cycle);
+            }
         }
         if (!ok) {
             atomic_store(&e->dead, 1);
             STAT_L(e);
             e->stats.engine_dead = 1;
-            e->stats.read_failures++;
+            if (is_read) e->stats.read_failures++; else e->stats.write_failures++;
             STAT_UL(e);
         }
         /* cb may re-submit (retry) — it grabs a fresh slot; free ours after. */
         io->cb(e, io, ok ? (int)len : -1);
-        w->bounce_free |= 1ULL << ((buf - w->bounce_base) / e->slot_size);
-        w->read_out[qi]--;
+        if (is_read) {
+            w->bounce_free |= 1ULL << ((buf - w->bounce_base) / e->slot_size);
+            w->read_out[qi]--;
+        } else if (ok) {
+            STAT_L(e);
+            e->stats.objects_written++; e->stats.bytes_written += len;
+            STAT_UL(e);
+        }
         w->outstanding--;
     }
     g_drain_worker = NULL;
@@ -1041,13 +1136,14 @@ static void prof_summarize(store_engine *e, int read,
         for (int b = 0; b < PROF_BUCKETS; b++) merged[b] += h[b];
     }
     /* v2 (P2a): worker-inline READs record into per-worker blocks */
-    if (read && e->workers) {
+    if (e->workers) {
         for (unsigned int i = 0; i < e->worker_count; i++) {
             store_worker *w = e->workers[i];
             if (!w) continue;
-            total += w->prof_r_count;
-            sum   += w->prof_r_sum_ns;
-            for (int b = 0; b < PROF_BUCKETS; b++) merged[b] += w->prof_r_hist[b];
+            total += read ? w->prof_r_count : w->prof_w_count;
+            sum   += read ? w->prof_r_sum_ns : w->prof_w_sum_ns;
+            uint32_t *h = read ? w->prof_r_hist : w->prof_w_hist;
+            for (int b = 0; b < PROF_BUCKETS; b++) merged[b] += h[b];
         }
     }
     *count = total; *avg = total ? sum / total : 0;
@@ -1085,8 +1181,9 @@ void extstore_get_stats(void *ptr, struct extstore_stats *st) {
             for (unsigned int i = 0; i < e->worker_count; i++) {
                 store_worker *w = e->workers[i];
                 if (!w) continue;
-                rc += w->prof_r_crypto_ns;
+                rc += w->prof_r_crypto_ns; wc += w->prof_w_crypto_ns;
                 rs += w->prof_r_sync_ns; rx += w->prof_r_xfer_ns;
+                ws += w->prof_w_sync_ns; wx += w->prof_w_xfer_ns;
             }
         }
         st->prof_read_crypto_avg_ns = st->prof_read_count ? rc / st->prof_read_count : 0;
@@ -1113,8 +1210,11 @@ void extstore_prof_reset(void *ptr) {
             store_worker *w = e->workers[i];
             if (!w) continue;
             w->prof_r_count = w->prof_r_sum_ns = 0;
+            w->prof_w_count = w->prof_w_sum_ns = 0;
             w->prof_r_crypto_ns = w->prof_r_sync_ns = w->prof_r_xfer_ns = 0;
+            w->prof_w_crypto_ns = w->prof_w_sync_ns = w->prof_w_xfer_ns = 0;
             memset(w->prof_r_hist, 0, sizeof(w->prof_r_hist));
+            memset(w->prof_w_hist, 0, sizeof(w->prof_w_hist));
         }
     }
 }

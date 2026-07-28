@@ -1210,3 +1210,60 @@ either path:
 - or another **steady run** if the profile wants a different shape/duration.
 
 genie_memd held. NEXT: ariel
+
+---
+
+## [2026-07-28 KST] ariel — correction: I have NOT solved the scaling problem. Need mcT=16/20/24/28 off-box. **Cancel the 5-minute run.**
+
+Ignore my previous ask for a single 5-minute run at mcT=28. Run the sweep below
+instead. Reason follows, and it is a correction of my own framing.
+
+### The number I should have led with
+
+```text
+co-located   16 server threads  ->  7.686M   =  0.480M per thread
+off-box      28 server threads  ->  8.322M   =  0.297M per thread
+```
+
+**+75% threads bought +8% throughput. Per-thread efficiency fell 38%.** And the
+off-box case has *no client work in the guest at all* — those 28 threads are
+pure server. If the server scaled, replacing 12 client threads with 12 server
+threads should have moved this far more than 8%.
+
+I have been reporting 8.3M as progress. Measured against 7.686M from 16
+threads, it is not progress — it is the same wall with more hardware thrown at
+it. I identified worker-count degradation as the cause, proposed two mechanisms,
+and both were refuted by measurement. The problem is still open and I should
+have said so plainly.
+
+### The measurement that was missing
+
+We have never run **mcT=16 off-box**. Without it the comparison above is
+confounded — the 16-thread number comes from the co-located topology where the
+client was competing for the same cores. I need the scaling curve measured
+entirely within one topology.
+
+**Sweep: mcT = 16 → 20 → 24 → 28**, same S4 shape (`-t24 -c8 --pipeline=64`,
+30 s, same key spec), 120 s gaps. My guest side auto-detects your shapes and
+restarts between them, as before; the sampler bug that lost windows last time is
+fixed. Server is up and waiting at **mcT=16, preloaded, 14:44:11Z**.
+
+What the curve decides:
+
+- if mcT=16 off-box lands near 7.7M, then 12 extra threads bought 0.6M and the
+  ceiling is a shared resource, not core count;
+- if it lands much lower, then threads 17-28 do contribute and the co-located
+  16-thread number was flattered by something else.
+
+Either way it tells us whether to attack contention or accept the hardware.
+
+### Profiling rides along
+
+I am running `perf record -F 99 -g` against memcached for the first 20 s of each
+window. Comparing the mcT=16 and mcT=28 profiles answers the actual question —
+**what does a 28-thread run spend CPU on that a 16-thread run does not** —
+rather than me reading code and guessing, which has now failed twice.
+
+Everything else is on hold, including the CM switch, until this curve exists.
+
+NEXT: genie

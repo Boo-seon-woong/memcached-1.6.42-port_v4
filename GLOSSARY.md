@@ -10,7 +10,7 @@
 | QP | RC Queue Pair. 기본은 worker당 1개이며 총 QP=`mcT × ext_qp_per_worker`. |
 | CQ | worker 하나의 모든 QP가 공유하는 completion queue. 소유 worker만 poll한다. |
 | window / `W` | worker당 미완료 READ+WRITE 상한. `ext_worker_window`, 기본 16. |
-| ORD | QP당 wire상의 RDMA READ 상한. 현재 16. WRITE에는 적용되지 않는다. |
+| ORD | QP당 wire상의 RDMA READ 상한. 기본은 CM 협상값(이 HCA에서 16). `ext_ord_limit`으로 고정 가능하며, 협상값보다 크게 잡으면 초과분은 SQ에 쌓인다. WRITE에는 적용되지 않는다. |
 | pipeline | memtier connection당 outstanding request 수. RDMA batching이나 server `-R`이 아니다. |
 | `-R` | memcached가 한 socket event에서 처리하는 request 수 상한. |
 | bounce slot | RDMA READ가 도착하는 worker-private DMA buffer. `EXT_READ_SLOTS`, 최대 64. |
@@ -41,9 +41,11 @@ Genie에서 memtier를 실행한 결과를 canonical v2 run으로 취급하지 �
 | 이름 | 기본값 | 범위/설명 |
 |---|---:|---|
 | `-t` | upstream 기본 4 | worker 수 |
-| `ext_worker_window` | 16 | 1..64 |
-| `ext_qp_per_worker` | 1 | 1..4 |
-| `ext_drain_spin` | 1024 | 0..4096 |
+| `ext_worker_window` | 16 | >= 1, 상한 없음 |
+| `ext_qp_per_worker` | 1 | >= 1, 상한 없음 |
+| `ext_drain_spin` | 1024 | >= 0, 상한 없음 |
+| `ext_ord_limit` | 0 | 0 = CM 협상값 채택. 값을 주면 그대로 사용 |
+| `ext_batch` | 32 | >= 1. post/drain 한 번의 WR·CQE 묶음 크기 |
 | `EXT_SLOT_SIZE` | 256 B | slabs와 RDMA engine이 공유하는 sealed-object 한도 |
 | `EXT_READ_SLOTS` | 32 | worker당, 최대 64 |
 | `EXT_WRITE_SLOTS` | 256 | process 예산을 worker 수로 나눔 |
@@ -68,8 +70,11 @@ worker 총 wire READ <= 16 × QP/worker
 offered client requests ≈ memtier_threads × clients × pipeline
 ```
 
-`W>16`은 QP가 1개면 wire READ 병렬도를 16 이상 늘리지 못한다.
+`W>ORD`는 QP가 1개면 wire READ 병렬도를 그 이상 늘리지 못한다.
 `ext_qp_per_worker>1`은 W도 함께 키운 실험에서만 의미가 있다.
+
+v2는 이 축들에 상한을 두지 않는다. 성능이 나쁜 설정도 유효한 측정 결과이므로
+엔진이 대신 판단하지 않으며, 동작에 필요한 하한(>=1)만 검사한다.
 
 ## 데이터와 보안 계약
 

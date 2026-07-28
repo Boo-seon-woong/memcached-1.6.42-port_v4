@@ -729,6 +729,8 @@ void *storage_init_config(struct settings *s) {
         cf->ext_cf.write_slots = 0;
     cf->ext_cf.worker_window = 16;   /* v2 P2a; ORD boundary for nqp=1 */
     cf->ext_cf.qp_per_worker = 1;
+    cf->ext_cf.ord_limit = 0;      /* 0 = adopt the CM-negotiated per-QP depth */
+    cf->ext_cf.batch = EXT_BATCH_DEFAULT;
     if ((v = getenv("EXT_READ_RETRIES"))) g_read_retries = atoi(v);
     if (getenv("EXT_TRACE_SEAL")) {
         g_seal_tab = calloc(SEAL_TRACE_MAX, sizeof(*g_seal_tab));
@@ -749,6 +751,8 @@ int storage_read_config(void *conf, char **subopt) {
         EXT_PATH,
         EXT_WORKER_WINDOW,
         EXT_QP_PER_WORKER,
+        EXT_ORD_LIMIT,
+        EXT_BATCH,
         EXT_DRAIN_SPIN,
     };
 
@@ -757,6 +761,8 @@ int storage_read_config(void *conf, char **subopt) {
         [EXT_PATH] = "ext_path",
         [EXT_WORKER_WINDOW] = "ext_worker_window",
         [EXT_QP_PER_WORKER] = "ext_qp_per_worker",
+        [EXT_ORD_LIMIT] = "ext_ord_limit",
+        [EXT_BATCH] = "ext_batch",
         [EXT_DRAIN_SPIN] = "ext_drain_spin",
         NULL
     };
@@ -776,24 +782,41 @@ int storage_read_config(void *conf, char **subopt) {
         case EXT_WORKER_WINDOW:
             if (subopts_value == NULL ||
                 !safe_strtoul(subopts_value, &ext_cf->worker_window) ||
-                ext_cf->worker_window < 1 || ext_cf->worker_window > 64) {
-                fprintf(stderr, "ext_worker_window must be 1..64\n");
+                ext_cf->worker_window < 1) {
+                fprintf(stderr, "ext_worker_window must be >= 1\n");
                 return 1;
             }
             break;
         case EXT_DRAIN_SPIN:
             if (subopts_value == NULL ||
                 !safe_strtoul(subopts_value, &settings.ext_drain_spin) ||
-                settings.ext_drain_spin > 4096) {
-                fprintf(stderr, "ext_drain_spin must be 0..4096\n");
+                false) {
+                fprintf(stderr, "ext_drain_spin must be a number\n");
                 return 1;
             }
             break;
         case EXT_QP_PER_WORKER:
             if (subopts_value == NULL ||
                 !safe_strtoul(subopts_value, &ext_cf->qp_per_worker) ||
-                ext_cf->qp_per_worker < 1 || ext_cf->qp_per_worker > EXT_QP_MAX) {
-                fprintf(stderr, "ext_qp_per_worker must be 1..%d\n", EXT_QP_MAX);
+                ext_cf->qp_per_worker < 1) {
+                fprintf(stderr, "ext_qp_per_worker must be >= 1\n");
+                return 1;
+            }
+            break;
+        case EXT_ORD_LIMIT:
+            /* 0 = adopt the CM-negotiated depth. A pinned value is honoured as
+             * given; exceeding the HCA's depth just queues in the SQ. */
+            if (subopts_value == NULL ||
+                !safe_strtoul(subopts_value, &ext_cf->ord_limit)) {
+                fprintf(stderr, "ext_ord_limit must be a number (0 = negotiated)\n");
+                return 1;
+            }
+            break;
+        case EXT_BATCH:
+            if (subopts_value == NULL ||
+                !safe_strtoul(subopts_value, &ext_cf->batch) ||
+                ext_cf->batch < 1) {
+                fprintf(stderr, "ext_batch must be >= 1\n");
                 return 1;
             }
             break;

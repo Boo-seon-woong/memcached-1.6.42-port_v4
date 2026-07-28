@@ -119,17 +119,26 @@ typedef struct store_engine store_engine;
 
 typedef struct store_worker {
     store_engine *e;
-    struct rdma_cm_id *cm_id[EXT_QP_MAX];
-    struct ibv_qp *qp[EXT_QP_MAX];
+    struct rdma_cm_id **cm_id;           /* [nqp] */
+    struct ibv_qp **qp;                  /* [nqp] */
     struct ibv_cq *cq;
     unsigned int nqp, rr;
-    unsigned int read_out[EXT_QP_MAX];
+    unsigned int *read_out;              /* [nqp] per-QP outstanding READ */
+    unsigned int ord_limit;              /* per-QP READ gate (input/negotiated) */
     unsigned int outstanding, window;
     char *bounce_base;
-    uint64_t bounce_free;
+    uint64_t *bounce_free;               /* bitmap, [bounce_words] */
+    unsigned int bounce_words, bounce_slots;
     char *staging_base;
-    uint64_t staging_free;
-    unsigned int staging_slots;
+    uint64_t *staging_free;              /* bitmap, [staging_words] */
+    unsigned int staging_words, staging_slots;
+    /* per-post/drain scratch, sized by ext_batch (no stack arrays -> no cap) */
+    unsigned int batch;
+    struct ibv_send_wr *wrs;
+    struct ibv_sge *sg;
+    struct obj_io **ios;
+    struct ibv_wc *wc;
+    struct ibv_sge *sync_sg;
     obj_io *wait_head, *wait_tail;
     atomic_uint_fast64_t drain_calls, drain_empty, wait_enq;
     uint64_t prof_r_count, prof_r_sum_ns;
@@ -157,6 +166,7 @@ struct store_engine {
     char *wstaging_base;                 /* P2b */
     struct ibv_mr *wstaging_mr;
     unsigned int w_staging_slots, write_slots;
+    unsigned int ord_limit, batch;
     struct sockaddr_in peer;
     atomic_uint_fast64_t dead;           /* QP error -> fail-fast */
     pthread_mutex_t mutex;               /* pages / buckets / freeloc */
@@ -280,8 +290,10 @@ void *extstore_init(struct extstore_conf_file *fh, struct extstore_conf *cf,
     e->page_size = cf->page_size;
     e->page_bucketcount = cf->page_buckets ? cf->page_buckets : 1;
     e->slot_size = cf->slot_size;
-    e->read_slots = cf->read_slots > 64 ? 64 : cf->read_slots;
+    e->read_slots = cf->read_slots < 1 ? 1 : cf->read_slots;
     e->write_slots = cf->write_slots ? cf->write_slots : 256;
+    e->ord_limit = cf->ord_limit;                 /* 0 = use negotiated */
+    e->batch = cf->batch ? cf->batch : EXT_BATCH_DEFAULT;
     e->peer = (struct sockaddr_in){ .sin_family = AF_INET,
         .sin_port = htons(fh->cport) };
     if (inet_pton(AF_INET, fh->file, &e->peer.sin_addr) != 1) {
@@ -402,6 +414,32 @@ void extstore_free_loc(void *ptr, const struct ext_loc *loc) {
 
 /* ---- v2 worker-inline READ/WRITE path ---- */
 
+/* Slot bitmaps. One word covers 64 slots, so the <=64 case costs exactly the
+ * same single ffsll as the old scalar bitmap; wider pools just loop. */
+static inline int bm_alloc(uint64_t *bm, unsigned int words) {
+    for (unsigned int i = 0; i < words; i++) {
+        if (bm[i]) {
+            int b = __builtin_ffsll((long long)bm[i]) - 1;
+            bm[i] &= ~(1ULL << b);
+            return (int)(i * 64) + b;
+        }
+    }
+    return -1;
+}
+
+static inline void bm_free(uint64_t *bm, int slot) {
+    bm[slot / 64] |= 1ULL << (slot % 64);
+}
+
+static inline uint64_t *bm_new(unsigned int slots, unsigned int *words_out) {
+    unsigned int words = (slots + 63) / 64;
+    uint64_t *bm = calloc(words, sizeof(uint64_t));
+    if (!bm) return NULL;
+    for (unsigned int i = 0; i < slots; i++) bm[i / 64] |= 1ULL << (i % 64);
+    *words_out = words;
+    return bm;
+}
+
 static _Thread_local store_worker *g_drain_worker = NULL;
 
 void *extstore_worker_current(void) { return g_drain_worker; }
@@ -443,12 +481,28 @@ static int cm_connect_worker_qp(store_engine *e, store_worker *w,
     if (rdma_create_qp(w->cm_id[qi], e->pd, &ia)) WCM_FAIL("create_qp");
     w->qp[qi] = w->cm_id[qi]->qp;
 
-    struct rdma_conn_param cp = { .responder_resources = 16,
-        .initiator_depth = 16, .retry_count = 7, .rnr_retry_count = 7 };
+    /* Ask for the configured ORD; 0 means "ask for the device maximum and take
+     * whatever the CM negotiates". The negotiated value is adopted below unless
+     * the operator pinned one explicitly. */
+    unsigned int ask = e->ord_limit;
+    if (ask == 0) {
+        struct ibv_device_attr da;
+        ask = (ibv_query_device(w->cm_id[qi]->verbs, &da) == 0 &&
+               da.max_qp_rd_atom > 0) ? (unsigned int)da.max_qp_rd_atom : 16;
+    }
+    struct rdma_conn_param cp = { .responder_resources = (uint8_t)ask,
+        .initiator_depth = (uint8_t)ask, .retry_count = 7, .rnr_retry_count = 7 };
     struct rdma_cm_event *ev;
     if (rdma_connect(w->cm_id[qi], &cp)) WCM_FAIL("connect");
     if (cm_wait(ch, RDMA_CM_EVENT_ESTABLISHED, &ev))
         WCM_FAIL("ESTABLISHED event");
+    /* Adopt the negotiated depth when the operator did not pin one. A pinned
+     * value is honoured verbatim even if it exceeds what the HCA negotiated —
+     * the excess simply queues in the SQ, which is a measurable outcome. */
+    if (e->ord_limit == 0) {
+        unsigned int neg = ev->param.conn.initiator_depth;
+        w->ord_limit = neg ? neg : ask;
+    }
     if (first) {
         if (ev->param.conn.private_data_len < sizeof(struct xrd_mr_info)) {
             rdma_ack_cm_event(ev);
@@ -492,10 +546,10 @@ int extstore_workers_prepare(void *ptr, unsigned int nworkers,
                              unsigned int nqp, unsigned int window) {
     store_engine *e = ptr;
     if (!e || nworkers == 0) return -1;
+    /* Functional floors only. No upper clamp: an oversized setting is the
+     * operator's experiment, and its cost is a measurement (see md/). */
     if (nqp < 1) nqp = 1;
-    if (nqp > EXT_QP_MAX) nqp = EXT_QP_MAX;
     if (window < 1) window = 1;
-    if (window > 64) window = 64;
     e->w_nqp = nqp;
     e->w_window = window;
     e->worker_count = nworkers;
@@ -508,6 +562,18 @@ int extstore_workers_prepare(void *ptr, unsigned int nworkers,
         w->e = e;
         w->nqp = nqp;
         w->window = window;
+        w->batch = e->batch;
+        w->ord_limit = e->ord_limit;   /* may be replaced by negotiated value */
+        w->cm_id = calloc(nqp, sizeof(*w->cm_id));
+        w->qp = calloc(nqp, sizeof(*w->qp));
+        w->read_out = calloc(nqp, sizeof(*w->read_out));
+        w->wrs = calloc(w->batch, sizeof(*w->wrs));
+        w->sg = calloc(w->batch, sizeof(*w->sg));
+        w->ios = calloc(w->batch, sizeof(*w->ios));
+        w->wc = calloc(w->batch, sizeof(*w->wc));
+        w->sync_sg = calloc(w->batch, sizeof(*w->sync_sg));
+        if (!w->cm_id || !w->qp || !w->read_out || !w->wrs || !w->sg ||
+            !w->ios || !w->wc || !w->sync_sg) return -1;
         e->workers[i] = w;
     }
 
@@ -519,8 +585,10 @@ int extstore_workers_prepare(void *ptr, unsigned int nworkers,
                 return -1;
     }
     fprintf(stderr, "extstore: genie_connect OK (raddr=0x%lx rkey=0x%x size=%lu, "
-            "workers=%u qps/worker=%u)\n", (unsigned long)e->raddr, e->rkey,
-            (unsigned long)rsize, nworkers, nqp);
+            "workers=%u qps/worker=%u window=%u ord=%u%s batch=%u)\n",
+            (unsigned long)e->raddr, e->rkey, (unsigned long)rsize, nworkers,
+            nqp, window, e->workers[0]->ord_limit,
+            e->ord_limit ? " pinned" : " negotiated", e->batch);
 
     size_t bsz = (size_t)nworkers * e->read_slots * e->slot_size;
     e->wbounce_base = dma_alloc(bsz);
@@ -534,7 +602,6 @@ int extstore_workers_prepare(void *ptr, unsigned int nworkers,
     }
 
     e->w_staging_slots = e->write_slots / nworkers;
-    if (e->w_staging_slots > 64) e->w_staging_slots = 64;
     if (e->w_staging_slots < 1) e->w_staging_slots = 1;
     size_t ssz = (size_t)nworkers * e->w_staging_slots * e->slot_size;
     e->wstaging_base = dma_alloc(ssz);
@@ -551,13 +618,13 @@ int extstore_workers_prepare(void *ptr, unsigned int nworkers,
         store_worker *w = e->workers[i];
         w->bounce_base = e->wbounce_base
             + (size_t)i * e->read_slots * e->slot_size;
-        w->bounce_free = e->read_slots >= 64 ? ~0ULL
-                                             : ((1ULL << e->read_slots) - 1);
+        w->bounce_slots = e->read_slots;
+        w->bounce_free = bm_new(w->bounce_slots, &w->bounce_words);
         w->staging_slots = e->w_staging_slots;
         w->staging_base = e->wstaging_base
             + (size_t)i * e->w_staging_slots * e->slot_size;
-        w->staging_free = w->staging_slots >= 64 ? ~0ULL
-                                                  : ((1ULL << w->staging_slots) - 1);
+        w->staging_free = bm_new(w->staging_slots, &w->staging_words);
+        if (!w->bounce_free || !w->staging_free) return -1;
     }
 
     if (getenv("EXT_SELFTEST") && selftest(e, e->workers[0]) != 0)
@@ -577,9 +644,9 @@ void *extstore_worker_create(void *ptr, unsigned int worker_id) {
  * Runs only on the owning worker thread. */
 static void worker_post(store_worker *w, obj_io *chain) {
     store_engine *e = w->e;
-    struct ibv_send_wr wrs[32], *bad;
-    struct ibv_sge sg[32];
-    obj_io *ios[32];
+    struct ibv_send_wr *wrs = w->wrs, *bad;
+    struct ibv_sge *sg = w->sg;
+    obj_io **ios = (obj_io **)w->ios;
 
     while (chain) {
         if (atomic_load(&e->dead)) {
@@ -590,17 +657,16 @@ static void worker_post(store_worker *w, obj_io *chain) {
         unsigned int qi = UINT_MAX;
         for (unsigned int k = 0; k < w->nqp; k++) {
             unsigned int cand = (w->rr + k) % w->nqp;
-            if (w->read_out[cand] < EXT_ORD_LIMIT) { qi = cand; break; }
+            if (w->read_out[cand] < w->ord_limit) { qi = cand; break; }
         }
         int n = 0;
-        while (chain && n < 32 && w->outstanding < w->window &&
-               w->bounce_free != 0 && qi != UINT_MAX &&
-               w->read_out[qi] + n < EXT_ORD_LIMIT) {
+        while (chain && (unsigned int)n < w->batch && w->outstanding < w->window &&
+               qi != UINT_MAX && w->read_out[qi] + n < w->ord_limit) {
+            int slot = bm_alloc(w->bounce_free, w->bounce_words);
+            if (slot < 0) break;                    /* bounce pool exhausted */
             obj_io *io = chain;
             chain = io->next;
             io->next = NULL;
-            int slot = __builtin_ffsll((long long)w->bounce_free) - 1;
-            w->bounce_free &= ~(1ULL << slot);
             io->buf = w->bounce_base + (size_t)slot * e->slot_size;
             io->wqp = qi;
             sg[n] = (struct ibv_sge){ .addr = (uintptr_t)io->buf, .length = io->len,
@@ -641,8 +707,8 @@ static void worker_post(store_worker *w, obj_io *chain) {
             for (int i = 0; i < n; i++) {
                 obj_io *io = ios[i];
                 w->outstanding--;
-                w->bounce_free |= 1ULL <<
-                        ((io->buf - w->bounce_base) / e->slot_size);
+                bm_free(w->bounce_free,
+                        (int)((io->buf - w->bounce_base) / e->slot_size));
                 STAT_L(e); e->stats.read_failures++; STAT_UL(e);
                 io->cb(e, io, -1);
             }
@@ -655,16 +721,16 @@ static void worker_post(store_worker *w, obj_io *chain) {
 /* P2b: worker-private staging slot (no lock; owner-only). */
 char *extstore_worker_staging_get(void *worker) {
     store_worker *w = worker;
-    if (!w || w->staging_free == 0) return NULL;
-    int slot = __builtin_ffsll((long long)w->staging_free) - 1;
-    w->staging_free &= ~(1ULL << slot);
+    if (!w) return NULL;
+    int slot = bm_alloc(w->staging_free, w->staging_words);
+    if (slot < 0) return NULL;
     return w->staging_base + (size_t)slot * w->e->slot_size;
 }
 
 void extstore_worker_staging_put(void *worker, char *slot) {
     store_worker *w = worker;
     if (!w || !slot) return;
-    w->staging_free |= 1ULL << ((slot - w->staging_base) / w->e->slot_size);
+    bm_free(w->staging_free, (int)((slot - w->staging_base) / w->e->slot_size));
 }
 
 /* P2b: post one WRITE inline. WRITE is exempt from ORD (READ-only limit) but
@@ -730,9 +796,10 @@ int extstore_worker_submit(void *worker, obj_io *chain) {
 int extstore_worker_drain(void *worker, int budget) {
     store_worker *w = worker;
     store_engine *e = w->e;
-    struct ibv_wc wc[32];
-    struct ibv_sge sync_sg[32];
-    if (budget > 32) budget = 32;
+    struct ibv_wc *wc = w->wc;
+    struct ibv_sge *sync_sg = w->sync_sg;
+    if (budget < 1) budget = 1;
+    if ((unsigned int)budget > w->batch) budget = (int)w->batch;
 
     atomic_fetch_add(&w->drain_calls, 1);
     int c = ibv_poll_cq(w->cq, budget, wc);
@@ -788,7 +855,7 @@ int extstore_worker_drain(void *worker, int budget) {
         /* cb may re-submit (retry) — it grabs a fresh slot; free ours after. */
         io->cb(e, io, ok ? (int)len : -1);
         if (is_read) {
-            w->bounce_free |= 1ULL << ((buf - w->bounce_base) / e->slot_size);
+            bm_free(w->bounce_free, (int)((buf - w->bounce_base) / e->slot_size));
             w->read_out[qi]--;
         } else if (ok) {
             STAT_L(e);

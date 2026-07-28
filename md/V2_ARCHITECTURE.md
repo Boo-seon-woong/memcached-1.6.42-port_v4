@@ -55,6 +55,8 @@ window로 바뀐 것**이다.
 | `ext_threads` (= IO thread 수 = QP 수, 1:1) | **삭제** | QP 수는 `-t × ext_qp_per_worker`로 파생. §2.1 |
 | — | **`ext_qp_per_worker`** | 신규. worker당 QP 개수 (1..4, 기본 1) |
 | — | **`ext_drain_spin`** | 신규. batch 처리 후 CQ를 몇 번까지 더 훑을지 (기본 1024) |
+| (하드코딩 16) | **`ext_ord_limit`** | 신규. 기본 0 = CM 협상값 채택 |
+| (하드코딩 32) | **`ext_batch`** | 신규. post/drain 한 번의 WR·CQE 묶음 크기 |
 | `-t N` (worker 수) | `-t N` — **의미가 늘었다** | 기존 knob이지만 이제 QP 수·RDMA 병렬도·bounce/staging 파티션 수까지 결정한다 |
 | IO thread별 bounce pool | worker별 bounce/staging 파티션 | 소유자만 바뀜 |
 | global staging + mutex/cond | worker별 staging 파티션, lock 없음 | 삭제 |
@@ -86,13 +88,14 @@ v2:  QP 수 = -t × ext_qp_per_worker   (worker 수에서 파생)
 | v1 `ext_io_depth`의 역할 | v2 대응 | 걸리는 단위 | 코드 |
 |---|---|---|---|
 | 미완료 개수 소프트 상한 | `ext_worker_window` (W) | **worker** | `w->outstanding < w->window` |
-| (암묵적) wire 동시성 한계 | `EXT_ORD_LIMIT` = 16 | **QP** | `w->read_out[qi] < EXT_ORD_LIMIT` |
+| (암묵적) wire 동시성 한계 | `ext_ord_limit` (기본 = 협상값) | **QP** | `w->read_out[qi] < w->ord_limit` |
 
 왜 쪼개졌나: v1은 IO thread ↔ QP가 1:1이라 "thread당 depth"와 "QP당 depth"가
 같은 말이었다. v2는 worker 하나가 QP를 여러 개 가질 수 있어(CQ는 공유) 그 두
 층이 분리됐고, 각자 다른 상한을 받는다.
 
-**ORD 16은 v1에도 있었다** — 코드가 추적하지 않아 보이지 않았을 뿐이다.
+**ORD는 v1에도 있었다** — 코드가 추적하지 않아 보이지 않았을 뿐이다. v2 초기에는
+16으로 하드코딩돼 있었으나 지금은 CM 협상값을 채택한다(이 HCA에서 실측 16).
 v1에서 `depth=64`를 줘도 wire에 나가는 READ는 16개가 한계였고 나머지는 SQ에서
 대기했다. depth를 16 너머로 올려도 throughput이 늘지 않던 v1 실측이 정확히
 이것이다. v2는 `read_out[]`으로 이를 명시 추적해 초과 post를 하지 않는다.
@@ -124,9 +127,13 @@ QP 하나의 wire READ        <= 16
 worker 전체 wire READ      <= 16 × ext_qp_per_worker
 ```
 
-즉 **QP가 1개면 W를 16 너머로 키워도 wire 병렬도는 안 늘어난다** — 초과분은
-SQ에서 기다릴 뿐이다. `W>16` 실험은 `ext_qp_per_worker`를 함께 올릴 때만
-의미가 있다. 기본값 W=16은 이 ORD 경계에 맞춘 값이다.
+즉 **QP가 1개면 W를 ORD 너머로 키워도 wire 병렬도는 안 늘어난다** — 초과분은
+SQ에서 기다릴 뿐이다. `W>ORD` 실험은 `ext_qp_per_worker`를 함께 올릴 때만
+의미가 있다. 기본값 W=16은 이 HCA의 ORD 경계에 맞춘 값이다.
+
+**이 축들에는 상한이 없다.** 성능이 나쁜 설정도 유효한 측정 결과이므로 엔진이
+대신 거부하지 않는다. 검사하는 것은 동작에 필요한 하한(>=1)뿐이고, 자원 배열과
+slot bitmap은 설정값에 맞춰 동적으로 잡힌다.
 
 ---
 

@@ -52,7 +52,10 @@ struct extstore_conf {
     unsigned int read_slots;   // bounce slots per worker (<= 64)
     unsigned int write_slots;  // total worker staging slots
     unsigned int worker_window;   // v2: per-worker outstanding cap (<= 64)
-    unsigned int qp_per_worker;   // v2: QPs per worker (1..EXT_QP_MAX)
+    unsigned int qp_per_worker;   // v2: QPs per worker (>=1, unbounded)
+    unsigned int ord_limit;       // v2: per-QP outstanding RDMA READ gate.
+                                  //     0 = use the CM-negotiated value.
+    unsigned int batch;           // v2: WR/CQE batch size per post/drain call
 };
 
 struct extstore_conf_file {
@@ -64,8 +67,10 @@ struct extstore_conf_file {
 };
 
 /* v2 (P2a): worker-inline READ path. */
-#define EXT_QP_MAX 4          /* ext_qp_per_worker upper bound */
-#define EXT_ORD_LIMIT 16      /* HCA max_qp_rd_atom; matches initiator_depth */
+/* v2: no compile-time ceiling on QP count, window, slots or ORD. Every limit
+ * is an input; a setting that performs badly is a measurement, not an error,
+ * so the engine does not second-guess it. Only functional floors (>=1) remain. */
+#define EXT_BATCH_DEFAULT 32  /* default WR/CQE batch; override via ext_batch */
 #ifndef EXT_SLOT_SIZE_DEFAULT
 #define EXT_SLOT_SIZE_DEFAULT 256
 #endif

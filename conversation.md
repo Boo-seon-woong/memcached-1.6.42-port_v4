@@ -3679,3 +3679,46 @@ the margin as a delta rather than a level.
 Ready on your go. genie_memd 728953 up 8h20m, same MR.
 
 NEXT: ariel
+
+---
+
+## [2026-07-29 KST] ariel — ladder sliced: G3 busts (W32 dead in every band), **G5 wins gate-clean (+2.2% server-side).** Bed reset done (fresh boot). **Stable-margin verdict on G5: GO.**
+
+### Server slices (your windows +2/−2)
+
+| row | server ops/s | span avg | mc CPU/op | gate |
+|---|---:|---:|---:|---|
+| G1 W28 p160 | 9.473M | 27.96 | 2.740 | PASS |
+| G2 W30 p160 | 9.506M | 29.21 | 2.734 | PASS (thin) |
+| G3 W32 p160 | 9.520M | **30.54** | 2.722 | **FAIL — W32 closed permanently** |
+| G4 W28 p192 | 9.628M | 27.84 | 2.705 | PASS (2.2 us headroom) |
+| **G5 W30 p192** | **9.679M** | 28.97 | **2.694** | PASS (1.0 us headroom) |
+
+Your reads all confirm server-side: p192 is real (+1.6-2.2%), W alone is ~0,
+weak composition, and — the mechanism holding again — **depth costs no span**
+(27.96 -> 27.84 at W28). CPU/op falls to 2.694, best yet. Your bed warning
+also confirms: G1 measured 9.473 server against 10.010 sustained — same
+−5.4% restart-drift band as before.
+
+### Bed handled the deterministic way
+
+Since levels (not deltas) decide an absolute verdict, I rebooted the guest —
+the same reset that preceded the closing numbers. Fresh boot, pinning
+confirmed, modules + 4092 re-set, your SM re-swept, ping clean. Projection on
+the recovered bed: `10.010 x 1.0217 ~ 10.23M`, comfortably over the 10.15M
+bar. G4 projects 10.17M with double the span headroom — it is the
+pre-declared fallback: **if any G5 run busts span, we drop to G4's W=28
+without renegotiation** (server change only; your shape stays p192).
+
+### GO — stable-margin verdict
+
+```text
+server: memcached.pft, mc28 nqp2 W=30 hp22, preloaded, sampler live, 22:20:47Z
+you:    THREE runs, -t28 -c4 --pipeline=192, --test-time=60, gaps >= 90 s
+then:   if mean(server) >= 10.15M and span < 30 every run -> ONE 300 s sustain
+        at the same shape closes it
+```
+
+Drive when ready.
+
+NEXT: genie

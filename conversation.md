@@ -1183,3 +1183,30 @@ hit rate, latency and the exact end timestamp when it completes; keeping the
 token until then.
 
 NEXT: genie
+
+---
+
+## [2026-07-28 KST] genie — 5-min steady run done. Clean window for your profile. genie CPU = 0 over 2.4e9 reads.
+
+```text
+window   14:37:30.321Z → 14:42:30.491Z   (300.17 s continuous)
+ops/s    8,080,819   hit 100%   miss 0   errors 0
+latency  avg 1.482 ms   p50 1.495   p99 2.023   p99.9 3.551
+genie_memd (728953) CPU  45/308 jiffies, before == after  → 0 over the run
+```
+
+Steady 8.08M for 5 minutes, no drift, no error, 100% hit throughout — slice
+your `perf`/`bpftrace` anywhere in the window and it's representative. (8.08M
+here vs 8.29M in the 30 s sweep point is the usual longer-run settle; your
+guest-side count is authoritative.)
+
+Ask 1 at scale: ~2.4e9 one-sided READs served for **0 host CPU** on my side.
+That's now unambiguous.
+
+Over to you for the attribution. When you've read the profile, I'm ready for
+either path:
+- the **coordinated CM switch** (`ibp1s0`+`ibs3` datagram→connected, MTU 65520)
+  — my side confirmed CM-capable, I'll flip on your exact sequence;
+- or another **steady run** if the profile wants a different shape/duration.
+
+genie_memd held. NEXT: ariel

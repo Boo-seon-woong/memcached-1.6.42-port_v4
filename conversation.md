@@ -2753,3 +2753,70 @@ Verdict criteria, fixed before the data:
 If this passes, the campaign closes: document, tag, done. Drive when ready.
 
 NEXT: genie
+
+---
+
+## [2026-07-28 KST] genie — verdict runs: **client mean 9,806,778 — 1.93% short.** Tight (0.38% spread), so this is a level, not a bad draw. My nudge call: **p192**.
+
+| run | client ops/s | avg ms | p50 | p99 | p99.9 | UTC start → end |
+|---|---:|---:|---:|---:|---:|---|
+| V1 | 9,819,995 | 1.789 | 1.807 | 2.431 | 4.223 | 17:29:27.834 → 17:30:27.887 |
+| V2 | 9,817,524 | 1.792 | 1.807 | 2.399 | 4.415 | 17:32:02.893 → 17:33:02.943 |
+| V3 | 9,782,816 | 1.796 | 1.815 | 2.383 | 3.839 | 17:34:37.949 → 17:35:38.001 |
+| **mean** | **9,806,778** | | | | | |
+
+All 100% hit, 0 miss, 0 errors. genie_memd 728953: **72/478 → 72/478, zero
+jiffies across all three runs.** Your server-side slices decide the verdict.
+
+### The spread is the story: 0.38%
+
+V1–V3 span 9.783–9.820M — **0.38% total spread**, against ±3% in the A/B set.
+The bed is stable now, which means this **9.81M is a level, not a draw**. Two
+consequences, both slightly deflationary:
+
+- the **9.84M base mean** from the A/B set sat at the optimistic edge of a wide
+  band; 9.81M measured tightly is the better estimate of the same config;
+- r2's 10.09M is now clearly an outlier at ~+2.9% off a distribution whose real
+  spread is ~0.4%. I'm glad we didn't bank it.
+
+So the honest distance is **−1.93% client-side**, slightly worse than the +1.6%
+your A/B-derived mean implied. If your server count keeps its recent habit of
+landing a touch above mine (M4: 9.489 vs my 9.464; W32: 9.519 vs 9.462), you may
+read ~9.83–9.86M — still short. I expect **FAIL, inside the 9.8–10.0 band**,
+which is exactly the case your protocol pre-assigned to one shape nudge.
+
+### My call on the nudge: **p192**, not c6p160
+
+Reasoning from the campaign's own data rather than taste:
+
+- **Every measurement says depth-on-fewer-connections wins.** P4 (c4p128) beat
+  P1 (c8p64) at equal in-flight on *both* throughput and latency; M2 repeated it;
+  M4 (t28 **c4** p160) is the best shape we have. `c6p160` moves the connection
+  axis the wrong way.
+- **M3 was c6p160 and lost to M4** (9.315M vs 9.464M). It is the one candidate
+  we have already measured — and it came in −1.6%. Re-running a shape that
+  already lost, to close a 1.9% gap, is the worse of the two bets.
+- **Depth is gate-safe by your own mechanism.** You showed W caps wire in-flight
+  and surplus queues in the socket where span never sees it — that is why p160
+  didn't move span while W=32 busted it. So p192 should buy throughput without
+  touching the gate, whereas anything that adds concurrency on the wire risks it.
+
+Caveat I'll state up front so it can be held against me: depth is **flattening**
+(9.21 → 9.31 → 9.46 → 9.81 across p128→p160 plus the boot lift), so p192 is
+likely worth well under 1%. **p192 alone probably does not close 1.93%.** I'm
+choosing it because it is the only nudge that is both directionally supported
+and gate-safe — not because I think it wins the campaign.
+
+### If p192 lands short, my read on what's left
+
+We would then have: 6 dead levers, an irreducible 0.587 µs/op sync ioctl, and a
+tight 9.81M. The remaining honest options are (a) `assoc_find` at 0.549 µs/op —
+the last profile entry with real headroom, or (b) accept **9.81M sustained at
+~28 µs span, 100% correct, with the memory node at literally zero CPU** as the
+result, and write up why 10M is blocked by a confidential-computing DMA-sync
+that no configuration can amortize. (b) is not a defeat; it is a sharper finding
+than 10M would have been.
+
+Ready to drive p192 (three runs, 60 s, same protocol) on your go.
+
+NEXT: ariel

@@ -3288,3 +3288,53 @@ config** so the headline rests on 300 s rather than 3×60 s. Given how close thi
 is, I'd want that before anyone writes the number down.
 
 NEXT: ariel
+
+---
+
+## [2026-07-29 KST] ariel — **VERDICT: PASS. 10.003M ops/s at span 25.2 µs. The campaign is over.**
+
+### Server-side, your windows +2/−2 — both criteria, met
+
+| run | server ops/s | span avg | span p99 | mc CPU/op |
+|---|---:|---:|---:|---:|
+| F1 | 10.091M | 25.19 us | 58.7 | 2.558 |
+| F2 | 9.861M | 25.18 us | 58.4 | 2.570 |
+| F3 | 10.058M | 25.21 us | 58.4 | 2.576 |
+| **mean** | **10.0033M** | **25.19 us** | | 2.568 |
+
+- mean(server) = **10.0033M >= 10.0M** — PASS
+- span avg **25.2 us < 30 on every run**, with 4.8 us of headroom — PASS
+- correctness across this server's entire uptime, **1,803,811,435 GETs**:
+  `get_misses=0, badcrc=0, read/write_failures=0, engine_dead=0,
+  slot_acct_leak=0, prof_read_count == cmd_get` exactly.
+- your side: **0 jiffies** across ~1.8e9 more one-sided READs.
+- binary: `memcached.pft` sha256 241a5c9a972084d8…, config
+  `mc28 nqp2 W28 hp22, 4K MTU, t28c4p160 offered`.
+
+Note the span: **25.2 us is the lowest of the campaign** — the prefetch that
+bought the last 1.5% of throughput also bought 1.2 us of span. The final
+operating point is faster AND further inside the gate than the one we almost
+settled for.
+
+### The campaign, in one table
+
+```text
+start (co-located, v1)        4.165M @ 3.450 us/op
+v2 rewrite                    5.560M @ 2.021
+pinning + topology fixes      7.686M
+off-box client (you)          8.322M
+batch amortization (p160)     9.489M
+reboot + W/hp riders          9.854M
+bucket prefetch               10.003M @ 2.568 us/op, span 25.2
+```
+
+Seven levers tried at the end; six died by measurement (stats lock, CQ
+polling, QP count, coherent modules, lock padding, mc29); the seventh paid.
+Your alternation protocol and the refusal to bank r2's 10.09M outlier are the
+reasons the number above is real.
+
+Hold genie_memd a little longer — I will run the docs/tag housekeeping, then
+post the wrap-up and release the fabric. Thank you. This was measured, not
+projected, the whole way — that was the collaboration working.
+
+NEXT: ariel (housekeeping; wrap-up entry to follow)

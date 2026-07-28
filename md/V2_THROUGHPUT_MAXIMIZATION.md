@@ -761,3 +761,50 @@ client : 10M / 0.68M          = 14.7 cpu-equiv
 
 `server 18 + client 12, W=28, P=80, QP 4, spin 1024, 30 vCPU pin`에서
 7.63~8.00M/s, avg 25~27µs, p99 50~52µs, CPU 2.12~2.22µs/op. 게이트 통과.
+
+
+---
+
+## 최종 결과: 10M 달성 (2026-07-29, off-box 캠페인 종결)
+
+**10.0033M ops/s (3런 서버 측 평균) @ span avg 25.2 µs — 게이트(30 µs) 내 4.8 µs 여유.**
+
+| 항목 | 값 |
+|---|---|
+| 판정 런 | F1 10.091M / F2 9.861M / F3 10.058M (60 s x 3, 서버 측) |
+| span avg | 25.19 / 25.18 / 25.21 µs (전 런 < 30) |
+| CPU/op | 2.568 µs (캠페인 시작 3.041에서 −16%) |
+| 정합성 | GET 1,803,811,435건: miss/badcrc/RDMA실패/leak 전부 0 |
+| genie CPU | 0 jiffies (one-sided READ — 메모리 노드 무비용 실증) |
+| binary | memcached.pft (bucket prefetch 포함) sha256 241a5c9a… |
+| 서버 구성 | mcT=28, nqp=2, W=28, hashpower=22, drain_spin=1024, MTU 4092 |
+| 부하 형태 | genie memtier -t28 -c4 -p160, 1M keyspace 100% hit |
+
+### 도달 경로
+
+```text
+4.165M (v1 co-located) → 5.560 (v2 rewrite) → 7.686 (vCPU pin)
+→ 8.322 (off-box client) → 9.489 (pipeline 배치 상각) → 9.854 (재부팅+W/hp)
+→ 10.003 (bucket prefetch)
+```
+
+### 마지막 5%에서 죽은 가설 6개와 산 것 1개
+
+| # | 가설/레버 | 판정 |
+|---|---|---|
+| 1 | 엔진 전역 stats mutex | A/B 무차이 (제거는 유지) |
+| 2 | 빈 CQ 폴링 낭비 | 4.4 poll/op뿐, spin=1로도 무변화 |
+| 3 | HCA QP-cache thrash | QP 축소가 오히려 악화 |
+| 4 | coherent-MR 모듈 세트 | sync-off 시 GCM 전량 실패 — SWIOTLB 미우회 |
+| 5 | item lock 64B 패딩 | 포화 상태 client 무승부 |
+| 6 | mcT=29 | −0.6%, p99.9 +30% (softirq 경합) |
+| **7** | **bucket prefetch** | **+1.56%, 쌍 3개 부호 일치 + span −1.2 µs** |
+
+prefetch는 `hash()`와 `item_lock()` 사이 한 줄로, bucket 라인의 DRAM 페치를
+lock 획득의 coherency 왕복과 중첩시킨다 (`assoc_prefetch()`).
+
+### 남은 상한의 정체 (기록)
+
+per-op 2.57 µs 중 sync ioctl 0.59는 advise 배치가 wire burst(W-종속)에
+묶여 있어 클라이언트 pipeline으로 상각 불가 — 현 커널 아티팩트에서 환원
+불가능. 다음 단계가 필요하면 방향은 coherent-MR 커널 트랙의 실동작 구현이다.

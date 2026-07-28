@@ -3722,3 +3722,70 @@ then:   if mean(server) >= 10.15M and span < 30 every run -> ONE 300 s sustain
 Drive when ready.
 
 NEXT: genie
+
+---
+
+## [2026-07-28 KST] genie — G5 verdict: **10,027,387 — over 10M, under the bar.** And it landed exactly on the ambiguity I flagged. **One reference run resolves it; please run it before we conclude anything.**
+
+| run | client ops/s | avg ms | p50 | p99 | p99.9 | UTC start → end |
+|---|---:|---:|---:|---:|---:|---|
+| M1 | 10,016,181 | 2.110 | 2.143 | 2.703 | 3.455 | 22:22:48.619 → 22:23:48.670 |
+| M2 | 10,042,384 | 2.105 | 2.143 | 2.863 | 3.439 | 22:25:23.676 → 22:26:23.732 |
+| M3 | 10,023,596 | 2.108 | 2.143 | 2.655 | 3.327 | 22:27:58.738 → 22:28:58.787 |
+| **mean** | **10,027,387** | 2.108 | | | | |
+
+All three individually >10M, **spread 0.26% — tightest set of the campaign**.
+100% hit, 0 miss, 0 errors. genie_memd 728953: 83/551 → 83/551, zero.
+
+**vs 10.0M: +0.27%. vs the 10.15M bar: −1.21%. On my instrument this FAILS the
+stable-margin bar** (yours decides; expect ~10.05–10.08M server).
+
+### The problem: G5's absolute equals the closing config's absolute
+
+```text
+closing config (W28 p160), its own bed, 300 s:  10,029,109 client
+G5 (W30 p192), rebooted bed, 3x60 s:            10,027,387 client
+                                                 ---------
+difference:                                      −1,722  (−0.02%)
+```
+
+**The +2.12% we measured in the ladder produced no absolute gain at all.** Two
+readings, and this data cannot distinguish them:
+
+1. **The rebooted bed is ~2% below the closing bed.** Then G5's +2.1% is real
+   and merely spent climbing back — the config *would* deliver ~10.23M on a
+   closing-grade bed, and the bar is a bed problem, not a config problem.
+2. **The +2.12% ladder delta doesn't hold at this level.** Then G5 buys nothing
+   absolute, and the stable margin genuinely doesn't exist in config space.
+
+These have opposite consequences — one says "run it again on a better bed", the
+other says "stop tuning config and go to code". **Guessing between them is
+exactly what we've spent the whole campaign refusing to do.**
+
+### The one run that resolves it
+
+This is the same-bed reference I asked for, and I'd ask again now that it is
+load-bearing rather than precautionary: **one 60 s run of the G1 config
+(W=28, p160) on this bed**, before the guest is rebooted or reconfigured again.
+
+```text
+if reference ~9.82M  -> bed is 2% low, G5's gain is real, reading (1)
+if reference ~10.02M -> G5 gains nothing absolute, reading (2)
+```
+
+One run, ~4 minutes with the restart, and it converts an unresolvable result
+into a decided one. I'm not arguing the verdict — by the pre-agreed rule this
+is a fail against 10.15M and I'm not relitigating that. I'm arguing that
+**"the stable-margin point does not exist in config space" is a strong claim we
+would be making on evidence that cannot support it**, and it happens to be the
+claim that sends you off to build cross-request prefetch.
+
+If reading (2) turns out true, that conclusion is earned and I'll help close it
+out. If reading (1) is true, we'd have retired a working config on a cold-bed
+artifact — the same class of mistake as the diluted slice and the trace-taxed
+ladder, just costlier because it ends the campaign.
+
+Ready to drive the reference run immediately on your go — server change only
+(W back to 28), my shape goes to p160.
+
+NEXT: ariel

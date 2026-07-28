@@ -3122,3 +3122,67 @@ verdict; if it wins short of 10M, we run one clean 3-run verdict on pft.
 First server (r1-base) is up and preloaded — drive when ready.
 
 NEXT: genie
+
+---
+
+## [2026-07-28 KST] genie — **prefetch WINS.** Pooled +1.556%, and for the first time all three pairs agree in sign. But its mean is 9.798M — the set's base was depressed, so this needs the clean verdict.
+
+| # | binary | client ops/s | avg ms | p99 | p99.9 | UTC start → end |
+|---|---|---:|---:|---:|---:|---|
+| r1 | base | 9,544,206 | 1.841 | 2.463 | 4.479 | 18:03:33.792 → 18:04:33.844 |
+| r2 | **pft** | 9,716,343 | 1.811 | 2.415 | 4.479 | 18:06:08.850 → 18:07:08.902 |
+| r3 | base | 9,629,922 | 1.828 | 2.527 | 4.255 | 18:08:43.906 → 18:09:43.954 |
+| r4 | **pft** | 9,746,968 | 1.805 | 2.335 | 3.247 | 18:11:18.958 → 18:12:19.003 |
+| r5 | base | 9,770,126 | 1.798 | 2.335 | 3.935 | 18:13:54.012 → 18:14:54.062 |
+| r6 | **pft** | 9,931,345 | 1.771 | 2.351 | 4.607 | 18:16:29.069 → 18:17:29.120 |
+
+100% hit, 0 miss, 0 errors throughout. genie_memd 728953: zero within every window.
+
+### This is a real effect — the first one
+
+```text
+pair1  +172,137  (+1.80%)
+pair2  +117,046  (+1.22%)
+pair3  +161,219  (+1.65%)
+pooled +150,134  (+1.556%)
+```
+
+**Three for three, same sign, consistent magnitude.** Compare padding, which was
++3.35 / −1.84 / −1.46 — signs disagreeing, i.e. noise. This is what a working
+lever looks like in this harness, and it is the first in seven. Your decision
+rule (pooled Δ > 0, span < 30 on every pft run) is satisfied on my half;
+**adopt, pending your gate check.** Latency also improves on every pft leg
+(1.841→1.811, 1.828→1.805, 1.798→1.771), which is the right direction for span.
+
+### Why I am NOT calling this the verdict
+
+pft mean is **9,798,219 = −2.02% vs 10M**, so on its face it fails. But look at
+the base legs: **9.544 → 9.630 → 9.770M, rising monotonically**, and the whole
+set sits below attempt 1's base (9.807M client). The bed was depressed early in
+this set and recovered through it — which is exactly the drift alternation is
+designed to cancel *within pairs* and cannot cancel *across sets*.
+
+So the two numbers say different things and both are honest:
+- **pairwise (drift-immune): prefetch is worth +1.56%** — trustworthy;
+- **absolute mean (drift-exposed): 9.798M** — not comparable to attempt 1's set.
+
+Applying the measured +1.556% to attempt 1's *server* baseline (9.854M) projects
+**10.007M** — which is exactly on the line and therefore exactly the kind of
+projection I should not bank. Your own +1.4% projection for attempt 2 delivered
++0.42%; I am not repeating that mistake in the other direction. **It needs the
+clean 3-run verdict on pft**, which is what your rule already prescribes for
+"wins short of 10M."
+
+One caution for that verdict: r6 (9.931M) is the highest legitimate number of the
+campaign and it landed at the *top* of an upward drift. If the verdict set opens
+on a depressed bed like this one did, it will read low for reasons that have
+nothing to do with the code. If you can, give the box a settling minute before
+r1 and consider making the verdict runs the *only* thing in flight.
+
+Ready to drive the pft verdict (3 × 60 s, ≥90 s gaps) on your go. If it clears
+10.0M with span < 30, the campaign closes on a lever we actually measured rather
+than a number we chased.
+
+NEXT: ariel
+
+NEXT: genie

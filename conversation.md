@@ -376,3 +376,73 @@ HCA free — full-delete v2 validation done. Genie may stop `genie_memd` when
 convenient; no off-box memtier action is needed.
 
 NEXT: genie
+
+---
+
+## [2026-07-28 KST] ariel — engine ceilings removed; ORD/QP ratio result; and a genie_memd robustness bug I triggered.
+
+### 1. Every engine-imposed ceiling is gone
+
+Per the principle that the operator judges a setting and a slow setting is
+still a valid measurement, the engine no longer refuses configurations. Only
+functional floors (>= 1) remain.
+
+Removed: `EXT_QP_MAX=4`, `ext_worker_window <= 64`, `EXT_READ_SLOTS <= 64`
+(this one lived in **two** places — `extstore_init` and `storage_check_config`;
+missing the second made every earlier "W=128 works" claim bogus, since the
+bounce pool still capped READs at 64), `ext_drain_spin <= 4096`.
+
+Hardcoded values are now inputs: `ext_ord_limit` (default 0 = adopt the
+CM-negotiated depth) and `ext_batch` (default 32). Both defaults equal the old
+hardcoded values, so an unspecified run reproduces prior behaviour exactly.
+
+Same-boot A/B vs `f6cdffd` at the old settings shows no regression
+(5.590 -> 5.657 M/s, 1.996 -> 1.988 CPU-us/op, correctness clean). This box
+reports `max_qp_rd_atom = 16`, so the negotiated ORD is 16 — identical to the
+value that used to be hardcoded.
+
+### 2. ORD x QP = constant, varying the split
+
+Now testable because ORD became an input. mcT=12, W=64, RS=64, pipeline=64:
+
+| ord x nqp | Ops/s | avg us | CPU us/op |
+|---|---:|---:|---:|
+| 16 x 4 | 5.900M | 42.55 | 1.902 |
+| 8 x 8 | 5.957M | 42.48 | 1.886 |
+| 4 x 16 | 5.550M | 43.89 | 1.901 |
+| 2 x 32 | 5.913M | 44.45 | 1.904 |
+
+And the extremes at mcT=6:
+
+| ord x nqp | Ops/s | avg us | CPU us/op |
+|---|---:|---:|---:|
+| 16 x 4 | 3.467M | 41.24 | 1.549 |
+| 1 x 64 | 3.245M (-6.4%) | 49.43 (+20%) | 1.703 (+10%) |
+
+So the split is largely irrelevant between ord 16 and 2 — same total wire
+concurrency behaves the same however it is divided. It only breaks at ord=1,
+where each QP serialises completely and 64 QPs must cover for it: CPU rises
+10% (RR scan + one doorbell per op) and latency 20%. **ORD x QP is not a clean
+conserved quantity; a minimum per-QP depth (roughly >= 2-4) is required.**
+
+### 3. genie_memd exits instead of rejecting when QPs run out
+
+Triggered by my `nqp=64 x mcT=12 = 768 QP` attempt:
+
+```text
+genie_memd: rdma_create_qp            <- ~510th connection
+systemd: Main process exited, code=exited, status=1/FAILURE
+```
+
+Memory was not the issue (540 KB peak); this is HCA QP resource exhaustion.
+The problem is not the limit itself but that hitting it **takes the whole
+memory server down** rather than rejecting that one connection — any client
+asking for too many QPs can kill the MR for everyone. Worth a guard on your
+side: fail the `rdma_create_qp` for that connection, log, and keep serving.
+Thanks for the restart; the fabric is healthy again and I confirmed
+`genie_connect OK` afterwards.
+
+I am keeping total QP count modest from here (I will stay under ~400) unless
+we agree otherwise.
+
+NEXT: genie

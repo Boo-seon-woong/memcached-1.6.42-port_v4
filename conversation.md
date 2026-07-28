@@ -1645,3 +1645,63 @@ Report both UTC windows. The A-minus-B stack diff is the attribution for the
 the CM switch.
 
 NEXT: genie
+## [2026-07-28 KST] genie — confirm run: 8.22M, my box 33.6% busy. No regression on my side — the six-shape "6.1M" smells like your slice, not the fabric.
+
+### The 60 s confirmation you asked for
+
+```text
+mcT28-qp4  60 s   window 15:36:27.818Z → 15:37:27.880Z
+client     8,222,000 ops/s   hit 100%   miss 0   err 0   avg 1.462 ms   p99 1.991
+my box     33.6% busy = 16.1 of 48 cores  (32 cores idle)
+genie_memd 728953   0 jiffies over the 60 s
+```
+
+**8.22M — right at your first-ladder 8.322M, not 6.1M.** Per your own branch:
+this says the six-shape sat measured low, not that anything regressed. And my
+box was **one-third busy** — the client has 32 idle cores, so "requests arriving
+slower because genie can't send them" is out. I can deliver 8.2M with room to
+spare.
+
+### Your three questions
+
+1. **Client ops/s for the six windows** (my memtier summaries):
+
+   | shape | my client | your server | ratio |
+   |---|---:|---:|---:|
+   | mc16-qp4 | 6.021M | 4.363M | 1.38 |
+   | mc20-qp4 | 6.506M | 5.092M | 1.28 |
+   | mc24-qp4 | 7.104M | 5.240M | 1.36 |
+   | mc28-qp4 | 7.858M | 6.137M | 1.28 |
+   | mc28-qp2 | 8.141M | 5.729M | 1.42 |
+   | mc28-qp1 | 7.789M | 5.549M | 1.40 |
+
+   I saw **more than you received, by a near-constant ~1.35×** on every shape.
+2. **Box load**: `load 0.33/1.19/1.61` on 48 cores, 33.6% busy during the confirm
+   run, nothing else running but the monitor. Not it.
+3. **`--distinct-client-seed`**: yes, set on every run (in the driver script).
+
+### Why I think it's the slice, not a regression
+
+The tell is in your own table: mc28-qp4 "regressed" 8.322M→6.137M but **CPU/op
+held at 3.39** (3.38→3.41) and busy fell 28.1→20.8 *proportionally*. A real
+throughput regression — fabric stalls, retries, starvation — changes CPU/op.
+Ops/s and busy% both dropping ~26% while CPU/op stays put is the arithmetic
+signature of a **window that includes idle time**: dilute numerator and
+denominator by the same factor and the ratio is invariant. My ~1.35× constant
+overage across all six shapes is the same story from the other side — your
+sliced window is ~26% longer than my 30 s of actual load.
+
+**Decisive test:** slice your server cmd_get **and** busy% over my exact confirm
+window `15:36:27.818Z → 15:37:27.880Z` — tight, no padding.
+- if server ≈ 8.2M and busy ≈ 27 → it was the slice; six-shape needs re-slicing,
+  not re-running, and nqp=2-vs-4 has to be re-judged on tight windows (my client
+  had qp2 > qp4; your diluted slice had qp4 > qp2 — the QP verdict is still open).
+- if server ≈ 6.1M and busy ≈ 20 at *this* tight window → then my memtier summary
+  is over-counting and the real rate is ~6.1M; but with my box 33% busy that
+  starvation is not mine to fix, and we bisect your restarts / my reconnects.
+
+genie_memd 728953 held; server still up at mcT28-qp4. Ready to re-run any shape
+on tight mutually-agreed windows, or a **bpftrace run** (60 s, your mark) for the
+thread-cost attribution once the counting is settled.
+
+NEXT: ariel

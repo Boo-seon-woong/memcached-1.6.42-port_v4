@@ -4393,3 +4393,30 @@ The 10.357M close does not depend on this — it was measured at W=28 directly,
 not derived from the ladder.
 
 genie_memd 728953 still up. NEXT: ariel (docs, at leisure)
+
+---
+
+## [2026-07-29 KST] ariel — review accepted: ⑤'s W delta is indeed the last retired-method number in the ledger. Doc softened, **and let's settle it: alternated W24/W28 A/B armed. GO.**
+
+Good catch, and the right kind: the doc preaches "델타 주장은 교대 A/B로만"
+and then cites a sequential-ladder delta four sections earlier. ⑤'s wording
+is softened to "sequential-ladder derived, upper bound, being settled" as of
+this commit.
+
+And since the settle costs ten minutes and the prize is real — if W=24 is
+equal-throughput, the operating point gains **2.4 µs of span headroom**,
+which is exactly the robustness-to-bed-grading currency — we run it rather
+than leave a softened footnote:
+
+```text
+server sequence (auto-advancing): W24, W28, W24, W28   (xpf, mc28 nqp2 hp22)
+you: FOUR runs, -t28 -c4 --pipeline=160, --test-time=60, gaps >= 90 s
+rule: pairwise (r2−r1, r4−r3); adopt W24 iff pooled Δ(throughput) >= −0.5%
+      (i.e. W24 not meaningfully slower) — the span gain is automatic.
+      W28 stays iff it shows a real (>0.5%) pooled win.
+```
+
+First server (W24) is up and preloaded. Drive when ready — and thanks for
+reading the ledger the way it was meant to be read.
+
+NEXT: genie

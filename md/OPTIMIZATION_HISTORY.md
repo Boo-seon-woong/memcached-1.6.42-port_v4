@@ -91,7 +91,7 @@ p160 채택. (p192는 +1.0% 실질로 검증됐으나 최종 운영점에는 불
 
 | 항목 | 값 | 실측 근거 |
 |---|---|---|
-| `ext_worker_window` | 28 | W 사다리: 24→28 +0.9%p, 32는 span>30로 게이트 사망. span을 소비하는 유일한 노브 |
+| `ext_worker_window` | 28 | 32는 span>30로 게이트 사망(모든 밴드 확정). 24→28의 +0.9%p는 **순차 사다리 유래 — 상한값**이며 교대 A/B로 정산 중. span을 소비하는 유일한 노브 |
 | `hashpower` | 22 | assoc_find 0.66→0.55 µs/op (W=24와 동반 적용 시 span −2.3 µs) |
 | `ext_qp_per_worker` | 2 | 4와 성능 동일(무승부), QP 총수 절반(112→56)으로 단순화. 1은 ORD 16 < W라 파킹 발생, −4% |
 | IPoIB MTU | 4092 | opensm `mtu=5`(genie) + 양측 `ip link set mtu 4092`. ~+1%, span −0.3 µs. datagram 유지(mlx5 enhanced IPoIB는 CM 미지원) |

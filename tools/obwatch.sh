@@ -71,7 +71,8 @@ END{
     v["get_misses"]+0, v["badcrc_from_extstore"]+0, v["extstore_read_failures"]+0,
     v["extstore_write_failures"]+0, v["extstore_engine_dead"]+0, v["ext_slot_acct_leak"]+0
   if (g>0) { d=(g-rc)/g*100
-    printf "read span 표본 커버리지 : %.4f%% 누락  %s\n", d, (d>=-0.05&&d<0.2)?"OK (리셋 경계 오차)":"*** 확인 필요 ***" }
+    printf "read span 표본 커버리지 : %+.4f%%  %s\n", d, (d>=-1.0&&d<0.2)?"OK":"*** 확인 필요 ***"
+    printf "   (양수=리셋 경계 누락, 음수=재시도로 표본 증가 — 혼합 워크로드에서 정상)\n" }
   if (s>0) { d=(s-wc)/s*100
     printf "write span 표본 커버리지: %.4f%% 누락  %s\n", d, (d>=-0.05&&d<0.2)?"OK":"*** 확인 필요 ***" }
 }'

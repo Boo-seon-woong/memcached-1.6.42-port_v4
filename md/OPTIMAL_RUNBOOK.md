@@ -114,7 +114,7 @@ cd $HOME/kvs-port && taskset -c 0-27 env \
 
 | 항목 | 값 | 이유(한 줄) |
 |---|---|---|
-| binary | v3 tree (태그 `v3-10.35M-sustained`) | in-request + cross-request prefetch 포함 |
+| binary | v3 tree (태그 `v3-10.35M-sustained`, sha256 `ed219244c5621570…`) | in-request + cross-request prefetch 포함. **guest의 `~/kvs-port-v3/memcached`가 구버전일 수 있으므로 `grep -ac assoc_prefetch`로 확인할 것** — 없으면 −6.9% |
 | `taskset 0-27` / `-t 28` | worker 28 | 29부터 softirq 경합(p99.9 +30%), 30은 게이트 붕괴 |
 | `ext_worker_window=24` | W=24 | W28과 동등 throughput, span −2.4 µs (교대 A/B 확정) |
 | `ext_qp_per_worker=2` | QP 56개 | 4와 동등, 절반으로 단순화; 1은 ORD<W 파킹으로 −4% |

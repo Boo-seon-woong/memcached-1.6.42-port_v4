@@ -136,6 +136,24 @@ ping -c2 -W2 10.99.0.2                 # => 0% packet loss
 
 ## Phase D — [ariel-guest] 서버 기동 + keyspace 프리로드
 
+### D-0. **바이너리 확인** — 최적 구성의 전제
+
+guest의 `~/kvs-port-v3/`에는 A/B용 변종들이 함께 있고, 평범한 `memcached`가
+구버전으로 남아 있을 수 있다. **prefetch 두 개(⑥⑦)가 없는 빌드로 돌리면
+약 6.9% 낮게 나온다** — 실제로 겪은 사고다.
+
+```sh
+grep -ac assoc_prefetch ~/kvs-port-v3/memcached
+# => 1 이상이어야 정상. 0이면 구버전이므로 아래로 교체:
+#    (서버가 실행 중이면 "Text file busy" — 먼저 내리고 실행)
+cp ~/kvs-port-v3/memcached.xpf ~/kvs-port-v3/memcached
+grep -ac assoc_prefetch ~/kvs-port-v3/memcached    # => 재확인
+```
+
+`memcached.xpf`도 없다면 저장소에서 빌드해 배포한다(호스트에서
+`make -j"$(nproc)"` 후 `scp memcached ...:~/kvs-port-v3/memcached`).
+기준 빌드의 sha256은 `ed219244c5621570…`.
+
 ### D-1. 서버 기동 (tmux — ssh 세션이 끊겨도 유지)
 
 ```sh
@@ -248,9 +266,17 @@ END{
   printf "hit rate     %.2f %%\n", (g>0)?h/g*100:0
   printf "\n--- 정합성 (전부 0이어야 정상) ---\n"
   printf "get_misses=%d badcrc=%d read_fail=%d write_fail=%d engine_dead=%d leak=%d\n", m,b,rf,wf,ed,lk
-  printf "prof_read_count == cmd_get : %s (%d vs %d)\n", (pc==g?"OK":"*** MISMATCH ***"), pc, g
+  d=(g>0)?(g-pc)/g*100:0
+  printf "prof_read_count 편차 : %+.4f %%  %s\n", d, (d>=-0.05 && d<0.2)?"OK (리셋 경계 오차)":"*** 확인 필요 ***"
 }' /tmp/result.txt
 ```
+
+> `prof_read_count`가 `cmd_get`보다 소폭(0.1% 내외) 작게 나오는 것은 정상이다.
+> `stats_reset()`이 `threadlocal_stats_reset()`(=`cmd_get`)을 먼저 리셋하고
+> `storage_prof_reset()`(=prof)을 나중에 호출하므로, 그 사이에 완료된 op는
+> `cmd_get`에만 잡힌다. 부하 중 worker 28개를 순회하는 데 드는 수십 ms에
+> 해당한다(실측 예: 641,923건 = 9.9M ops/s에서 65 ms). **서버를 멈춘 상태나
+> 리셋 없이 누적 측정할 때만 정확히 일치한다.**
 
 ### F-2. 합격 기준
 
@@ -260,7 +286,7 @@ END{
 | span avg | **< 30 µs** | 계약 게이트. W=24에서 23.5~26.7 기대 |
 | hit rate | 100.00% | 아니면 `--key-prefix` 불일치 |
 | 정합성 6종 | 전부 0 | 하나라도 0이 아니면 **성능 수치 무효** |
-| prof_read_count | `== cmd_get` | 모든 GET이 remote READ를 거쳤다는 증거 |
+| prof_read_count | `cmd_get` 대비 −0.2% 이내 | 모든 GET이 remote READ를 거쳤다는 증거. 리셋 경계 오차로 소폭 작게 나오는 것이 정상 |
 
 ### F-3. genie 수치와 대조
 
@@ -272,11 +298,15 @@ ariel(서버) 수치와 genie(client) 수치는 0.01~0.5% 안에서 일치해야
 
 ### F-4. [genie] 메모리 노드 CPU가 0인지 확인 (선택, 아키텍처 검증)
 
-E-1 직전과 E-4 직후에 각각 실행해 값이 **동일**해야 한다.
+**E-1 직전에 한 번, E-4 직후에 한 번** 실행해 두 값이 완전히 같아야 한다.
+한 번만 재면 비교 대상이 없어 의미가 없다.
 
 ```sh
-awk '{print $14, $15}' /proc/$(pgrep genie_memd)/stat
-# => 두 시점의 utime/stime이 완전히 같아야 정상 (one-sided READ = 호스트 CPU 0)
+# E-1 직전
+awk '{print $14, $15}' /proc/$(pgrep genie_memd)/stat > /tmp/gm_before
+# E-4 직후
+awk '{print $14, $15}' /proc/$(pgrep genie_memd)/stat > /tmp/gm_after
+diff /tmp/gm_before /tmp/gm_after && echo "genie CPU = 0 (one-sided READ 확인)"
 ```
 
 ---
@@ -309,6 +339,7 @@ CPU를 쓰지 않고, 다음 시행에서 조율 없이 바로 연결된다.
 | hit rate 0% | `--key-prefix=m-` 불일치 (memtier 기본값은 `memtier-`) |
 | `.ko: No such file or directory` + `Cannot find device "ibp1s0"` | **호스트에서 실행 중이다.** 프롬프트가 `seonung@ariel`이면 guest가 아니다 → C-0으로 접속 후 재실행. (호스트에 IB 디바이스가 없고 HCA가 `vfio-pci`에 묶여 있는 것은 정상 — guest에 인계된 상태다) |
 | `Failed to prepare storage workers` | genie_memd 미기동 → Phase A. **SSH를 끊었다면 `&`로만 띄운 genie_memd가 SIGHUP으로 죽었을 가능성** — `nohup`/`setsid`로 재기동 |
+| throughput 약 7% 낮음 (≈9.7~9.9M) | **prefetch 없는 구버전 바이너리** → D-0으로 확인·교체 |
 | throughput 2~3% 낮음 | bed 드리프트 — fresh boot 후 재시행 |
 | span > 30 µs | W 값 확인(24여야 함), guest 재시작 누적 여부 확인 |
 | badcrc가 cmd_get과 같음 | DMA sync가 꺼짐 — `EXT_SKIP_DMA_SYNC`를 절대 설정하지 말 것 |

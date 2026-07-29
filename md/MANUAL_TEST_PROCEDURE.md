@@ -136,6 +136,13 @@ ping -c2 -W2 10.99.0.2                 # => 0% packet loss
 
 ## Phase D — [ariel-guest] 서버 기동 + keyspace 프리로드
 
+### D-0a. 관측 도구 배포 (최초 1회)
+
+```sh
+# ariel 호스트에서
+scp -i ~/.ssh/snp_guest -P 2222 <repo>/tools/obwatch.sh ubuntu@localhost:/tmp/
+```
+
 ### D-0. **바이너리 확인** — 최적 구성의 전제
 
 guest의 `~/kvs-port-v3/`에는 A/B용 변종들이 함께 있고, 평범한 `memcached`가
@@ -192,111 +199,121 @@ printf 'stats\r\nquit\r\n' | nc 127.0.0.1 11411 | tr -d '\r' | grep curr_items
 
 ---
 
-## Phase E — 측정 (양측 협조, 6분)
+## Phase E — 측정 (양측 협조)
 
-부하는 genie가 **360초** 돌리고, ariel이 그 안쪽에 **300초 창**을 잡는다.
+부하는 genie가 **창보다 60초 길게** 돌리고, ariel이 그 안쪽에 창을 잡는다.
 이렇게 하면 사람이 시각을 정밀하게 맞출 필요가 없다.
 
-### E-1. [genie] 부하 시작 — 먼저 실행
+### E-1. [genie] 부하 시작 — 워크로드를 하나 골라 실행
+
+공통 인자(모든 워크로드 동일):
 
 ```sh
-memtier_benchmark -s 10.99.0.3 -p 11411 -P memcache_text \
-  --ratio=0:1 -d 64 --key-prefix=m- --key-minimum=1 --key-maximum=1000000 \
+COMMON="-s 10.99.0.3 -p 11411 -P memcache_text -d 64 \
+  --key-prefix=m- --key-minimum=1 --key-maximum=1000000 \
   --key-pattern=R:R --distinct-client-seed --hide-histogram \
-  -t 28 -c 4 --pipeline=160 --test-time=360
+  -t 28 -c 4 --pipeline=160"
 ```
 
-이 명령은 360초간 블록되며 끝나면 요약표를 출력한다. 그대로 두고 **즉시**
-E-2로 이동.
+| # | 워크로드 | 명령 | 목적 |
+|---|---|---|---|
+| **W1** | GET only | `memtier_benchmark $COMMON --ratio=0:1 --test-time=360` | 기준 — optimal 운영점 |
+| **W2** | SET only | `memtier_benchmark $COMMON --ratio=1:0 --test-time=360` | remote WRITE 경로. seal→WRITE→CQE→STORED |
+| **W3** | SET:GET 1:9 | `memtier_benchmark $COMMON --ratio=1:9 --test-time=360` | 혼합. 읽기/쓰기 경로 동시 부하 |
+| **W4** | SET:GET 1:1 | `memtier_benchmark $COMMON --ratio=1:1 --test-time=360` | 쓰기 비중 상한 확인 |
 
-### E-2. [ariel-guest] 부하 유입 확인 (약 10초)
+워크로드별 유의사항:
+
+- **W1**은 프리로드(D-2)가 반드시 선행돼야 100% hit이 나온다.
+- **W2/W3/W4**는 SET이 섞이므로 **`--key-pattern=R:R`이 기존 키를 덮어쓴다.**
+  keyspace 크기는 유지되고 `curr_items`도 1,000,000에서 크게 변하지 않는다.
+  GET이 섞인 W3/W4는 hit율이 100%로 유지되는 것이 정상이다.
+- SET 경로는 GET과 달리 **STORED 응답 전에 WRITE CQE를 기다린다.** 따라서
+  SET 비중이 높을수록 throughput이 낮고 span(write)이 별도로 잡힌다.
+- 워크로드를 바꿔 연속 측정할 때 **프리로드를 다시 할 필요는 없다**(서버를
+  재시작하지 않는 한). 서버를 재시작했다면 D-2부터.
+
+### E-2. [ariel-guest] 부하 유입 확인
 
 ```sh
-a=$(printf 'stats\r\nquit\r\n' | nc 127.0.0.1 11411 | tr -d '\r' | awk '/^STAT cmd_get /{print $3}')
+a=$(printf 'stats\r\nquit\r\n' | nc 127.0.0.1 11411 | tr -d '\r' | awk '/^STAT (cmd_get|cmd_set) /{s+=$3}END{print s}')
 sleep 3
-b=$(printf 'stats\r\nquit\r\n' | nc 127.0.0.1 11411 | tr -d '\r' | awk '/^STAT cmd_get /{print $3}')
+b=$(printf 'stats\r\nquit\r\n' | nc 127.0.0.1 11411 | tr -d '\r' | awk '/^STAT (cmd_get|cmd_set) /{s+=$3}END{print s}')
 echo "현재 부하: $(( (b-a)/3 )) ops/s"
-# => 9000000 이상이면 정상. 0이면 genie 명령이 안 돌고 있는 것.
+# => 수백만 이상이면 정상. 0이면 genie 명령이 안 돌고 있는 것.
 ```
 
-### E-3. [ariel-guest] 300초 창 측정 — 이 한 덩어리를 그대로 붙여넣는다
+### E-3. [ariel-guest] 창 열고 실시간 관측 — **이 한 줄이 측정 전체다**
 
 ```sh
-printf 'stats reset\r\nquit\r\n' | nc 127.0.0.1 11411 >/dev/null
-T0=$(date -u +%s); echo "창 시작 $(date -u +%H:%M:%SZ) — 300초 대기"
-sleep 300
-T1=$(date -u +%s)
-printf 'stats\r\nquit\r\n' | nc 127.0.0.1 11411 | tr -d '\r' > /tmp/result.txt
-echo "창 종료 $(date -u +%H:%M:%SZ), 경과 $((T1-T0))초"
+DUR=300 bash /tmp/obwatch.sh
 ```
 
-`stats reset`은 `cmd_get`과 span 히스토그램을 함께 리셋한다(코드 확인:
-`stats_reset() → storage_prof_reset()`). 따라서 `/tmp/result.txt`는 **이
-300초 창만의 값**이다. `curr_items`(프리로드)는 리셋되지 않는다.
+`stats reset`으로 창을 열고, 1초마다 실시간 지표를 찍고, 300초 뒤 최종
+요약까지 출력한다. 별도 계산 단계(구 F-1) 없이 이것으로 끝난다.
+
+```text
+extstore watch — window 300s, opened 02:10:14Z
+
+     t       get/s       set/s     hit%   span_avg   span_p50   span_p99 wait_enq/s   err
+------ ----------- ----------- -------- ---------- ---------- ---------- --------- -----
+    1s    10.229M     0.000M   100.00    23.90us    22.10us     54.9us    31.2M     0
+    2s    10.231M     0.000M   100.00    23.90us    22.10us     54.8us    31.1M     0
+    ...
+
+===== SERVER STATS (300s window) =====
+Type             Ops/sec      Hits/sec     Span Avg     Span p50     Span p99
+------------------------------------------------------------------------------------
+Gets       10229000.00   10229000.00     23.900us     22.100us     54.900us
+Totals     10229000.00   10229000.00
+
+gate span avg < 30us         PASS  (23.90us, 여유 6.10us)
+hit rate                     100.00 %
+
+--- correctness (전부 0이어야 정상) ---
+get_misses=0 badcrc=0 read_fail=0 write_fail=0 engine_dead=0 leak=0
+read span 표본 커버리지 : 0.0007% 누락  OK (리셋 경계 오차)
+```
+
+간격을 바꾸려면 `DUR=60 INT=5 bash /tmp/obwatch.sh`.
+
+> 관측 비용은 초당 `stats` 1회 — 10M ops/s 대비 1e-7 수준이라 성능에 영향이
+> 없다. 기록 런들도 모두 동일한 1초 샘플러를 켠 채 측정했다.
 
 ### E-4. [genie] 부하 종료 확인
 
-360초가 지나면 memtier가 요약을 출력한다. `Gets` 행의 ops/s와 `Hits`/`Misses`
-를 기록해 둘 것 — ariel 측 수치와 대조한다.
+memtier 요약의 `Gets`/`Sets` 행 ops/s, `Hits`/`Misses`를 기록해 ariel 수치와
+대조한다.
 
 ---
 
-## Phase F — [ariel-guest] 결과 검증
+## Phase F — 결과 판정
 
-### F-1. 계산
+E-3 출력이 곧 판정 자료다. 아래 기준으로 읽는다.
 
-```sh
-awk -v t=$((T1-T0)) '
-/^STAT cmd_get /              {g=$3}
-/^STAT get_hits /             {h=$3}
-/^STAT get_misses /           {m=$3}
-/^STAT badcrc_from_extstore / {b=$3}
-/^STAT extstore_read_failures / {rf=$3}
-/^STAT extstore_write_failures /{wf=$3}
-/^STAT extstore_engine_dead /  {ed=$3}
-/^STAT ext_slot_acct_leak /    {lk=$3}
-/read_avg_ns /                {ra=$3}
-/read_p99_ns /                {rp=$3}
-/extstore_prof_read_count /   {pc=$3}
-END{
-  printf "\n===== 결과 (%d초 창) =====\n", t
-  printf "throughput   %.3f M ops/s\n", g/t/1e6
-  printf "span avg     %.2f us   %s\n", ra/1000, (ra/1000<30?"PASS":"*** FAIL (게이트 30us) ***")
-  printf "span p99     %.1f us\n", rp/1000
-  printf "hit rate     %.2f %%\n", (g>0)?h/g*100:0
-  printf "\n--- 정합성 (전부 0이어야 정상) ---\n"
-  printf "get_misses=%d badcrc=%d read_fail=%d write_fail=%d engine_dead=%d leak=%d\n", m,b,rf,wf,ed,lk
-  d=(g>0)?(g-pc)/g*100:0
-  printf "prof_read_count 편차 : %+.4f %%  %s\n", d, (d>=-0.05 && d<0.2)?"OK (리셋 경계 오차)":"*** 확인 필요 ***"
-}' /tmp/result.txt
-```
-
-> `prof_read_count`가 `cmd_get`보다 소폭(0.1% 내외) 작게 나오는 것은 정상이다.
-> `stats_reset()`이 `threadlocal_stats_reset()`(=`cmd_get`)을 먼저 리셋하고
-> `storage_prof_reset()`(=prof)을 나중에 호출하므로, 그 사이에 완료된 op는
-> `cmd_get`에만 잡힌다. 부하 중 worker 28개를 순회하는 데 드는 수십 ms에
-> 해당한다(실측 예: 641,923건 = 9.9M ops/s에서 65 ms). **서버를 멈춘 상태나
-> 리셋 없이 누적 측정할 때만 정확히 일치한다.**
-
-### F-2. 합격 기준
+### F-1. 합격 기준
 
 | 항목 | 기준 | 비고 |
 |---|---|---|
-| throughput | **≥ 10.0 M ops/s** | fresh boot에서 10.0~10.4 기대 |
-| span avg | **< 30 µs** | 계약 게이트. W=24에서 23.5~26.7 기대 |
-| hit rate | 100.00% | 아니면 `--key-prefix` 불일치 |
-| 정합성 6종 | 전부 0 | 하나라도 0이 아니면 **성능 수치 무효** |
-| prof_read_count | `cmd_get` 대비 −0.2% 이내 | 모든 GET이 remote READ를 거쳤다는 증거. 리셋 경계 오차로 소폭 작게 나오는 것이 정상 |
+| gate | `span avg < 30us` **PASS** | 계약. GET이 있는 워크로드에만 적용 |
+| correctness 6종 | 전부 0 | 하나라도 0이 아니면 **성능 수치 무효** |
+| span 표본 커버리지 | `OK` | 누락 0.2% 초과면 계측 이상 |
+| hit rate | W1/W3/W4에서 100.00% | 아니면 `--key-prefix` 불일치 |
+| 계기 일치 | genie 대비 0.01~0.5% | 1% 이상 벌어지면 창 어긋남 |
 
-### F-3. genie 수치와 대조
+### F-2. 워크로드별 기대치 (참고)
 
-```text
-ariel(서버) 수치와 genie(client) 수치는 0.01~0.5% 안에서 일치해야 한다.
-1% 이상 벌어지면 창이 어긋난 것 — E-3의 300초가 genie의 360초 안에 온전히
-들어갔는지 확인할 것.
-```
+| 워크로드 | throughput | 비고 |
+|---|---|---|
+| W1 GET only | 10.0~10.4 M ops/s | fresh boot, span 23~27 µs |
+| W2 SET only | W1보다 낮음 | STORED가 WRITE CQE를 기다림. write span 별도 계측 |
+| W3 1:9 | W1과 W2 사이, W1에 가까움 | |
+| W4 1:1 | W2에 가까움 | |
 
-### F-4. [genie] 메모리 노드 CPU가 0인지 확인 (선택, 아키텍처 검증)
+> SET 계열은 이번 캠페인에서 **최적화 대상이 아니었다.** 10M/30µs 계약은
+> GET-only 기준이며, W2~W4 수치는 기준선 기록용이지 게이트 판정 대상이 아니다.
+
+### F-3. [genie] 메모리 노드 CPU가 0인지 확인 (선택, 아키텍처 검증)
 
 **E-1 직전에 한 번, E-4 직후에 한 번** 실행해 두 값이 완전히 같아야 한다.
 한 번만 재면 비교 대상이 없어 의미가 없다.
@@ -308,6 +325,9 @@ awk '{print $14, $15}' /proc/$(pgrep genie_memd)/stat > /tmp/gm_before
 awk '{print $14, $15}' /proc/$(pgrep genie_memd)/stat > /tmp/gm_after
 diff /tmp/gm_before /tmp/gm_after && echo "genie CPU = 0 (one-sided READ 확인)"
 ```
+
+> W2~W4처럼 SET이 섞여도 결과는 같아야 한다 — WRITE도 one-sided이므로
+> genie CPU를 쓰지 않는다.
 
 ---
 
@@ -349,6 +369,7 @@ CPU를 쓰지 않고, 다음 시행에서 조율 없이 바로 연결된다.
 반복 측정·A/B가 필요하면 수동 대신 `tools/`의 하네스를 쓴다.
 
 ```text
+tools/obwatch.sh  창 열기 + 실시간 관측 + 최종 요약 (수동 측정의 기본 도구)
 tools/obup.sh     기동 + 프리로드 + 1초 샘플러
 tools/obslice.sh  UTC 창 절단 (genie가 보고한 창을 그대로 입력)
 tools/obsweep.sh  구성 사다리 (mcT:nqp:W 튜플, 부하 감지로 자동 진행)

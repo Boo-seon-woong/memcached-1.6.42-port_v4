@@ -76,11 +76,15 @@ grep -i pinned /tmp/snp-guest.log | tail -1
 ```
 
 ```sh
-# SSH가 열릴 때까지 대기
+# SSH가 열릴 때까지 대기 (도달성 확인만 — 접속되는 것은 아니다)
 until ssh -i ~/.ssh/snp_guest -p 2222 -o ConnectTimeout=3 \
       -o StrictHostKeyChecking=no ubuntu@localhost true 2>/dev/null; do sleep 5; done
 echo "guest up"
 ```
+
+> ⚠️ **이 루프는 접속 상태를 남기지 않는다.** 아직 ariel 호스트 셸이다.
+> Phase C부터 Phase F까지는 전부 guest 안에서 실행해야 하므로, 반드시
+> 다음 단계(C-0)에서 먼저 접속할 것.
 
 > **절대값을 주장할 측정이면 fresh boot에서 하라.** 재시작이 누적된 guest는
 > 같은 구성에서도 2~3% 낮게 나온다(문서화된 bed 드리프트).
@@ -90,6 +94,20 @@ echo "guest up"
 ## Phase C — [ariel-guest] 모듈·네트워크 bringup
 
 부팅 직후 1회만. 이미 완료된 guest면 C-2 확인만 하고 넘어간다.
+
+### C-0. **guest 접속** — 여기서부터 실행 위치가 바뀐다
+
+```sh
+ssh -i ~/.ssh/snp_guest -p 2222 ubuntu@localhost
+```
+
+접속 후 아래로 위치를 확인한다. **Phase F까지 이 셸에서 진행한다.**
+
+```sh
+whoami; hostname; nproc
+# => ubuntu / (guest hostname) / 30
+#    'seonung'이 나오면 아직 호스트다 — 위 ssh를 먼저 실행할 것.
+```
 
 ### C-1. 모듈 스왑 + IP
 
@@ -289,6 +307,7 @@ CPU를 쓰지 않고, 다음 시행에서 조율 없이 바로 연결된다.
 | `reg_mr ... Input/output error` | 이전 memcached 유령이 snp_shared 점유 → `pgrep -x "memcached[.a-z]*"` 로 전부 kill |
 | `Address already in use` | 위와 동일. `-x memcached`만으로는 `.pft/.xpf` 변종이 안 잡힌다 |
 | hit rate 0% | `--key-prefix=m-` 불일치 (memtier 기본값은 `memtier-`) |
+| `.ko: No such file or directory` + `Cannot find device "ibp1s0"` | **호스트에서 실행 중이다.** 프롬프트가 `seonung@ariel`이면 guest가 아니다 → C-0으로 접속 후 재실행. (호스트에 IB 디바이스가 없고 HCA가 `vfio-pci`에 묶여 있는 것은 정상 — guest에 인계된 상태다) |
 | `Failed to prepare storage workers` | genie_memd 미기동 → Phase A. **SSH를 끊었다면 `&`로만 띄운 genie_memd가 SIGHUP으로 죽었을 가능성** — `nohup`/`setsid`로 재기동 |
 | throughput 2~3% 낮음 | bed 드리프트 — fresh boot 후 재시행 |
 | span > 30 µs | W 값 확인(24여야 함), guest 재시작 누적 여부 확인 |

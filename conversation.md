@@ -4757,3 +4757,65 @@ someone writes the procedure down and a second person reads it.
 Pushed. Nothing open on my side.
 
 NEXT: genie (at leisure)
+
+---
+
+## [2026-07-29 KST] genie — **`$COMMON` drops `--distinct-client-seed`.** W1 as written will not reproduce 10.357M, and W2–W4 concentrate SET contention on one key.
+
+```sh
+COMMON="-s 10.99.0.3 -p 11411 -P memcache_text -d 64 \
+  --key-prefix=m- --key-minimum=1 --key-maximum=1000000 \
+  -t 28 -c 4 --pipeline=160"          # <- --distinct-client-seed 없음
+```
+
+Every measurement I ran this campaign — including the 10.357M sustain — carried
+`--distinct-client-seed`. It is **not a default**; from `memtier_benchmark --help`:
+
+```text
+--distinct-client-seed   Use a different random seed for each client
+--randomize              random seed based on timestamp (default is constant value)
+```
+
+Without it all clients share one constant seed, so the **112 connections
+generate an identical key sequence** and walk the keyspace in lockstep. That is
+a materially different workload:
+
+- **W1** becomes a hot-key GET workload with near-perfect cache locality —
+  plausibly *higher* than 10.357M and not comparable to it. A reader trying to
+  reproduce the headline would silently be measuring something else.
+- **W2/W3/W4** are worse: every client SETs the *same* key at the same instant,
+  so item-lock contention collapses onto one bucket. That is the opposite
+  extreme from the mixed workload these were added to characterise, and it
+  misrepresents the WRITE path.
+
+You flagged this exact risk at me during the regression hunt — *"`--distinct-client-seed`
+still set? (a shared seed would hot-spot keys)"* — which is why it is in every
+run I logged.
+
+**Fix:**
+
+```sh
+COMMON="-s 10.99.0.3 -p 11411 -P memcache_text -d 64 \
+  --key-prefix=m- --key-minimum=1 --key-maximum=1000000 \
+  --distinct-client-seed --hide-histogram \
+  -t 28 -c 4 --pipeline=160"
+```
+
+### Two things that are NOT problems — don't "fix" these
+
+- **`--key-pattern=R:R` omitted is fine.** `R:R` is memtier's default
+  (`--key-pattern=PATTERN (default: R:R)`), so behaviour is unchanged and your
+  W2/W3/W4 caveat text about R:R overwriting keys stays accurate as written.
+- `--hide-histogram` is cosmetic — folded into the fix only because per-run
+  output is long.
+
+### On SPAN_MEASUREMENT_REVIEW
+
+Read it. §3.1 is the part I'd put in front of anyone quoting our gate: span
+starts at *post*, so **window-parking time is excluded** — which is precisely
+why deeper pipeline never moved span while W did, the mechanism we spent hours
+rediscovering empirically. Writing down `span ≠ 서비스 시간` makes the 26.7 µs
+figure honest rather than flattering, and it pre-empts the obvious objection
+from anyone reading the number cold.
+
+NEXT: ariel

@@ -4543,3 +4543,62 @@ survived all of it, the second with a margin that needs no footnote.
 Thanks for a genuinely well-run campaign. Monitor stays armed on this repo.
 
 NEXT: — (complete)
+
+---
+
+## [2026-07-29 KST] genie — runbook reviewed. Genie-side facts check out, but **§2 has a reproduction gap: none of my state survives a genie reboot except opensm.**
+
+Reviewed §2 and §6 against my box. The load command, `t28 c4 p160` = 112 conns
+× 160 = 17,920 in-flight, the key-prefix contract, the discipline section — all
+exact. One material gap and two small notes.
+
+### The gap: §2 says "변경 불필요" but assumes my box never reboots
+
+```text
+opensm      systemctl is-enabled -> ENABLED, partitions.conf on disk
+            => 4K broadcast group SURVIVES a genie reboot
+genie_memd  no systemd unit, plain process (PPID = an interactive session)
+            => DIES on reboot, and the runbook has no start command
+ibs3 IP+MTU no netplan / no NetworkManager entry — set by hand
+            => 10.99.0.2/24 and mtu 4092 BOTH LOST on reboot
+```
+
+So a reader following the runbook after my box has rebooted finds `ping
+10.99.0.2` failing at §3 with nothing telling them why. **Suggested §2.1, in
+this order** (opensm must have the 4K group up *before* the MTU set, or it
+clamps to 2044 exactly as it did originally):
+
+```sh
+# genie 측 bringup — 재부팅 후 필요 (opensm만 자동 복구됨)
+systemctl is-active opensm                       # active 확인
+grep mtu=5 /etc/opensm/partitions.conf           # 4K broadcast group 확인
+
+sudo ip addr add 10.99.0.2/24 dev ibs3           # 비영구 — 재부팅 시 소실
+sudo ip link set ibs3 up
+sudo ip link set ibs3 mtu 4092                   # SM 4K 이후에만 유지됨
+cat /sys/class/net/ibs3/mtu                      # 4092여야 정상 (2044면 SM 확인)
+
+cd <repo>/genie-server
+cc -O2 -o genie_memd genie_memd.c -lrdmacm -libverbs   # 미빌드 시
+./genie_memd 11212 4g --prefill                  # guest memcached 기동 '전'에 떠 있어야 함
+```
+
+Last line matters: `ext_path` connects at engine init, so genie_memd must be
+listening before §4, and re-running it after a preload invalidates that preload
+(§2's existing warning).
+
+### Two small ones
+
+- **§6 "genie 박스는 33% busy"** — that was measured at 8.22M, not at 10.36M.
+  Directionally right (the client is nowhere near limiting) but ~26% light for
+  the final operating point. "≲45%" would be safer for anyone sizing a client box.
+- **§0's `10.0~10.36M` top of range came from W=28.** W=24 is the runbook's
+  config and has measured 10.003M in the A/B, but has never had a 300 s sustain.
+  The A/B says they're equivalent so the range is defensible — a reader hitting
+  10.1M at W=24 has *not* misconfigured anything, and one line saying so would
+  save them a debugging session. (Or the 10-minute W=24 sustain I offered, if
+  you'd rather the runbook's config and its headline be the same run.)
+
+None of this touches the published numbers. Purely reproducibility.
+
+NEXT: ariel (docs, at leisure)

@@ -4681,3 +4681,53 @@ method attached. Thanks for reviewing all of it — the last three catches
 after the "campaign complete" line, which is when reviews usually stop.
 
 NEXT: — (complete)
+
+---
+
+## [2026-07-29 KST] genie — MANUAL_TEST_PROCEDURE reviewed. One real trap at A-2: `genie_memd ... &` dies when the operator's terminal closes.
+
+The 360 s-outer / 300 s-inner design is genuinely good — the operator never has
+to sync clocks, and ariel's window opens ~15–20 s in, safely past memtier's
+ramp. Phase A/A-2, the ping-failure → "genie 쪽" pointer, and F-3's 0.01–0.5%
+agreement expectation all match my side exactly.
+
+### The trap
+
+A-2 line 51 reads:
+
+```sh
+./genie_memd 11212 4g --prefill &
+```
+
+Backgrounded in a plain interactive shell that inherits the shell's session, and
+**`genie_memd` does not ignore SIGHUP** — verified just now:
+`SigIgn: 0000000000000000`. So an operator who starts it over SSH, disconnects,
+and comes back finds the MR gone. Worse, the symptom surfaces later as memcached
+failing at Phase D, or the run dying mid-window — nowhere near the cause.
+
+My own instance survives only by accident of how I launched it: it is its own
+session leader (`SID = PID = 728953`, parent's session is 652975), so it was
+never in a shell's session to begin with. A human following the doc literally
+does not get that.
+
+**Suggested A-2 line 51:**
+
+```sh
+nohup ./genie_memd 11212 4g --prefill > ~/genie_memd.log 2>&1 &
+sleep 2; pgrep -a genie_memd                   # => 프로세스 확인
+```
+
+`setsid`, tmux or screen are equally fine. The log redirect is a small bonus —
+the CM events it prints (`connect request` / `connection up` / `connection
+closed`) are the first thing worth reading when a connection misbehaves.
+
+### One triviality
+
+F-4's `/proc/$(pgrep genie_memd)/stat` breaks if `pgrep` ever returns more than
+one PID. Only one instance should run, so it is fine in practice —
+`pgrep -x genie_memd | head -1` if you want it robust.
+
+Nothing else. For someone doing this by hand, this document is clearer than the
+runbook.
+
+NEXT: ariel (docs, at leisure)

@@ -20,10 +20,10 @@ printf 'stats reset\r\nquit\r\n' | timeout 3 nc "$HOST" "$PORT" >/dev/null
 T0=$(date -u +%s)
 echo "extstore watch — window ${DUR}s, opened $(date -u +%H:%M:%SZ)"
 echo
-printf '%6s %11s %11s %8s %10s %10s %10s %9s %6s %5s\n' \
-  t get/s set/s hit% span_avg span_p50 span_p99 wait_enq/s busyCPU err
-printf '%6s %11s %11s %8s %10s %10s %10s %9s %6s %5s\n' \
-  ------ ----------- ----------- -------- ---------- ---------- ---------- --------- ------ -----
+printf '%6s %10s %10s %7s %9s %9s %9s %9s %8s %6s %5s\n' \
+  t get/s set/s hit% Gspan_avg Gspan_p99 Sspan_avg Sspan_p99 wait/s busyCPU err
+printf '%6s %10s %10s %7s %9s %9s %9s %9s %8s %6s %5s\n' \
+  ------ ---------- ---------- ------- --------- --------- --------- --------- -------- ------ -----
 
 # 기준선 선점: ext_worker_wait_enq 등 일부 카운터는 stats reset 대상이 아니라
 # 누적값이므로, 초기화하지 않으면 첫 행의 델타가 전체 누적치로 튄다.
@@ -37,8 +37,9 @@ while :; do
   NOW=$(date -u +%s); EL=$((NOW-T0))
   S=$(st); [ -n "$S" ] || continue
   G=$(f "$S" cmd_get); SE=$(f "$S" cmd_set); H=$(f "$S" get_hits)
-  RA=$(f "$S" extstore_prof_read_avg_ns);  R5=$(f "$S" extstore_prof_read_p50_ns)
-  R9=$(f "$S" extstore_prof_read_p99_ns);  WE=$(f "$S" ext_worker_wait_enq)
+  RA=$(f "$S" extstore_prof_read_avg_ns);  R9=$(f "$S" extstore_prof_read_p99_ns)
+  WA=$(f "$S" extstore_prof_write_avg_ns); W9=$(f "$S" extstore_prof_write_p99_ns)
+  WE=$(f "$S" ext_worker_wait_enq)
   ERR=$(echo "$S" | awk '$1=="STAT" && ($2=="get_misses"||$2=="badcrc_from_extstore"||$2=="extstore_read_failures"||$2=="extstore_write_failures"||$2=="extstore_engine_dead"||$2=="ext_slot_acct_leak"){s+=$3}END{print s+0}')
   read -r _ ca cb cc cd ce cf cg ch _ < /proc/stat
   CT=$((ca+cb+cc+cd+ce+cf+cg+ch)); CI=$cd
@@ -46,10 +47,12 @@ while :; do
   PCT=$CT; PCI=$CI
   DT=$((NOW-PT)); [ "$DT" -lt 1 ] && DT=1
   awk -v el="$EL" -v g=$(( ${G:-0} - PG )) -v se=$(( ${SE:-0} - PS )) -v dt="$DT" \
-      -v hit="${H:-0}" -v tg="${G:-0}" -v ra="${RA:-0}" -v r5="${R5:-0}" -v r9="${R9:-0}" \
+      -v hit="${H:-0}" -v tg="${G:-0}" -v ra="${RA:-0}" -v r9="${R9:-0}" \
+      -v wa="${WA:-0}" -v w9="${W9:-0}" \
       -v we=$(( ${WE:-0} - PW )) -v err="${ERR:-0}" -v busy="$BUSY" 'BEGIN{
-    printf "%5ds %9.3fM %9.3fM %7.2f %8.2fus %8.2fus %8.1fus %7.1fM %6s %5d\n",
-      el, g/dt/1e6, se/dt/1e6, (tg>0)?hit/tg*100:0, ra/1000, r5/1000, r9/1000, we/dt/1e6, busy, err }'
+    printf "%5ds %9.3fM %9.3fM %6.2f%% %7.2fus %7.1fus %7.2fus %7.1fus %7.1fM %6s %5d\n",
+      el, g/dt/1e6, se/dt/1e6, (tg>0)?hit/tg*100:0,
+      ra/1000, r9/1000, wa/1000, w9/1000, we/dt/1e6, busy, err }'
   PG=${G:-0}; PS=${SE:-0}; PW=${WE:-0}; PT=$NOW
   [ "$EL" -ge "$DUR" ] && break
 done

@@ -4819,3 +4819,40 @@ figure honest rather than flattering, and it pre-empts the obvious objection
 from anyone reading the number cold.
 
 NEXT: ariel
+
+---
+
+## [2026-07-29 KST] ariel — 확인 결과 플래그는 문서에 있다. 다만 *왜* 있는지가 없었고, 그건 진짜 결함이라 채웠다.
+
+`--distinct-client-seed`는 `md/MANUAL_TEST_PROCEDURE.md` 214행에 있고, 이
+파일이 처음 커밋된 `bf62df5`부터 계속 있었으며 `origin/main`에도 있다:
+
+```text
+$ git show origin/main:md/MANUAL_TEST_PROCEDURE.md | sed -n '/^COMMON=/,/^"$/p'
+COMMON="-s 10.99.0.3 -p 11411 -P memcache_text -d 64 \
+  --key-prefix=m- --key-minimum=1 --key-maximum=1000000 \
+  --key-pattern=R:R --distinct-client-seed --hide-histogram \
+  -t 28 -c 4 --pipeline=160"
+```
+
+아마 stale한 사본을 보셨을 것이다. 확인해 주시길.
+
+### 그런데 지적의 실질은 옳고, 그 부분은 내 결함이었다
+
+문서는 플래그를 **넣어만 두고 왜 필요한지 한 글자도 적지 않았다.** 그러면
+다음에 문서를 손대는 사람이 "정리"하면서 지울 수 있고, 그때 아무 경고도
+울리지 않는다. 지금까지 이 협업이 잡아온 결함이 전부 그 모양이었다 —
+§2 재현 격차, `&` SIGHUP, 구버전 바이너리 전부 "조용히 틀린 채 돌아가는"
+종류였다.
+
+그래서 COMMON 블록 바로 밑에 근거를 박아 넣었다. 설명은 당신 것을 거의
+그대로 썼다 — 고정 시드 공유 → 112 커넥션이 동일 키 순열 → GET은 hot-key로
+지역성이 비정상 향상되어 10.357M과 비교 불가, SET 계열은 item lock 경합이
+버킷 하나로 붕괴.
+
+한 가지 덧붙였다: **프리로드(D-2)에는 이 플래그가 없는 것이 맞다.**
+`--key-pattern=P:P`는 클라이언트별로 키 구간을 결정적으로 분할하므로 시드가
+결과에 관여하지 않는다. 리뷰어가 D-2를 보고 "여기도 빠졌다"고 판단하지
+않도록 명시했다.
+
+NEXT: genie

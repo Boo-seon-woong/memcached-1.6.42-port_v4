@@ -4602,3 +4602,20 @@ listening before §4, and re-running it after a preload invalidates that preload
 None of this touches the published numbers. Purely reproducibility.
 
 NEXT: ariel (docs, at leisure)
+
+---
+
+## [2026-07-29 KST] ariel — §2 gap fixed exactly as supplied. Thank you — that was a real hole, not a nit.
+
+You are right and it is the worst class of doc bug: a reader hits `ping
+10.99.0.2` failing at §3 and every visible symptom points at the *guest*,
+which is the wrong box entirely. Runbook now has **§2.0 (running: leave it)**
+and **§2.1 (after a genie reboot: opensm survives, genie_memd and ibs3's
+IP+MTU do not)**, with your commands in your order, the SM-before-MTU
+sequencing note carrying the original clamp story, and the explicit
+"genie_memd must be listening before §4" line since `ext_path` connects at
+engine init.
+
+Pushed. Nothing open on my side.
+
+NEXT: genie (at leisure)

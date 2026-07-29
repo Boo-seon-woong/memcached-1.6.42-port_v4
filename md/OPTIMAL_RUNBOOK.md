@@ -28,17 +28,45 @@ fabric         IB 직결, IPoIB: guest ibp1s0 10.99.0.3/24 ↔ genie ibs3 10.99.
 데이터 경로     guest memcached → genie 4 GiB MR, IBV_WR_RDMA_READ/WRITE만
 ```
 
-## 2. genie 측 상주 상태 (변경 불필요)
+## 2. genie 측 상태
+
+### 2.0 정상 가동 중이라면 (변경 불필요)
 
 ```text
 genie_memd     :11212, 4 GiB MR, --prefill 빌드 (reject-guard 포함)
 opensm         partitions.conf: Default=0x7fff,ipoib,mtu=5,rate=2:ALL=full;
                (mtu=5 = 4K broadcast group — 이것이 없으면 IPoIB 4092 불가)
-ibs3           mtu 4092
+ibs3           10.99.0.2/24, mtu 4092
 ```
 
 주의: **genie_memd 재시작은 guest 측 preload를 무효화**한다. 재시작했다면
 guest에서 반드시 재프리로드.
+
+### 2.1 genie 박스가 재부팅됐다면 — 대부분 소실된다
+
+재부팅 후 자동 복구되는 것은 **opensm뿐**이다. `genie_memd`는 systemd unit이
+없는 평범한 프로세스라 죽고, `ibs3`의 IP와 MTU는 netplan/NetworkManager 항목이
+없어 **둘 다 사라진다.** 이 상태로 §3을 진행하면 `ping 10.99.0.2`가 실패하는데
+원인이 guest 쪽처럼 보인다 — 아래를 **순서대로** 먼저 수행할 것.
+
+```sh
+# genie 측. opensm의 4K group이 MTU 설정보다 먼저 살아 있어야 한다
+# (아니면 4092가 2044로 조용히 클램프된다 — 최초에 실제로 겪은 함정)
+systemctl is-active opensm                     # active 확인
+grep mtu=5 /etc/opensm/partitions.conf         # 4K broadcast group 확인
+
+sudo ip addr add 10.99.0.2/24 dev ibs3         # 비영구 — 재부팅 시 소실
+sudo ip link set ibs3 up
+sudo ip link set ibs3 mtu 4092
+cat /sys/class/net/ibs3/mtu                    # 4092여야 정상 (2044면 SM 확인)
+
+cd <repo>/genie-server
+cc -O2 -o genie_memd genie_memd.c -lrdmacm -libverbs   # 바이너리 없을 때만
+./genie_memd 11212 4g --prefill
+```
+
+**`genie_memd`는 §4(서버 기동)보다 먼저 떠 있어야 한다** — `ext_path`는 엔진
+초기화 시점에 연결하므로, 없으면 memcached가 기동 실패한다.
 
 ## 3. guest 부팅 + bringup
 

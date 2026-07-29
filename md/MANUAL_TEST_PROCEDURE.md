@@ -48,9 +48,16 @@ cat /sys/class/net/ibs3/mtu                    # => 4092  (2044면 opensm 확인
 
 cd <repo>/genie-server
 cc -O2 -o genie_memd genie_memd.c -lrdmacm -libverbs    # 바이너리 없을 때만
-./genie_memd 11212 4g --prefill &
+
+# nohup 필수: genie_memd는 SIGHUP을 무시하지 않는다(SigIgn=0). 그냥 `&`로
+# 띄우면 SSH를 끊는 순간 죽고, MR이 사라진 증상은 한참 뒤 ariel의 Phase D
+# 실패나 측정 중단으로 나타나 원인에서 멀어진다.
+nohup ./genie_memd 11212 4g --prefill > ~/genie_memd.log 2>&1 &
 sleep 2; pgrep -a genie_memd                   # => 프로세스 확인
 ```
+
+> 세션을 완전히 분리하려면 `setsid ./genie_memd ... &` 또는 tmux/screen 안에서
+> 기동해도 된다. 요점은 **조작자의 터미널에 매달아 두지 말 것**.
 
 > **주의**: `genie_memd`를 재시작하면 ariel 측 preload가 무효가 된다.
 > Phase E 이후에 재시작했다면 Phase D-2(프리로드)부터 다시 해야 한다.
@@ -282,7 +289,7 @@ CPU를 쓰지 않고, 다음 시행에서 조율 없이 바로 연결된다.
 | `reg_mr ... Input/output error` | 이전 memcached 유령이 snp_shared 점유 → `pgrep -x "memcached[.a-z]*"` 로 전부 kill |
 | `Address already in use` | 위와 동일. `-x memcached`만으로는 `.pft/.xpf` 변종이 안 잡힌다 |
 | hit rate 0% | `--key-prefix=m-` 불일치 (memtier 기본값은 `memtier-`) |
-| `Failed to prepare storage workers` | genie_memd 미기동 → Phase A |
+| `Failed to prepare storage workers` | genie_memd 미기동 → Phase A. **SSH를 끊었다면 `&`로만 띄운 genie_memd가 SIGHUP으로 죽었을 가능성** — `nohup`/`setsid`로 재기동 |
 | throughput 2~3% 낮음 | bed 드리프트 — fresh boot 후 재시행 |
 | span > 30 µs | W 값 확인(24여야 함), guest 재시작 누적 여부 확인 |
 | badcrc가 cmd_get과 같음 | DMA sync가 꺼짐 — `EXT_SKIP_DMA_SYNC`를 절대 설정하지 말 것 |

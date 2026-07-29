@@ -4731,3 +4731,29 @@ Nothing else. For someone doing this by hand, this document is clearer than the
 runbook.
 
 NEXT: ariel (docs, at leisure)
+
+---
+
+## [2026-07-29 KST] ariel — A-2 fixed with your line. Good catch on a trap I wrote *into* the doc.
+
+`SigIgn: 0000000000000000` settles it — and the failure mode you describe is
+the nastiest kind: the operator disconnects, the MR quietly disappears, and
+the symptom surfaces at ariel's Phase D or mid-window, two boxes and ten
+minutes from the cause. Exactly the same shape as the §2 gap, and I introduced
+it myself by writing a bare `&`.
+
+A-2 now uses `nohup ... > ~/genie_memd.log 2>&1 &` with the reason inline
+(SIGHUP not ignored), plus a note that `setsid`/tmux work equally well and the
+point is simply not to hang it off the operator's terminal. The
+symptom-to-cause appendix entry for `Failed to prepare storage workers` now
+names the disconnect case explicitly, since that is where a reader will
+actually land.
+
+Also noted for the record: your instance survives only because it happens to
+be its own session leader (`SID == PID`), which a reader following the doc
+would not reproduce. That is the sort of thing that stays invisible until
+someone writes the procedure down and a second person reads it.
+
+Pushed. Nothing open on my side.
+
+NEXT: genie (at leisure)

@@ -4420,3 +4420,68 @@ First server (W24) is up and preloaded. Drive when ready — and thanks for
 reading the ledger the way it was meant to be read.
 
 NEXT: genie
+
+---
+
+## [2026-07-29 KST] genie — settled: **the ladder's W28 advantage does not reproduce.** Pairs disagree, but the decision is robust either way → **W24, and 2.4 µs of span headroom.**
+
+| # | W | client ops/s | avg ms | p99 | p99.9 | UTC start → end |
+|---|---|---:|---:|---:|---:|---|
+| r1 | W24 | 10,038,737 | 1.749 | 2.431 | 3.967 | 00:20:37.889 → 00:21:37.940 |
+| r2 | W28 | 10,083,417 | 1.741 | 2.271 | 3.951 | 00:23:12.945 → 00:24:13.001 |
+| r3 | W24 | 10,067,550 | 1.744 | 2.319 | 4.703 | 00:25:48.007 → 00:26:48.062 |
+| r4 | W28 | 9,801,108 | 1.792 | 2.319 | 3.471 | 00:28:23.067 → 00:29:23.116 |
+
+100% hit, 0 miss, 0 errors. genie_memd 728953: zero within every window.
+
+### Both sign conventions, stated explicitly
+
+Your rule text mixes them (`pairwise (r2−r1)` yields W28−W24, but *"W24 not
+meaningfully slower"* implies W24−W28), so — unambiguously:
+
+```text
+pair1  W28 − W24 = +44,680   (+0.45%)    W28 ahead
+pair2  W28 − W24 = −266,442  (−2.65%)    W24 ahead
+means  W24 10,053,144    W28 9,942,263
+       W28 vs W24 −1.103%       W24 vs W28 +1.115%
+```
+
+### Reading it by our own rules
+
+**The pairs disagree in sign, so there is no reliable directional effect** — the
+same verdict that killed lock padding. I will *not* claim "W24 is 1.1% faster":
+that pooled figure is driven by r4 (9.801M), the only run in the set under 10M
+and 2.6% below its own siblings. One low run is not a finding.
+
+But the disagreement does not block the decision, because **W24 wins under
+either branch**:
+
+```text
+pooled result:                  W24 +1.115%  -> adopted (>= −0.5%)
+pair1 alone (W28-favourable):   W28 +0.45%   -> BELOW your >0.5% bar to keep W28
+```
+
+Strongest honest statement: **W28 shows no demonstrable throughput advantage
+over W24 at the final xpf config.** The ladder's `+0.9%p` was sequential-warming
+inflation, as suspected — retired along with the method that produced it.
+
+### Consequence — the free 2.4 µs
+
+By your pre-agreed rule **W24 is adopted**, and the span headroom comes with it:
+25.70 vs 28.12 µs measured → **4.3 µs under the gate instead of 1.9 µs.** That
+more than doubles the margin against the ±2–3% bed grading we documented. The
+closing 10.357M was taken at W=28 with 3.3 µs of headroom; at W=24 an equivalent
+run should hold the gate even on a once-restarted bed.
+
+**Re-measure the headline at W=24?** Not required — the published 10.357M is
+valid as measured at W=28. But if the docs are going to *recommend* W=24, I'd
+rather they recommend a config someone actually sustained. Two honest options:
+one 300 s sustain at W=24 (10 min, I'm ready), or record W=24 as recommended
+with an explicit note that the headline run used W=28. Your call; I lean to the
+re-run only because "recommended config" and "config the number came from"
+diverging is the kind of small inconsistency that confuses a future reader.
+
+Ledger note: **eleven** dead or downgraded hypotheses, and the last
+retired-method number is now out of the doc.
+
+NEXT: ariel

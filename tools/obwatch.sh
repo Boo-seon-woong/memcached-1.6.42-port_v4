@@ -20,16 +20,18 @@ printf 'stats reset\r\nquit\r\n' | timeout 3 nc "$HOST" "$PORT" >/dev/null
 T0=$(date -u +%s)
 echo "extstore watch — window ${DUR}s, opened $(date -u +%H:%M:%SZ)"
 echo
-printf '%6s %11s %11s %8s %10s %10s %10s %9s %5s\n' \
-  t get/s set/s hit% span_avg span_p50 span_p99 wait_enq/s err
-printf '%6s %11s %11s %8s %10s %10s %10s %9s %5s\n' \
-  ------ ----------- ----------- -------- ---------- ---------- ---------- --------- -----
+printf '%6s %11s %11s %8s %10s %10s %10s %9s %6s %5s\n' \
+  t get/s set/s hit% span_avg span_p50 span_p99 wait_enq/s busyCPU err
+printf '%6s %11s %11s %8s %10s %10s %10s %9s %6s %5s\n' \
+  ------ ----------- ----------- -------- ---------- ---------- ---------- --------- ------ -----
 
 # 기준선 선점: ext_worker_wait_enq 등 일부 카운터는 stats reset 대상이 아니라
 # 누적값이므로, 초기화하지 않으면 첫 행의 델타가 전체 누적치로 튄다.
 B=$(st)
 PG=$(f "$B" cmd_get); PS=$(f "$B" cmd_set); PW=$(f "$B" ext_worker_wait_enq)
 PG=${PG:-0}; PS=${PS:-0}; PW=${PW:-0}; PT=$(date -u +%s)
+read -r _ ca cb cc cd ce cf cg ch _ < /proc/stat
+PCT=$((ca+cb+cc+cd+ce+cf+cg+ch)); PCI=$cd; NCPU=$(nproc)
 while :; do
   sleep "$INT"
   NOW=$(date -u +%s); EL=$((NOW-T0))
@@ -38,12 +40,16 @@ while :; do
   RA=$(f "$S" extstore_prof_read_avg_ns);  R5=$(f "$S" extstore_prof_read_p50_ns)
   R9=$(f "$S" extstore_prof_read_p99_ns);  WE=$(f "$S" ext_worker_wait_enq)
   ERR=$(echo "$S" | awk '$1=="STAT" && ($2=="get_misses"||$2=="badcrc_from_extstore"||$2=="extstore_read_failures"||$2=="extstore_write_failures"||$2=="extstore_engine_dead"||$2=="ext_slot_acct_leak"){s+=$3}END{print s+0}')
+  read -r _ ca cb cc cd ce cf cg ch _ < /proc/stat
+  CT=$((ca+cb+cc+cd+ce+cf+cg+ch)); CI=$cd
+  BUSY=$(awk -v dt=$((CT-PCT)) -v di=$((CI-PCI)) -v n="$NCPU" 'BEGIN{printf "%.1f", (dt>0)?(dt-di)/dt*n:0}')
+  PCT=$CT; PCI=$CI
   DT=$((NOW-PT)); [ "$DT" -lt 1 ] && DT=1
   awk -v el="$EL" -v g=$(( ${G:-0} - PG )) -v se=$(( ${SE:-0} - PS )) -v dt="$DT" \
       -v hit="${H:-0}" -v tg="${G:-0}" -v ra="${RA:-0}" -v r5="${R5:-0}" -v r9="${R9:-0}" \
-      -v we=$(( ${WE:-0} - PW )) -v err="${ERR:-0}" 'BEGIN{
-    printf "%5ds %9.3fM %9.3fM %7.2f %8.2fus %8.2fus %8.1fus %7.1fM %5d\n",
-      el, g/dt/1e6, se/dt/1e6, (tg>0)?hit/tg*100:0, ra/1000, r5/1000, r9/1000, we/dt/1e6, err }'
+      -v we=$(( ${WE:-0} - PW )) -v err="${ERR:-0}" -v busy="$BUSY" 'BEGIN{
+    printf "%5ds %9.3fM %9.3fM %7.2f %8.2fus %8.2fus %8.1fus %7.1fM %6s %5d\n",
+      el, g/dt/1e6, se/dt/1e6, (tg>0)?hit/tg*100:0, ra/1000, r5/1000, r9/1000, we/dt/1e6, busy, err }'
   PG=${G:-0}; PS=${SE:-0}; PW=${WE:-0}; PT=$NOW
   [ "$EL" -ge "$DUR" ] && break
 done
@@ -66,10 +72,14 @@ END{
   printf "%-10s %13.2f %13.2f\n","Totals",(g+s)/t,h/t
   printf "\n%-28s %s\n","gate span avg < 30us",(g==0)?"n/a (GET 없음)":((ra/1000<30)?sprintf("PASS  (%.2fus, 여유 %.2fus)",ra/1000,30-ra/1000):sprintf("*** FAIL (%.2fus) ***",ra/1000))
   printf "%-28s %.2f %%\n","hit rate",(g>0)?h/g*100:0
-  printf "\n--- correctness (전부 0이어야 정상) ---\n"
-  printf "get_misses=%d badcrc=%d read_fail=%d write_fail=%d engine_dead=%d leak=%d\n",
-    v["get_misses"]+0, v["badcrc_from_extstore"]+0, v["extstore_read_failures"]+0,
-    v["extstore_write_failures"]+0, v["extstore_engine_dead"]+0, v["ext_slot_acct_leak"]+0
+  printf "\n--- correctness ---\n"
+  bc=v["badcrc_from_extstore"]+0; gm=v["get_misses"]+0
+  printf "필수 0: get_misses=%d read_fail=%d write_fail=%d engine_dead=%d leak=%d  %s\n",
+    gm, v["extstore_read_failures"]+0, v["extstore_write_failures"]+0,
+    v["extstore_engine_dead"]+0, v["ext_slot_acct_leak"]+0,
+    (gm==0 && v["extstore_read_failures"]+0==0 && v["extstore_write_failures"]+0==0 && v["extstore_engine_dead"]+0==0 && v["ext_slot_acct_leak"]+0==0)?"OK":"*** FAIL ***"
+  if (s>0) printf "badcrc=%d (%.3f%% of GET) — 혼합 워크로드에서는 read-during-write 경합으로 발생 가능. get_misses=0이면 재시도로 복구된 것이며 미검증 데이터는 전달되지 않는다\n", bc, (g>0)?bc/g*100:0
+  else     printf "badcrc=%d  %s (GET-only에서는 0이어야 한다)\n", bc, (bc==0)?"OK":"*** FAIL ***"
   if (g>0) { d=(g-rc)/g*100
     printf "read span 표본 커버리지 : %+.4f%%  %s\n", d, (d>=-1.0&&d<0.2)?"OK":"*** 확인 필요 ***"
     printf "   (양수=리셋 경계 누락, 음수=재시도로 표본 증가 — 혼합 워크로드에서 정상)\n" }

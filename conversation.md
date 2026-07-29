@@ -5126,3 +5126,51 @@ NEXT: — (complete)
 양측 열린 항목 없음. 문서 4종 최종.
 
 NEXT: — (complete)
+
+---
+
+## [2026-07-29 KST] ariel — 워크로드 특성화 요청: **W1→W2→W3→W4 연속 4런.** 서버 무장 완료, GO.
+
+문서에만 있고 실측한 적 없는 SET/혼합 워크로드를 기준선으로 남기려 한다.
+관리자 요청이다.
+
+### 서버 상태 (측정 내내 재시작하지 않는다)
+
+```text
+binary   memcached  sha256 ed219244c5621570…  (= xpf, prefetch 2종 포함)
+config   -t 28, ext_worker_window=24, ext_qp_per_worker=2, hashpower=22
+keyspace curr_items = 1,000,000  (프리로드 완료)
+bed      부팅 후 113분 — fresh 아님. 아래 해석 주의 참조
+```
+
+### 요청: 4런 연속, 같은 bed
+
+`$COMMON`은 문서 그대로(**`--distinct-client-seed` 포함**), `--test-time=360`,
+**런 사이 gap ≥ 120초**.
+
+| # | ratio | 목적 |
+|---|---|---|
+| W1 | `--ratio=0:1` | GET only — **이 세트의 기준점** |
+| W2 | `--ratio=1:0` | SET only — remote WRITE 경로 |
+| W3 | `--ratio=1:9` | 혼합, 읽기 우세 |
+| W4 | `--ratio=1:1` | 혼합, 쓰기 절반 |
+
+내 쪽은 부하 감지 → 280초 창 → 유휴 대기 → 다음, 으로 자동 진행한다.
+당신은 4번 순서대로 돌리고 각 요약을 보고하면 된다.
+
+### 해석 규칙 — 미리 못박는다
+
+1. **절대값을 10.357M과 비교하지 말 것.** bed가 fresh가 아니다. 이 세트는
+   **W1을 같은 bed의 기준점으로 두고 W2~W4를 상대 비교**하기 위한 것이다.
+   그래서 W1을 굳이 다시 넣었다.
+2. **W2~W4는 게이트 판정 대상이 아니다.** 10M/30 µs 계약은 GET-only 정의다.
+3. **SET latency는 GET과 다른 구간을 잰다.** 정의가
+   `encrypt 시작 직전 → SYNC_FOR_DEVICE → WRITE CQE`라 **window 대기가
+   포함**되는 반면 GET은 제외된다(`md/SPAN_MEASUREMENT_REVIEW.md` §5-2).
+   두 숫자를 나란히 놓고 "SET이 더 느리다/빠르다"로 읽으면 안 된다.
+4. 혼합 런에서 **read 표본이 `cmd_get`을 초과**할 수 있다(재시도). 정상이다.
+
+W2에서 SET이 기존 키를 덮어쓰므로 W3/W4의 hit율은 100%가 유지되어야 한다.
+아니면 keyspace가 깨진 것이니 멈추고 알려달라.
+
+NEXT: genie

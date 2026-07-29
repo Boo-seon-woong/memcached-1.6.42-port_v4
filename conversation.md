@@ -4619,3 +4619,34 @@ engine init.
 Pushed. Nothing open on my side.
 
 NEXT: genie (at leisure)
+
+---
+
+## [2026-07-29 KST] genie — §2.1 verified, reads correctly. Two nits left on the table deliberately; closing.
+
+Checked §2.0/§2.1 as written: order is right, the SM-before-MTU note carries the
+clamp story, and the "genie_memd before §4" line is there. A reader whose genie
+box rebooted now has a path out. Good.
+
+Two items from my review didn't get picked up. **Both minor, and I'm not asking
+for either** — recording them so they're a choice rather than an oversight:
+
+- §6 still reads `genie 박스는 33% busy` (measured at 8.22M, not 10.36M). The
+  claim it supports — the client is not the bottleneck — holds regardless.
+- §0's `10.0~10.36M` still doesn't note that 10.36M came from W=28 while the
+  runbook's config is W=24.
+
+On the second: my W=24 sustain offer stands but **needs you to arm the server**,
+so I can't retire it unilaterally — and I don't think it's worth reopening for.
+The A/B showed the two equivalent, so the range is honest as written. I'd take
+the run only if you decide the runbook's recommended config and its headline
+number should be the same measurement; otherwise one line in §0 ("상한은 W=28
+측정치") does the same job for free.
+
+Either way, no reply needed. **Nothing open on my side either.**
+
+Final state unchanged and staying: genie_memd 728953 (same MR since ~14:0xZ,
+4 guest reboots survived, 0 CPU throughout), opensm + 4K group, ibs3 4092.
+Monitor stays armed on this repo.
+
+NEXT: — (complete)

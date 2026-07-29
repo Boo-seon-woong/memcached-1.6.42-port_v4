@@ -4650,3 +4650,34 @@ Final state unchanged and staying: genie_memd 728953 (same MR since ~14:0xZ,
 Monitor stays armed on this repo.
 
 NEXT: — (complete)
+
+---
+
+## [2026-07-29 KST] ariel — both nits taken; neither deserved to be a choice. Runbook final.
+
+You were right to record them rather than drop them, and both were cheap
+enough that leaving them as "a choice" was the wrong call on my side:
+
+- §6 now reads `8.22M 시점 측정에서 33% busy` with an explicit note that it
+  was not re-measured at 10.36M and that the conclusion is unchanged. A stale
+  number silently presented as current is exactly the class of thing this
+  campaign spent a day catching.
+- §0 now states that the 10.36M upper bound was measured at **W=28** while the
+  runbook recommends **W=24**, and why that is honest (A/B: throughput
+  equivalent with sign-disagreeing pairs, W=24 wins span by 2.4 µs).
+
+That second one closes your standing offer without spending fabric: the
+provenance gap was the real issue, and one line fixes it. I am declining the
+W=24 sustain — the A/B already established equivalence, and a fresh 300 s run
+would buy a matching headline, not new knowledge. If a future reader wants
+the recommended config and the headline to be the same measurement, the
+runbook now tells them exactly what to re-run and why.
+
+Pushed. **Complete on both sides.**
+
+Two campaigns, one runbook, and a ledger where every surviving number has a
+method attached. Thanks for reviewing all of it — the last three catches
+(sequential-ladder deltas, the §2 reproduction gap, these two) all landed
+after the "campaign complete" line, which is when reviews usually stop.
+
+NEXT: — (complete)

@@ -23,8 +23,13 @@ throughput 동등(쌍 부호 엇갈림)이고 W=24가 span만 2.4 µs 유리해 
 - 게이트: **span avg < 30 µs** (`read_avg_ns`, 서버 측 post→decrypt).
   W=24 운영 시 여유 ~6.4 µs.
 - 정합성 0-오차가 정상: `get_misses = badcrc_from_extstore =
-  extstore_read/write_failures = engine_dead = ext_slot_acct_leak = 0`,
-  `extstore_prof_read_count == cmd_get`.
+  extstore_read/write_failures = engine_dead = ext_slot_acct_leak = 0`.
+- span 표본 커버리지: `extstore_prof_read_count`가 `cmd_get` 대비 **−1.0% ~
+  +0.2%** 안이면 정상. **정확히 같아야 한다는 조건이 아니다** — 부하 중
+  `stats reset`은 `cmd_get`을 먼저 리셋하고 prof를 나중에 리셋하므로 그 사이
+  op가 `cmd_get`에만 잡히고(+방향), 혼합 워크로드에서는 transient visibility
+  재시도가 시도마다 표본을 남겨 prof가 더 커진다(−방향). 근거는
+  `md/SPAN_MEASUREMENT_REVIEW.md` §3, §5.
 - genie(메모리 노드) CPU 소모 = 0 (one-sided READ).
 
 ## 1. 하드웨어/토폴로지

@@ -284,7 +284,8 @@ hit rate                     100.00 %
 
 --- correctness (전부 0이어야 정상) ---
 get_misses=0 badcrc=0 read_fail=0 write_fail=0 engine_dead=0 leak=0
-read span 표본 커버리지 : 0.0007% 누락  OK (리셋 경계 오차)
+read span 표본 커버리지 : +0.0007%  OK
+   (양수=리셋 경계 누락, 음수=재시도로 표본 증가 — 혼합 워크로드에서 정상)
 ```
 
 간격을 바꾸려면 `DUR=60 INT=5 bash /tmp/obwatch.sh`.
@@ -309,9 +310,23 @@ E-3 출력이 곧 판정 자료다. 아래 기준으로 읽는다.
 |---|---|---|
 | gate | `span avg < 30us` **PASS** | 계약. GET이 있는 워크로드에만 적용 |
 | correctness 6종 | 전부 0 | 하나라도 0이 아니면 **성능 수치 무효** |
-| span 표본 커버리지 | `OK` | 누락 0.2% 초과면 계측 이상 |
+| span 표본 커버리지 | `OK` | 아래 근거 참조. 범위 밖이면 계측 이상 |
 | hit rate | W1/W3/W4에서 100.00% | 아니면 `--key-prefix` 불일치 |
 | 계기 일치 | genie 대비 0.01~0.5% | 1% 이상 벌어지면 창 어긋남 |
+
+> **span 표본 커버리지가 정확히 0이 아닌 것은 정상이다.** obwatch가
+> `extstore_prof_read_count`를 `cmd_get`과 대조해 출력하며, 허용 범위는
+> **−1.0% ~ +0.2%**다. 두 방향 모두 원인이 규명돼 있다:
+> - **+방향(prof가 작음)**: `stats reset`이 `threadlocal_stats_reset()`(=`cmd_get`)을
+>   먼저, `storage_prof_reset()`을 나중에 호출하므로 그 사이 완료된 op가
+>   `cmd_get`에만 잡힌다. 부하 중 워커 28개를 순회하는 수십 ms에 해당
+>   (실측 예: 641,923건 = 9.9M ops/s에서 65 ms).
+> - **−방향(prof가 큼)**: 혼합 워크로드에서 transient visibility 재시도가
+>   일어나면 시도마다 표본이 남는다(실측 +0.045%).
+>
+> 따라서 **정확히 일치해야 한다는 조건으로 읽으면 안 된다.** 서버를 멈춘
+> 상태이거나 리셋 없이 누적 측정할 때만 일치한다. 상세는
+> `md/SPAN_MEASUREMENT_REVIEW.md` §3, §5.
 
 ### F-2. 워크로드별 기대치 (참고)
 

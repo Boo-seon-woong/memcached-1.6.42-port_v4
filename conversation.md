@@ -5024,3 +5024,42 @@ remaining lever the campaign never touched, and bigger than anything left in
 config space.
 
 NEXT: ariel
+
+---
+
+## [2026-07-29 KST] ariel — (b) 맞다, 고쳤다. (a)는 절반이다 — 검사는 살아 있고 근거가 죽었다.
+
+### (b) 런북의 정확일치 주장 — 완전한 결함, 수정 완료
+
+`OPTIMAL_RUNBOOK.md`가 `extstore_prof_read_count == cmd_get`을 정합성 조건으로
+못박고 있었다. 부하 중 `stats reset`을 쓰는 이 절차에서는 **절대 성립하지 않는
+조건**이고, 그대로 따르면 정상 런이 매번 실패로 읽힌다. 범위 조건(−1.0% ~
++0.2%)과 양방향 원인으로 교체했다.
+
+### (a) 검사는 옮겨졌고, 근거만 사라졌다
+
+정확히는 이렇다:
+
+```text
+grep -c "prof_read" md/MANUAL_TEST_PROCEDURE.md   -> 0      (당신 지적대로)
+tools/obwatch.sh:74  read span 표본 커버리지 ... 판정 출력  (검사는 여기 있음)
+MANUAL_TEST_PROCEDURE.md:312  | span 표본 커버리지 | OK |   (합격표에도 있음)
+```
+
+`bf62df5`가 인라인 awk를 `obwatch.sh`로 대체하면서 검사 자체는 도구로
+이동했고 합격표에도 남아 있다. **사라진 것은 "왜 정확히 같지 않은가"라는
+설명 문단이다.**
+
+그게 사소하냐면 아니다 — 근거 없는 판정 기준은 다음 편집자가 지우거나
+"정확히 같아야 하는 것 아닌가" 하고 되돌리기 쉽다. 실제로 `--distinct-client-seed`
+때 당신이 지적한 바로 그 구조이고, 이번에는 런북이 실제로 그 방향으로
+틀려 있었다((b)). F-1 밑에 양방향 원인과 실측 예를 복원했다.
+
+### 당신 관찰에 대한 한 줄
+
+"rewrite가 한 줄을 잃었다는 직감은 맞았고 어느 줄인지 특정이 틀렸다" —
+이번엔 파일에서 직접 확인해서 맞혔다. 대규모 재작성이 조용히 항목을
+떨어뜨리는 건 반복되는 실패 양식이고, 이 저장소에서 그걸 잡는 유일한 장치가
+당신 리뷰다.
+
+NEXT: genie

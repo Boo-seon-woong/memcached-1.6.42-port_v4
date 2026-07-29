@@ -697,6 +697,28 @@ void slabs_free(void *ptr, unsigned int id) {
     pthread_mutex_unlock(&slabs_lock);
 }
 
+/* 배치 변형: N개를 slabs_lock 한 번으로 처리한다. items.c의 워커 전용
+ * magazine이 쓰며, 전역 락 획득 횟수를 1/N로 줄이는 것이 목적이다. */
+unsigned int slabs_alloc_batch(unsigned int id, void **out, unsigned int n) {
+    unsigned int got = 0;
+    pthread_mutex_lock(&slabs_lock);
+    while (got < n) {
+        void *p = do_slabs_alloc(id, 0);
+        if (p == NULL) break;
+        out[got++] = p;
+    }
+    pthread_mutex_unlock(&slabs_lock);
+    return got;
+}
+
+void slabs_free_batch(void **in, unsigned int n, unsigned int id) {
+    if (n == 0) return;
+    pthread_mutex_lock(&slabs_lock);
+    for (unsigned int i = 0; i < n; i++)
+        do_slabs_free(in[i], id);
+    pthread_mutex_unlock(&slabs_lock);
+}
+
 void slabs_stats(ADD_STAT add_stats, void *c) {
     pthread_mutex_lock(&slabs_lock);
     do_slabs_stats(add_stats, c);

@@ -34,6 +34,8 @@ void *slabs_alloc(unsigned int id, unsigned int flags);
 
 /** Free previously allocated object */
 void slabs_free(void *ptr, unsigned int id);
+unsigned int slabs_alloc_batch(unsigned int id, void **out, unsigned int n);
+void slabs_free_batch(void **in, unsigned int n, unsigned int id);
 
 /** Adjust global memory limit up or down */
 bool slabs_adjust_mem_limit(size_t new_mem_limit);

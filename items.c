@@ -88,8 +88,38 @@ static size_t item_make_header(const uint8_t nkey, const client_flags_t flags, c
     return sizeof(item) + nkey + *nsuffix + nbytes;
 }
 
+/* 워커 전용 item magazine.
+ *
+ * 전역 slabs_lock은 alloc/free 각각 1건마다 잡히므로 SET 경로에서 CPU의
+ * 절반 가까이를 소모한다(측정: slabs_alloc 33.3% + slabs_free 13.4%).
+ * GET은 복호 목적지를 _Thread_local cache_t에서 꺼내 이 비용을 피하는데,
+ * stub item은 해시테이블에 등재되므로 같은 방식을 쓸 수 없다. 대신 슬랩
+ * 계층 앞에 워커 전용 자유 목록을 두고 배치로 채우고 비운다.
+ *
+ * magazine에 든 항목의 상태는 slab 자유 목록에 있을 때와 동일하게
+ * (ITEM_SLABBED, slabs_clsid) 유지하고, 꺼낼 때 do_slabs_alloc과 같은
+ * 전이(플래그 해제 + refcount=1)를 적용한다. chunked item은 별도 해제
+ * 경로가 필요하므로 제외한다. */
+static _Thread_local struct {
+    void *v[ITEM_MAG_MAX];
+    unsigned int n;
+} g_item_mag[MAX_NUMBER_OF_SLAB_CLASSES];
+
 /* No eviction in v2: allocation failure is an OOM error, never an evict. */
 item *do_item_alloc_pull(const size_t ntotal, const unsigned int id) {
+    unsigned int depth = settings.item_mag_depth;
+    if (depth > ITEM_MAG_MAX) depth = ITEM_MAG_MAX;
+    if (depth > 0 && id < MAX_NUMBER_OF_SLAB_CLASSES) {
+        if (g_item_mag[id].n == 0)
+            g_item_mag[id].n = slabs_alloc_batch(id, g_item_mag[id].v, depth);
+        if (g_item_mag[id].n > 0) {
+            item *it = (item *)g_item_mag[id].v[--g_item_mag[id].n];
+            /* do_slabs_alloc과 동일한 전이 */
+            it->it_flags &= ~ITEM_SLABBED;
+            it->refcount = 1;
+            return it;
+        }
+    }
     item *it = slabs_alloc(id, 0);
     if (it == NULL) {
         pthread_mutex_lock(&lru_locks[id]);
@@ -223,6 +253,19 @@ void item_free(item *it) {
     /* so slab size changer can tell later if item is already free or not */
     clsid = ITEM_clsid(it);
     DEBUG_REFCNT(it, 'F');
+    {
+        unsigned int depth = settings.item_mag_depth;
+        if (depth > ITEM_MAG_MAX) depth = ITEM_MAG_MAX;
+        if (depth > 0 && clsid < MAX_NUMBER_OF_SLAB_CLASSES &&
+            (it->it_flags & ITEM_CHUNKED) == 0 &&
+            g_item_mag[clsid].n < depth) {
+            /* do_slabs_free와 동일한 전이 (자유 목록 연결만 생략) */
+            it->it_flags = ITEM_SLABBED;
+            it->slabs_clsid = clsid;
+            g_item_mag[clsid].v[g_item_mag[clsid].n++] = it;
+            return;
+        }
+    }
     slabs_free(it, clsid);
 }
 

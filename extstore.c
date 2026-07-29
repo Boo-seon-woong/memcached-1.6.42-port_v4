@@ -339,10 +339,43 @@ static store_page *grab_active(store_engine *e, unsigned int bucket, unsigned in
     return p;
 }
 
+/* 워커 전용 remote-loc magazine.
+ *
+ * extstore_alloc/free_loc은 e->mutex(free list + 페이지 할당)와 그 안에
+ * 중첩된 stats_mutex를 SET 1건마다 5~6회 잡는다. item magazine 적용 뒤
+ * SET CPU의 57.8%가 여기로 몰렸다(측정).
+ *
+ * 핵심 성질: magazine에 든 loc은 **여전히 '사용 중'으로 회계된다.**
+ * 따라서 (a) push/pop 시 회계 변경이 없어 전역 상태를 건드리지 않고,
+ * (b) obj_count가 줄지 않으므로 해당 페이지가 재활용될 수 없어 loc이
+ * stale해지지 않는다 — 전역 경로의 version 검증을 우회해도 안전한 이유다.
+ * 통계는 magazine 점유분만큼 사용량을 과대 보고한다(보수적, 유계). */
+#define LOC_MAG_MAX 256
+static _Thread_local struct {
+    struct ext_loc v[LOC_MAG_MAX];
+    unsigned int n;
+} g_loc_mag;
+static unsigned int g_loc_mag_depth = 64;   /* ext_loc_mag_depth, 0 = 비활성 */
+
+void extstore_set_loc_mag_depth(unsigned int d) {
+    g_loc_mag_depth = d > LOC_MAG_MAX ? LOC_MAG_MAX : d;
+}
+
 int extstore_alloc(void *ptr, unsigned int len, unsigned int bucket, struct ext_loc *out) {
     store_engine *e = ptr;
     if (bucket >= e->page_bucketcount) bucket = 0;
     if (len > e->slot_size) return -1;
+    /* 워커 전용 magazine: 회계가 이미 '사용 중'이므로 전역 락 없이 재사용.
+     * 전역 경로와 동일하게 LIFO 최상단만 검사한다(크기 축소만 허용). */
+    if (g_loc_mag_depth && g_loc_mag.n > 0) {
+        struct ext_loc *t = &g_loc_mag.v[g_loc_mag.n - 1];
+        if (t->len >= len) {
+            *out = *t;
+            out->len = len;
+            g_loc_mag.n--;
+            return 0;
+        }
+    }
     pthread_mutex_lock(&e->mutex);
     struct loc_stack *fs = &e->freeloc[bucket];
     /* A freed loc carries the *previous* object's len. Reuse its physical slot
@@ -382,8 +415,7 @@ int extstore_alloc(void *ptr, unsigned int len, unsigned int bucket, struct ext_
     return 0;
 }
 
-void extstore_free_loc(void *ptr, const struct ext_loc *loc) {
-    store_engine *e = ptr;
+static void free_loc_global(store_engine *e, const struct ext_loc *loc) {
     pthread_mutex_lock(&e->mutex);
     if (loc->page_id >= e->page_count || loc->len == 0 ||
             loc->offset + loc->len > e->page_size) {
@@ -427,6 +459,25 @@ void extstore_free_loc(void *ptr, const struct ext_loc *loc) {
     pthread_mutex_unlock(&e->mutex);
 }
 
+void extstore_free_loc(void *ptr, const struct ext_loc *loc) {
+    store_engine *e = ptr;
+    if (g_loc_mag_depth && g_loc_mag.n < g_loc_mag_depth &&
+            loc->len > 0 && loc->page_id < e->page_count) {
+        /* 회계를 건드리지 않고 로컬 보관 — 이 loc은 계속 '사용 중'이다 */
+        g_loc_mag.v[g_loc_mag.n++] = *loc;
+        return;
+    }
+    if (g_loc_mag_depth && g_loc_mag.n >= g_loc_mag_depth) {
+        /* 절반을 전역으로 되돌린다: 락 획득 1회당 N/2건 */
+        unsigned int keep = g_loc_mag.n / 2;
+        while (g_loc_mag.n > keep)
+            free_loc_global(e, &g_loc_mag.v[--g_loc_mag.n]);
+        g_loc_mag.v[g_loc_mag.n++] = *loc;
+        return;
+    }
+    free_loc_global(e, loc);
+}
+
 /* ---- v2 worker-inline READ/WRITE path ---- */
 
 /* Slot bitmaps. One word covers 64 slots, so the <=64 case costs exactly the
@@ -456,6 +507,7 @@ static inline uint64_t *bm_new(unsigned int slots, unsigned int *words_out) {
 }
 
 static _Thread_local store_worker *g_drain_worker = NULL;
+
 
 void *extstore_worker_current(void) { return g_drain_worker; }
 

@@ -13,7 +13,7 @@ rate() {
   echo $(( (${b:-0} - ${a:-0}) / 2 ))
 }
 
-PID=$(pgrep -x memcached | head -1) || exit 1
+PID=$(pgrep -x "memcached[.a-z0-9]*" | head -1) || exit 1
 echo "부하 대기중 (pid=$PID)..."
 for _ in $(seq 1 200); do
   [ "$(rate)" -gt 200000 ] && break

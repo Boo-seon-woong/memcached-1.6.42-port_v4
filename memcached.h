@@ -117,6 +117,7 @@ typedef uint32_t client_flags_t;
 #define CHUNK_ALIGN_BYTES 8
 /* slab class max is a 6-bit number, -1. */
 #define MAX_NUMBER_OF_SLAB_CLASSES (63 + 1)
+#define ITEM_MAG_MAX 64   /* item_mag_depth 상한 (배열 크기) */
 
 /** How long an object can reasonably be assumed to be locked before
     harvesting it on a low memory condition. Default: disabled. */
@@ -460,6 +461,7 @@ struct settings {
     bool maxconns_fast;     /* Whether or not to early close connections */
     bool ssl_enabled; /* indicates whether SSL is enabled */
     int hashpower_init;
+    unsigned int item_mag_depth; /* 워커 전용 item magazine 깊이. 0 = 비활성 */
     int item_lock_power;    /* item lock table size = 2^N; 0 = derive from -t */     /* Starting hash power level */
     bool shutdown_command; /* allow shutdown command */
     int tail_repair_time;   /* LRU tail refcount leak repair time */

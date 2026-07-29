@@ -14,7 +14,7 @@ LOG=${LOG:-/tmp/ob_samples.tsv}
 
 tmux kill-session -t ob 2>/dev/null
 tmux kill-session -t obsample 2>/dev/null
-for p in $(pgrep -x memcached); do kill -9 "$p" 2>/dev/null; done
+for p in $(pgrep -x "memcached[.a-z0-9]*"); do kill -9 "$p" 2>/dev/null; done
 sleep 1
 
 OPT="ext_path=10.99.0.2:11212:4g,ext_worker_window=$W,ext_qp_per_worker=$NQP,ext_drain_spin=$SPIN"
@@ -24,7 +24,7 @@ EXT_RDMA_PROF=1 EXT_CRYPTO_KEY=$HOME/kvs-port/ext.key EXT_SLOT_SIZE=256 \
 EXT_READ_SLOTS=$RS $BIN -p 11411 -U 0 -t $MC -m 2048 -c 16384 -R 1024 -o $OPT"
 tmux new-session -d -s ob "$CMD > /tmp/ob_server.log 2>&1"
 sleep 4
-pgrep -x memcached >/dev/null || { echo "START_FAIL: $(grep -iE 'illegal|failed|REJECT' /tmp/ob_server.log | head -1)"; exit 1; }
+pgrep -x "memcached[.a-z0-9]*" >/dev/null || { echo "START_FAIL: $(grep -iE 'illegal|failed|REJECT' /tmp/ob_server.log | head -1)"; exit 1; }
 
 # keyspace 프리로드: 로컬 loopback으로 1M SET. 측정 구간이 아니라 셋업이다.
 # 각 SET은 genie MR로 RDMA WRITE되므로 이후 어디서 GET하든 hit한다.
@@ -40,7 +40,7 @@ echo "preloaded curr_items=$PRE  (1000000 이어야 함)"
 cat > /tmp/obsample.sh <<'SAMP'
 #!/bin/bash
 LOG=${LOG:-/tmp/ob_samples.tsv}
-PID=$(pgrep -x memcached | head -1)
+PID=$(pgrep -x "memcached[.a-z0-9]*" | head -1)
 HZ=$(getconf CLK_TCK)
 # 재시작해도 이어 붙인다 — truncate하면 앞 구간이 날아간다.
 [ -s "$LOG" ] || printf 'ts\tbusy_cpu\tmc_cpu_s\tcmd_get\tget_hits\tread_cnt\tread_avg_ns\tread_p99_ns\twait_enq\n' > "$LOG"

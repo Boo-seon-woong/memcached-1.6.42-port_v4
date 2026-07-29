@@ -123,6 +123,7 @@ void *extstore_init(struct extstore_conf_file *fh, struct extstore_conf *cf, enu
 /* Allocate a remote slot of `len` bytes in size-class `bucket`. 0 on success. */
 int extstore_alloc(void *ptr, unsigned int len, unsigned int bucket, struct ext_loc *out);
 void extstore_free_loc(void *ptr, const struct ext_loc *loc);
+void extstore_set_loc_mag_depth(unsigned int d);
 
 /* v2 worker-inline READ/WRITE API. All *_worker functions touch only the
  * calling worker's resources (shared-nothing; see md/V2_CODE_SPEC.md P2).

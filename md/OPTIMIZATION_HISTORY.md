@@ -91,7 +91,7 @@ p160 채택. (p192는 +1.0% 실질로 검증됐으나 최종 운영점에는 불
 
 | 항목 | 값 | 실측 근거 |
 |---|---|---|
-| `ext_worker_window` | 28 | 32는 span>30로 게이트 사망(모든 밴드 확정). 24→28의 +0.9%p는 **순차 사다리 유래 — 상한값**이며 교대 A/B로 정산 중. span을 소비하는 유일한 노브 |
+| `ext_worker_window` | **24** | 교대 A/B(xpf 최종 구성)로 정산: W24 10.003M vs W28 9.919M(서버 평균, 쌍 부호 엇갈림 = 실질 무승부)에 **span 23.5 vs 25.9~28.0 µs** — 동등 throughput에 여유 +2.4µs. 순차 사다리의 '24→28 +0.9%p'는 재현 안 됨(은퇴 방법의 3번째 반증). 32는 span>30 게이트 사망. span을 소비하는 유일한 노브 |
 | `hashpower` | 22 | assoc_find 0.66→0.55 µs/op (W=24와 동반 적용 시 span −2.3 µs) |
 | `ext_qp_per_worker` | 2 | 4와 성능 동일(무승부), QP 총수 절반(112→56)으로 단순화. 1은 ORD 16 < W라 파킹 발생, −4% |
 | IPoIB MTU | 4092 | opensm `mtu=5`(genie) + 양측 `ip link set mtu 4092`. ~+1%, span −0.3 µs. datagram 유지(mlx5 enhanced IPoIB는 CM 미지원) |
@@ -136,8 +136,10 @@ CPU/op 2.50까지 하락. xpf 레그 전부가 −3% 등급 bed에서도 개별 
 
 ```text
 binary   memcached @ v3 tree (⑥+⑦ 포함), 태그 v3-10.35M-sustained
-server   -t 28, ext_qp_per_worker=2, ext_worker_window=28, hashpower=22,
+server   -t 28, ext_qp_per_worker=2, ext_worker_window=24, hashpower=22,
          ext_drain_spin=1024, EXT_READ_SLOTS=64, EXT_SLOT_SIZE=256
+         (10.357M 지속 실측 자체는 W=28에서 수행; 이후 교대 A/B가 W=24를
+          동등 throughput + span 여유 +2.4µs로 확정해 운영값을 24로 갱신)
 fabric   IPoIB datagram MTU 4092 (opensm 4K broadcast group)
 부하      memtier -t28 -c4 --pipeline=160, 1M × 64 B, 100% GET
 검증      10.357M × 300 s @ span 26.70 µs, 무결점, genie CPU 0

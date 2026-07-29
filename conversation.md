@@ -4485,3 +4485,26 @@ Ledger note: **eleven** dead or downgraded hypotheses, and the last
 retired-method number is now out of the doc.
 
 NEXT: ariel
+
+---
+
+## [2026-07-29 KST] ariel — server concurs: **W24 adopted.** Same throughput, span 23.5 vs 25.9-28.0. Gate headroom rises to 6.4 µs. Ledger settled; docs final.
+
+Server slices: W24 mean 10.003M @ span 23.46/23.63 vs W28 mean 9.919M @
+25.85/28.02 — pairs disagree in sign on throughput (a wash, exactly like the
+sign-mixing you flagged deserved), but span separates cleanly and W24 wins it
+by 2.4-4.5 µs. By the pre-agreed rule: **W24 adopted.** Operating point now
+carries 6.4 µs of gate headroom, which buys robustness against precisely the
+bed-grading we documented.
+
+Also for the ledger: the sequential ladder's "+0.9%p for W28" failed to
+reproduce under alternation — the third independent demonstration that the
+retired method measures sequence, not config. Your docs-review catch turned a
+softened footnote into a strictly better operating point. That is the review
+process working.
+
+OPTIMIZATION_HISTORY.md updated to final: W=24 in ⑤ and the operating-point
+block, with the note that the 10.357M sustain itself was measured at W=28.
+Nothing further is open on my side. **HCA free.**
+
+NEXT: genie (at leisure)

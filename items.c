@@ -45,12 +45,11 @@ void item_stats_reset(void) {
     }
 }
 
-/* Get the next CAS id for a new item. */
+/* Get the next CAS id for a new item.
+ * CAS 의미론은 유일성과 단조성만 요구하므로 뮤텍스 대신 원자 증가로 충분하다.
+ * SET 1건마다 잡히던 전역 cas_id_lock을 제거한다. */
 uint64_t get_cas_id(void) {
-    pthread_mutex_lock(&cas_id_lock);
-    uint64_t next_id = ++cas_id;
-    pthread_mutex_unlock(&cas_id_lock);
-    return next_id;
+    return __atomic_add_fetch(&cas_id, 1, __ATOMIC_RELAXED);
 }
 
 void set_cas_id(uint64_t new_cas) {
@@ -289,36 +288,31 @@ bool item_size_ok(const size_t nkey, const client_flags_t flags, const int nbyte
 }
 
 /* Per-class accounting shared by link/unlink. */
+/* sizes/sizes_bytes는 통계 카운터일 뿐이라 lru_locks 없이 원자 갱신한다.
+ * stub item은 전부 같은 slab class라 lru_locks[id]가 사실상 전역 락으로
+ * 동작했다(측정: item_acct_add/remove가 SET CPU의 상위). */
 static void item_acct_add(item *it) {
     unsigned int id = ITEM_clsid(it);
-    pthread_mutex_lock(&lru_locks[id]);
-    sizes[id]++;
+    __atomic_add_fetch(&sizes[id], 1, __ATOMIC_RELAXED);
 #ifdef EXTSTORE
-    if (it->it_flags & ITEM_HDR) {
-        sizes_bytes[id] += (ITEM_ntotal(it) - it->nbytes) + sizeof(item_hdr);
-    } else {
-        sizes_bytes[id] += ITEM_ntotal(it);
-    }
+    uint64_t nb = (it->it_flags & ITEM_HDR)
+        ? (ITEM_ntotal(it) - it->nbytes) + sizeof(item_hdr) : ITEM_ntotal(it);
 #else
-    sizes_bytes[id] += ITEM_ntotal(it);
+    uint64_t nb = ITEM_ntotal(it);
 #endif
-    pthread_mutex_unlock(&lru_locks[id]);
+    __atomic_add_fetch(&sizes_bytes[id], nb, __ATOMIC_RELAXED);
 }
 
 static void item_acct_remove(item *it) {
     unsigned int id = ITEM_clsid(it);
-    pthread_mutex_lock(&lru_locks[id]);
-    sizes[id]--;
+    __atomic_sub_fetch(&sizes[id], 1, __ATOMIC_RELAXED);
 #ifdef EXTSTORE
-    if (it->it_flags & ITEM_HDR) {
-        sizes_bytes[id] -= (ITEM_ntotal(it) - it->nbytes) + sizeof(item_hdr);
-    } else {
-        sizes_bytes[id] -= ITEM_ntotal(it);
-    }
+    uint64_t nb = (it->it_flags & ITEM_HDR)
+        ? (ITEM_ntotal(it) - it->nbytes) + sizeof(item_hdr) : ITEM_ntotal(it);
 #else
-    sizes_bytes[id] -= ITEM_ntotal(it);
+    uint64_t nb = ITEM_ntotal(it);
 #endif
-    pthread_mutex_unlock(&lru_locks[id]);
+    __atomic_sub_fetch(&sizes_bytes[id], nb, __ATOMIC_RELAXED);
 }
 
 /* fixing stats/references during warm start */
@@ -346,11 +340,11 @@ int do_item_link(item *it, const uint32_t hv, const uint64_t cas) {
     it->it_flags |= ITEM_LINKED;
     it->time = current_time;
 
-    STATS_LOCK();
-    stats_state.curr_bytes += ITEM_ntotal(it);
-    stats_state.curr_items += 1;
-    stats.total_items += 1;
-    STATS_UNLOCK();
+    /* 전역 STATS_LOCK 대신 원자 갱신 — 순수 카운터이고 SET 1건마다
+     * link/unlink에서 두 번 잡히던 지점이다. */
+    __atomic_add_fetch(&stats_state.curr_bytes, (uint64_t)ITEM_ntotal(it), __ATOMIC_RELAXED);
+    __atomic_add_fetch(&stats_state.curr_items, 1, __ATOMIC_RELAXED);
+    __atomic_add_fetch(&stats.total_items, 1, __ATOMIC_RELAXED);
 
     /* Allocate a new CAS ID on link. */
     ITEM_set_cas(it, cas);
@@ -366,10 +360,8 @@ void do_item_unlink(item *it, const uint32_t hv) {
     MEMCACHED_ITEM_UNLINK(ITEM_key(it), it->nkey, it->nbytes);
     if ((it->it_flags & ITEM_LINKED) != 0) {
         it->it_flags &= ~ITEM_LINKED;
-        STATS_LOCK();
-        stats_state.curr_bytes -= ITEM_ntotal(it);
-        stats_state.curr_items -= 1;
-        STATS_UNLOCK();
+        __atomic_sub_fetch(&stats_state.curr_bytes, (uint64_t)ITEM_ntotal(it), __ATOMIC_RELAXED);
+        __atomic_sub_fetch(&stats_state.curr_items, 1, __ATOMIC_RELAXED);
         item_stats_sizes_remove(it);
         assoc_delete(ITEM_key(it), it->nkey, hv);
         item_acct_remove(it);

@@ -633,8 +633,12 @@ int storage_store_item(void *e, item *it, item **hdr_out, uint32_t hv) {
         .t_start = prof_start, .t_end = prof_crypto_done,
     };
 
+    /* spin 카운터는 루프 밖에서 한 번만 반영한다. 전역 _Atomic을 회전마다
+     * 두드리면 워커 28개가 캐시라인 하나를 놓고 경합한다(SET당 15.6회
+     * → 초당 2600만 RMW). 통계값이라 배치 반영으로 충분하다. */
+    uint64_t spins = 0;
     while (extstore_worker_outstanding(w) >= g_worker_window) {
-        atomic_fetch_add(&g_worker_write_spins, 1);
+        spins++;
         if (extstore_worker_drain(w, 32) < 0) break;
     }
     if (extstore_worker_post_write(w, &io) != 0) {
@@ -642,9 +646,10 @@ int storage_store_item(void *e, item *it, item **hdr_out, uint32_t hv) {
         wait.ret = -1;
     }
     while (!wait.done) {
-        atomic_fetch_add(&g_worker_write_spins, 1);
+        spins++;
         if (extstore_worker_drain(w, 32) < 0) break;
     }
+    if (spins) atomic_fetch_add(&g_worker_write_spins, spins);
     extstore_worker_staging_put(w, slot);
 
     if (wait.ret != (int)rlen) {

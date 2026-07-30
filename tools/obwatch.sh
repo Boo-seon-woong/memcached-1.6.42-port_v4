@@ -5,6 +5,11 @@
 #   DUR=60 INT=5 bash tools/obwatch.sh     # 5초 간격 출력
 #
 # 시작 시 'stats reset'으로 창을 열고, DUR 초 뒤 최종 요약을 찍는다.
+#
+# 2026-07-30: 초당 행이 약 5% 과대보고하던 버그를 고쳤다. 루프 한 바퀴는
+# sleep 1 + stats 왕복이라 실제로 ~1.05초인데 정수 초(NOW-PT=1)로 나눴고,
+# 누적 오차가 1초를 넘길 때마다 DT=2가 되어 그 행만 절반으로 찍혔다
+# (관측: 19바퀴마다 dip). 이제 date +%s.%N으로 실제 경과를 쓴다.
 # 비용: 초당 stats 1회 — 10M ops/s 대비 1e-7 수준이라 성능 영향 없음
 # (모든 기록 런에서 동일한 1초 샘플러가 함께 돌았다).
 set -u
@@ -17,7 +22,7 @@ command -v nc >/dev/null || { echo "nc 필요"; exit 1; }
 [ -n "$(st)" ] || { echo "memcached ($HOST:$PORT) 응답 없음"; exit 1; }
 
 printf 'stats reset\r\nquit\r\n' | timeout 3 nc "$HOST" "$PORT" >/dev/null
-T0=$(date -u +%s)
+T0=$(date -u +%s.%N)
 echo "extstore watch — window ${DUR}s, opened $(date -u +%H:%M:%SZ)"
 echo
 printf '%6s %10s %10s %7s %9s %9s %9s %9s %8s %6s %5s\n' \
@@ -34,7 +39,8 @@ read -r _ ca cb cc cd ce cf cg ch _ < /proc/stat
 PCT=$((ca+cb+cc+cd+ce+cf+cg+ch)); PCI=$cd; NCPU=$(nproc)
 while :; do
   sleep "$INT"
-  NOW=$(date -u +%s); EL=$((NOW-T0))
+  NOW=$(date -u +%s.%N)
+  EL=$(awk -v a="$NOW" -v b="$T0" 'BEGIN{printf "%.0f", a-b}')
   S=$(st); [ -n "$S" ] || continue
   G=$(f "$S" cmd_get); SE=$(f "$S" cmd_set); H=$(f "$S" get_hits)
   RA=$(f "$S" extstore_prof_read_avg_ns);  R9=$(f "$S" extstore_prof_read_p99_ns)
@@ -45,7 +51,7 @@ while :; do
   CT=$((ca+cb+cc+cd+ce+cf+cg+ch)); CI=$cd
   BUSY=$(awk -v dt=$((CT-PCT)) -v di=$((CI-PCI)) -v n="$NCPU" 'BEGIN{printf "%.1f", (dt>0)?(dt-di)/dt*n:0}')
   PCT=$CT; PCI=$CI
-  DT=$((NOW-PT)); [ "$DT" -lt 1 ] && DT=1
+  DT=$(awk -v a="$NOW" -v b="$PT" 'BEGIN{d=a-b; if(d<0.001)d=0.001; printf "%.6f", d}')
   awk -v el="$EL" -v g=$(( ${G:-0} - PG )) -v se=$(( ${SE:-0} - PS )) -v dt="$DT" \
       -v hit="${H:-0}" -v tg="${G:-0}" -v ra="${RA:-0}" -v r9="${R9:-0}" \
       -v wa="${WA:-0}" -v w9="${W9:-0}" \
@@ -57,9 +63,10 @@ while :; do
   [ "$EL" -ge "$DUR" ] && break
 done
 
-T1=$(date -u +%s); S=$(st)
+T1=$(date -u +%s.%N); S=$(st)
 echo
-echo "$S" | awk -v t=$((T1-T0)) '
+WIN=$(awk -v a="$T1" -v b="$T0" 'BEGIN{printf "%.6f", a-b}')
+echo "$S" | awk -v t="$WIN" '
 $1=="STAT"{v[$2]=$3}
 END{
   g=v["cmd_get"]+0; s=v["cmd_set"]+0; h=v["get_hits"]+0
@@ -67,7 +74,7 @@ END{
   r9=v["extstore_prof_read_p99_ns"]+0;  rc=v["extstore_prof_read_count"]+0
   wa=v["extstore_prof_write_avg_ns"]+0; w5=v["extstore_prof_write_p50_ns"]+0
   w9=v["extstore_prof_write_p99_ns"]+0; wc=v["extstore_prof_write_count"]+0
-  printf "===== SERVER STATS (%ds window) =====\n", t
+  printf "===== SERVER STATS (%.1fs window) =====\n", t
   printf "%-10s %13s %13s %12s %12s %12s\n","Type","Ops/sec","Hits/sec","Span Avg","Span p50","Span p99"
   printf "%s\n","------------------------------------------------------------------------------------"
   if (s>0) printf "%-10s %13.2f %13s %10.3fus %10.3fus %10.3fus\n","Sets",s/t,"---",wa/1000,w5/1000,w9/1000

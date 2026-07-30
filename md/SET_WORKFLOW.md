@@ -1,10 +1,27 @@
 # SET 경로 전체 워크플로 — 요청 도착부터 응답 송신까지
 
-작성 2026-07-30. 대상은 **main의 동기 SET 경로**(step ①②③③′ + A-결함 수정
-적용 후). 최적화 후보를 직접 도출할 수 있도록, 단계마다 코드 위치·잡는 자원·
-실측 비용을 붙인다. 수치 출처는 `md/SET_COST_ATTRIBUTION.md`(프로파일·A/B),
+작성 2026-07-30. 최종 갱신 2026-07-30 21:00 KST, 기준 commit **`6428ccd` (main)**.
+대상은 **main의 동기 SET 경로**(step ①②③③′ + A-결함 수정 + alloc 결함
+수정 `678e7a3`). 최적화 후보를 직접 도출할 수 있도록, 단계마다 코드 위치·잡는
+자원·실측 비용을 붙인다. 수치 출처는 `md/SET_COST_ATTRIBUTION.md`(프로파일·A/B),
 `md/SET_10M_REQUIREMENTS.md`(예산 산정), `md/GET_SET_CONCURRENCY.md`(구조 대조).
-비동기 SET이 실측 기각된 경위는 `md/V3_REVIEW_FINDINGS.md` 처분 주석 참조.
+비동기 SET 두 갈래가 실측 기각된 경위는 `md/V3_REVIEW_FINDINGS.md` 처분 주석 참조.
+
+> ## ⚠ 2026-07-30 20:55 — 이 문서의 SET 측정치는 전부 무효다
+>
+> genie가 `extstore_alloc`의 재활용 조건 결함을 잡았다(`678e7a3`). 이 함수는
+> **SET 경로 한복판**(단계 7b)이고, 수정 전에는 SET의 약 12%가 느린 페이지
+> append 경로로 흘렀으며 그 경로가 페이지를 진행성으로 소진시켰다.
+> **7-30에 잰 SET 수치는 전부 그 상태에서 나온 것이다** — §0-1, §0-2, §0-3,
+> 그리고 off-box 판정치까지. 재측정 대상 목록은 §0-4.
+>
+> 무효화되지 않는 것: **§0(7-29 기준선)의 구조적 결론**(락 제거 궤적,
+> 동기 구조 상한, span 성분비)과 **GET 수치 전부**(GET은 원격 슬롯을
+> 할당하지 않는다). §1~§2의 경로 서술과 §5의 계약도 유효하다 — 단 **7b는
+> 이번에 정정됐다**(magazine 히트율 100%는 사실이 아니었다).
+>
+> 재측정 대상 바이너리: `v3-set-pac` **`785b308`** (alloc 수정 + pac +
+> SYNC 배치화 + seal 지연). 5M·10M 산수는 재측정 후 다시 세운다.
 
 ## 0. 기준 수치 (mc28 / W24 / nqp2 / hp22, 2026-07-29 실측)
 
@@ -23,7 +40,10 @@ CPU 포화 상한          28워커 ÷ 7.29 µs = 3.84 M/s   (실측은 그 45%)
 CPU 7.29µs로는 **3.84M이 천장**이다. 실측 1.71M은 CPU 상한의 45%로,
 나머지 55%는 아래 §3에서 규명되지 않은 대기다(§4-9).
 
-### 0-1. 2026-07-30 동기 경로 재측정 (memtier@genie, 60s 창)
+### 0-1. 2026-07-30 동기 경로 재측정 (memtier@genie, 60s 창) — **무효**
+
+> **무효 (2026-07-30 20:55).** alloc 결함 상태에서 측정됨 → 재측정 필요.
+> 아래 수치는 이력 보존용이며 어떤 판정의 근거로도 쓰지 않는다.
 
 > **귀속 정정.** 초판은 이 측정을 main `7a09928`으로 적었으나, 당시 떠 있던
 > 서버는 **`memcached.cca9807` + `no_ext_async_set`**(PID 33104, 06:46 기동,
@@ -48,7 +68,12 @@ guest busyCPU          25.6 / 30      → guest 전체 ≈ 11.3 µs/op
 12.3 − 11.3 ≈ 1µs 수준으로 줄었다. 규명 시 클라이언트 구성을 함께 기록하고
 같은 bed 교대 A/B로만 델타를 주장할 것.
 
-### 0-2. 2026-07-30 pac 1차 A/B — (c) 이전의 첫 실측 (co-located)
+### 0-2. 2026-07-30 pac 1차 A/B — (c) 이전의 첫 실측 (co-located) — **무효**
+
+> **무효 (2026-07-30 20:55).** 세 런 전부 alloc 결함 상태다. 다만 A·B·C가
+> **같은 결함을 공유**하므로 "pac이 동기보다 빠르다"는 **부호 판정은 살아
+> 있고**, +21%라는 **크기와 절대값은 무효**다. 결함은 SET 경로에 있으므로
+> 수정 후 델타가 커질 수도 작아질 수도 있다.
 
 `v3-set-pac` 브랜치(`e424305`)의 publish-at-command 비동기 SET을 동기 경로와
 같은 bed에서 3련전으로 비교했다. **클라이언트를 guest 안에 두었으므로**
@@ -82,12 +107,23 @@ guest busyCPU          25.6 / 30      → guest 전체 ≈ 11.3 µs/op
 조건임에 유의. SET에 30 µs급 span 목표를 세운다면 이제 줄일 대상은 drain
 수거 주기이고, 그 값이 이 표다.
 
-### 0-3. 2026-07-30 SYNC 배치화 — 1차 목표(5M) 진척 (co-located)
+### 0-3. 2026-07-30 SYNC 배치화 — 1차 목표(5M) 진척 (co-located) — **일부 무효**
+
+> **무효 (2026-07-30 20:55).** 처리량·CPU/op·환산치는 alloc 결함 상태 →
+> 재측정. **살아 있는 것은 `prof_write_sync_avg_ns` 성분 실측**(1.90 → 0.32
+> µs/op, 상각 계수 63.7)이다 — advise 호출 자체의 비용이고 alloc 경로와
+> 무관하며, 배치 크기 스윕의 상각 계수가 설정값과 정확히 일치한 것도 그렇다.
+> 아래 표에서 `set/s`·`busyCPU`·`4.85M`·`5.77`·`3.25`는 폐기 대상,
+> `상각 계수`·`sync/crypto/xfer` 성분은 유효.
+>
+> 코드 참조 `2d0290a`는 alloc 수정 위로 rebase되어 **`90f532e`로 대체**됐다
+> (`v3-set-pac`). 재측정은 그 위의 `785b308`로 한다.
 
 1차 목표를 **SET-only 5 M ops/s, span < 30 µs**로 설정하고 착수한 첫 항목.
 pac이 비동기 구조를 열어 준 덕에 §4의 최대 단일 레버(SYNC_FOR_DEVICE 상각)를
-처음으로 적용할 수 있었다. 코드는 `v3-set-pac` `2d0290a`, guest 바이너리
-`memcached.pacb-2d0290a`. 원자료 guest `~/pac-ab-20260730/`.
+처음으로 적용할 수 있었다. 코드는 `v3-set-pac` `2d0290a`(→ rebase 후
+`90f532e`), guest 바이너리 `memcached.pacb-2d0290a`.
+원자료 guest `~/pac-ab-20260730/`.
 
 **배치 크기 스윕** (`ext_setq_max`, 같은 바이너리·같은 bed, 각 50 s 창):
 
@@ -142,6 +178,79 @@ CPU 제외. 스크립트 `~/pac-ab-20260730/srvcpu.sh`):
 다음 단계다(워커 스레드 comm은 `mc-worker`다. 프로세스명으로 필터하면 표본이
 0이 된다).
 
+### 0-4. 2026-07-30 20:55 — alloc 결함 수정, 측정치 무효화, 이중 게이트
+
+세 가지가 한꺼번에 바뀌었다.
+
+**(1) alloc 결함 수정 (`678e7a3`, genie).** 단계 7b의 재활용 조건이
+"LIFO top의 len ≥ 요청 len"이었다. memtier 키 `m-1`..`m-1000000`은 nkey가
+3~9로 갈리므로 `rlen`이 7종이고, **약 12%가 이 조건을 놓쳐 페이지 append
+경로로** 흘렀다. 게다가 보수적 축소 스탬프가 기록된 len을 단방향으로
+내리깎으므로 미스율은 시간이 갈수록 **올라간다**. 페이지는 회수 기구가 없어
+(compaction 없음, `free_pages` 미보충) 159 MB 라이브셋에 4 GiB / 64페이지를
+전소시키고, 그 뒤 모든 SET이 `NOT_STORED`였다 — 쓰기 부하 약 7분.
+memtier는 이를 `NOT_STORED` + `response parsing failed`로 보고하는데
+**두 사건이 아니라 하나**다.
+
+수정: 물리 슬롯 간격을 `slot_size` 균일로 바꿔 free list를 완전 대체
+가능하게 만들었다. 기록되는 `out->len`은 여전히 호출자의 실제 len이라 stub과
+seal이 일치한다(불일치하면 GET이 1바이트 더 읽어 GCM이 영구 실패). 비용은
+라이브 객체당 `slot_size − len` 바이트. 아울러 `extstore_alloc` 실패가 아무
+카운터도 올리지 않아 **막힌 store가 stats에서 보이지 않던 것**도 고쳤다
+(`extstore_write_failures`는 RDMA WRITE 완료 오류만 센다) — 신규
+`extstore_alloc_failures`.
+
+배포 검증(프리로드 1M, `785b308`):
+
+```text
+extstore_pages_free      60      (1M item에 4페이지)   ← 수정 전 64장 전소
+extstore_alloc_failures   0
+ext_pac_fallback          0
+curr_items        1,000,000
+```
+
+**(2) 무효화 원장.** 결함이 SET 경로 한복판이므로 7-30의 SET 측정은 전부
+"12%가 느린 경로 + 진행 중인 소진" 상태였다.
+
+| 무효화 | 값 | 재측정 |
+|---|---|:--:|
+| off-box SET-only | 2.85 M @ 8.42 µs/op | ✅ |
+| off-box 1:9 혼합 | 8.81 M @ 3.17 µs/op | ✅ |
+| co-located SET 서버 CPU/op (§0-3) | 5.77 µs | ✅ |
+| SET 고유 비용 (§0-3) | 3.25 µs (5.77 − 2.52) | ✅ |
+| co-located pac 델타 (§0-2) | +21% | ✅ (부호는 유효) |
+| 동기 재측정 (§0-1) | 2.27 M @ 6.21 µs | ✅ |
+| GET-only | 2.72 µs/op | ❌ 불필요 — GET은 alloc을 안 탄다 |
+
+수정으로 SET이 **빨라졌을 가능성이 크다**(느린 경로 12% 제거). 5M·10M 판정
+산수는 재측정 뒤에 다시 세운다.
+
+**(3) 목표가 이중 게이트가 됐다.** 관리자 지시로 **GET-only도 혼합과 동시에
+10M / span < 30 µs**를 충족해야 한다. 이 변경으로 권고 하나가 철회된다 —
+`ext_drain_spin` 상향(drain을 굵게 해 SYNC 상각을 올리는 것)의 근거였던
+span 여유 5.06 µs는 **혼합 런의 GET span**(24.94)에서 나온 값인데, 이제
+구속 조건은 **GET-only의 26.7 µs = 여유 3.3 µs**다. drain을 두 배로 굵게
+하면 배치 내 대기가 그만큼 늘어 3.3 µs를 넘긴다. 잘못된 예산을 인용했다.
+
+이중 게이트에서 GET 쪽에 남는 레버는 사실상 하나다. GET CPU 2.72 µs의 구성:
+
+```text
+crypto (복호)          0.60 µs    하한
+sync (SYNC_FOR_CPU)    0.544 µs   = 지연 5.49 ÷ advise당 10.1건
+나머지                 ~1.58 µs   프로토콜·소켓·해시·iov (7단계 기적용)
+```
+
+- `ext_drain_empty_max`는 **이미 기각된 가설**(OPTIMIZATION_HISTORY 부록:
+  "poll 4.4회/op뿐, spin=1로도 무변화"). 지금도 GET당 4.18회로 같다.
+- drain 굵게 = span 초과. **불가**.
+- **sync ioctl 제거만이 CPU와 span을 동시에 낮춘다** — 유일하게 두 게이트와
+  양립하는 레버이고, 경로는 coherent-MR 커널 트랙이다(1회 실패 이력: 모듈
+  세트 적용 시 GCM 전량 실패 = SWIOTLB를 실제로 우회하지 못함).
+  애플리케이션 코드 밖의 작업이다.
+
+**다음 행동**: genie가 `785b308`로 GET-only / SET-only / 1:9 재측정.
+그 결과가 §0-1~§0-3을 대체한다.
+
 ## 1. 타임라인 한눈에
 
 워커 스레드 하나가 SET 1건을 처리하는 전 구간. ★는 SET에만 있는 비용,
@@ -156,15 +265,15 @@ CPU 제외. 스크립트 `~/pac-ab-20260730/srvcpu.sh`):
  4  값 바이트 수신           conn_nread (c->ritem으로 직접)          —
  5  해시+버킷 락             thread.c:1012-1014 store_item          ◆ item_lock[hv]
  6  기존 키 조회             do_store_item → assoc_find             (5의 락 아래)
- 7  원격 저장(인라인)        storage.c:557 storage_store_item        아래 7a~7h
+ 7  원격 저장(인라인)        storage.c:559 storage_store_item        아래 7a~7h
  7a   hdr stub 할당          do_item_alloc                          item magazine
- 7b   원격 슬롯 할당         extstore_alloc                         loc magazine(워커 전용)
+ 7b   원격 슬롯 할당         extstore_alloc                         loc magazine(워커 전용) → ◆miss ~12%는 엔진 뮤텍스
  7c   staging 슬롯           extstore_worker_staging_get            워커 전용 비트맵
  7d   AES-GCM 봉인           ext_crypto_seal                        ★ 1.05 µs
  7e   window 대기            outstanding≥W면 drain                  (평시 0회전)
- 7f   SYNC_FOR_DEVICE        extstore.c:845 ibv_advise_mr           ★ 1.90 µs, SET당 1회
- 7g   WRITE post             extstore.c:856 ibv_post_send           QP 라운드로빈
- 7h   ★자기 CQE busy-wait    storage.c:655 drain 루프               ★ xfer 2.48 µs 점유
+ 7f   SYNC_FOR_DEVICE        extstore.c:851 ibv_advise_mr           ★ 1.90 µs, SET당 1회
+ 7g   WRITE post             extstore.c:868 ibv_post_send           QP 라운드로빈
+ 7h   ★자기 CQE busy-wait    storage.c:661 drain 루프               ★ xfer 2.48 µs 점유
  8  게시                     memcached.c:1663 item_replace           (5의 락 아래) ◆lru_locks
  9  구 원격 슬롯 해제        memcached.c:1666 storage_delete         loc magazine
 10  응답                     out_string("STORED") → conn_mwrite      워커 전용 resp
@@ -191,9 +300,9 @@ libevent가 소켓 가독 이벤트를 올리면 `try_read_network`가 워커 �
 
 `process_update_cmd_start`가 key/flags/exptime/vlen을 파싱하고 **값을 받을
 실제 item을 먼저 할당**한다. 할당은 step ①의 워커 전용 item magazine을
-먼저 치고(items.c:147, 깊이는 클래스당 `ITEM_MAG_MAX_BYTES` 64KB로 유계),
+먼저 치고(items.c:150, 깊이는 클래스당 `ITEM_MAG_MAX_BYTES` 64KB로 유계),
 비면 `slabs_alloc_batch`로 refill — 이때만 전역 `slabs_lock`을 잡는다.
-실패 시 자기 magazine 전량 spill 후 1회 재시도(items.c:160-166, A-3).
+실패 시 자기 magazine 전량 spill 후 1회 재시도(items.c:164-170, A-3).
 
 `c->ritem = ITEM_data(it)`(proto_text.c:790)로 소켓 바이트가 item 메모리로
 직접 들어간다(rbuf에 이미 있으면 memcpy 1회). 별도 중간 버퍼 없음.
@@ -210,7 +319,7 @@ item_lock은 버킷보다 굵은 granularity(기본 `item_lock_hashpower`)임에
 `do_store_item`은 `do_item_get`(assoc_find)으로 old_it을 찾고, NREAD_SET이면
 무조건 `do_store = true`(memcached.c:1646-1648).
 
-### 7. storage_store_item — 원격 저장 인라인 (storage.c:557)
+### 7. storage_store_item — 원격 저장 인라인 (storage.c:559)
 
 SET CPU의 46.6%(step ③ 후 프로파일 1위)가 이 함수다. 순서대로:
 
@@ -218,26 +327,45 @@ SET CPU의 46.6%(step ③ 후 프로파일 1위)가 이 함수다. 순서대로:
 sizeof(item_hdr))`. 로컬에 남는 것은 key + 48B item_hdr뿐이다(값은 원격).
 item magazine 적용 대상이라 평시 전역 락 없음.
 
-**7b. 원격 슬롯 할당** — `extstore_alloc`. step ②의 워커 전용 loc
-magazine(extstore.c:361, 깊이 `ext_loc_mag_depth` 기본 64)을 먼저 친다.
-pop 조건은 **정확히 같은 len**(A-5)이라 고정 크기 워크로드에서 히트율 100%.
-miss면 전역 경로(엔진 뮤텍스). 반납 시 구조 검증 실패분은 전역 경로로
-격리된다(A-9).
+**7b. 원격 슬롯 할당** — `extstore_alloc`(extstore.c:368). 두 층이다.
 
-**7c. staging 슬롯** — `extstore_worker_staging_get`(extstore.c:816),
+1. **워커 전용 loc magazine**(extstore.c:378, 깊이 `ext_loc_mag_depth` 기본
+   64). pop 조건은 **정확히 같은 len**(A-5) — 축소 재사용을 허용하면 슬롯이
+   예전 큰 len으로 청구된 채 `out->len`만 작아지고, 나중 `free_loc_global`이
+   작은 len만 빼주므로 `bytes_used`가 차이만큼 영구 표류한다(전역 경로는
+   free에서 감산·alloc에서 재가산해 균형이 맞지만 magazine엔 그 쌍이 없다).
+2. **miss면 전역 경로**(엔진 뮤텍스). free list는 `678e7a3` 이후 **완전
+   대체 가능**하다 — 물리 슬롯 간격이 `slot_size` 균일이라 어떤 빈 슬롯이든
+   어떤 요청이든 담는다(`len > slot_size`는 함수 입구에서 이미 거절).
+   기록되는 len만 호출자의 실제 len이다. free list가 비면 페이지 append,
+   페이지도 없으면 `extstore_alloc_failures`++ 후 실패 = 클라이언트
+   `NOT_STORED`.
+
+반납 시 구조 검증 실패분은 전역 경로로 격리된다(A-9).
+
+> **초판의 "고정 크기 워크로드라 히트율 100%"는 틀렸다.** memtier 키
+> `m-1`..`m-1000000`은 nkey가 3~9로 갈려 `rlen`이 7종이고, 분포상 약 90%가
+> 한 값(nkey 8)에 몰리므로 **magazine 미스가 약 10~12%** 남는다 —
+> genie가 계측한 그 12%다. 결함 수정은 미스의 *귀결*(페이지 소진)을 없앴을
+> 뿐 **미스 자체는 그대로**다. 즉 SET 8~9건 중 1건은 지금도 엔진 뮤텍스를
+> 잡는다. magazine을 전역 경로처럼 대체 가능하게 만드는 것(= 균일 슬롯을
+> 전제로 len 조건을 풀고 `bytes_used` 회계를 짝맞추는 것)은 **미검증
+> 후보**다 — §4 원장에 올렸다.
+
+**7c. staging 슬롯** — `extstore_worker_staging_get`(extstore.c:822),
 워커 전용 비트맵에서 pop. 워커당 슬롯 수 = `write_slots/nworkers`(256/28=9,
-extstore.c:688). 동기 경로는 동시 1건이라 1개면 족하다 — 9개는 여유.
+extstore.c:713). 동기 경로는 동시 1건이라 1개면 족하다 — 9개는 여유.
 
 **7d. AES-GCM 봉인** — `ext_crypto_seal`이 item 전체를 staging 슬롯에
 암호화 복사. **1.05 µs/op** (span 계측 시작점, `EXT_RDMA_PROF=1`).
 AAD에 hv/page/offset/version이 들어가 위치 위조를 막는다.
 
-**7e. window 대기** — `outstanding >= g_worker_window`면 drain(storage.c:649).
+**7e. window 대기** — `outstanding >= g_worker_window`면 drain(storage.c:653).
 동기 경로는 outstanding이 항상 0 또는 1이라 **이 루프는 사실상 0회전**이다
 (window 대기는 GET/SET 혼합 시 GET READ가 window를 채울 때만 의미).
 
-**7f. SYNC_FOR_DEVICE** — `extstore_worker_post_write`(extstore.c:832) 안에서
-`ibv_advise_mr(..., SYNC_FOR_DEVICE, FLUSH, &sg, 1)`(extstore.c:845).
+**7f. SYNC_FOR_DEVICE** — `extstore_worker_post_write`(extstore.c:838) 안에서
+`ibv_advise_mr(..., SYNC_FOR_DEVICE, FLUSH, &sg, 1)`(extstore.c:851).
 SEV에서 NIC이 읽기 전 staging의 평문 캐시라인을 밀어내는 ioctl로,
 **1.90 µs — SET당 1회, 상각 없음**. 대조: GET은 drain 한 번에 평균 13건의
 READ를 SYNC_FOR_CPU **1회**로 묶어 op당 0.34µs로 상각한다. 이것이
@@ -250,7 +378,7 @@ READ를 SYNC_FOR_CPU **1회**로 묶어 op당 0.34µs로 상각한다. 이것이
 `wr_id = &io`(A-2: io/wait는 `_Thread_local` — 엔진 사망 경로에서 스택
 프레임과 함께 죽지 않도록).
 
-**7h. 자기 CQE busy-wait** — storage.c:655:
+**7h. 자기 CQE busy-wait** — storage.c:661:
 
 ```c
 while (!wait.done) {
@@ -276,8 +404,8 @@ wire 왕복 **2.48 µs** 동안 `ibv_poll_cq`를 반복한다. spin 횟수는
 
 `item_replace(old_it, hdr_it, hv, cas_in)`(memcached.c:1663) →
 `do_item_unlink(old)` + `do_item_link(hdr_it)`. step ③ 이후 curr_items 등
-카운터는 원자 갱신(items.c:385-390)이고, `item_stats_sizes`/`item_acct`도
-원자화됐다(items.c:333-335 — stub이 전부 같은 클래스라 `lru_locks[id]`가
+카운터는 원자 갱신(items.c:387-392)이고, `item_stats_sizes`/`item_acct`도
+원자화됐다(items.c:338-340 — stub이 전부 같은 클래스라 `lru_locks[id]`가
 사실상 전역 락으로 동작했던 지점). 남은 lru_locks 사용처는 OOM 카운터 등
 저빈도 경로뿐이다.
 
@@ -312,12 +440,17 @@ slabs_lock, loc magazine miss 시 엔진 뮤텍스)과 스케줄링 이탈인데
 빗나갔다(`GET_SET_CONCURRENCY.md` §4). **여기를 먼저 재는 것이 순서다** —
 off-CPU 프로파일(예: sched switch 스택)이 도구다.
 
-> **2026-07-30 갱신.** 이 간극은 고정 상수가 아니다. §0-1에서 공급이 좋아지자
-> 12.3 − 11.3 ≈ 1µs로 줄었고, §0-2의 pac A/B는 같은 부하에서 CPU/op를
-> 12.0 → 9.6µs로 낮췄다. 즉 간극의 일부는 7h의 동기 대기가 만드는 것이고
-> (pac이 제거), 나머지는 클라이언트 공급 조건에 딸린다. off-CPU 프로파일은
-> 여전히 필요하지만, **pac 적용 후 상태에서 재는 것**이 맞다 — 제거된 항목을
-> 다시 귀속시키는 낭비를 피할 수 있다.
+> **2026-07-30 갱신 (수치는 무효, 결론은 유효).** 이 간극은 고정 상수가
+> 아니다. §0-1에서 공급이 좋아지자 줄었고, §0-2의 pac A/B에서 더 줄었다 —
+> 두 측정 모두 alloc 결함 상태라 **크기는 인용 금지**지만, 세 관측이 같은
+> 방향을 가리키므로 방향성 결론은 남는다: 간극의 일부는 7h의 동기 대기가
+> 만들고(pac이 제거), 나머지는 클라이언트 공급 조건에 딸린다.
+> off-CPU 프로파일은 여전히 필요하지만 **`785b308` 재측정 후, pac 적용
+> 상태에서** 재는 것이 맞다 — 제거된 항목을 다시 귀속시키는 낭비를 피한다.
+>
+> 이 간극에 **7b 미스 12%가 섞여 있었다**는 것이 새 정보다. 엔진 뮤텍스
+> 대기는 CPU를 태우지 않으므로 정확히 "점유 − CPU"에 들어간다. 재측정에서
+> 간극이 줄어든다면 그 일부가 이것이다.
 
 ## 4. 이미 당겨졌거나 기각된 레버 (재발명 방지 목록)
 
@@ -332,10 +465,14 @@ off-CPU 프로파일(예: sched switch 스택)이 도구다.
 | SYNC_FOR_DEVICE 배치화 | 미측정 (브랜치 756e45c) | 비동기 큐 전제. 동기 경로엔 묶을 이웃 쓰기가 없음 |
 | set_pending_t 풀링 | 해당 없음 (비동기 전용) | |
 | SET 키 prefetch ⑥⑦ | 미측정 (브랜치 69421ff) | 동기 경로에도 이식 가능. "죽을 확률 최대" 분류 |
-| **publish-at-command (pac)** | **구현·1차 실측 통과 (브랜치 `v3-set-pac`)** | co-located A/B에서 **+21%, 클라이언트 p99 −18%, CPU/op −20%**, 결함 0 (§0-2). off-box 정본 bed 재판정 대기 |
+| **publish-at-command (pac)** | **구현 완료, 실측 재판정 대기 (브랜치 `v3-set-pac`)** | co-located A/B에서 동기 대비 우세(부호 확정). **크기(+21%)는 alloc 결함으로 무효** — `785b308`로 재측정 (§0-2·§0-4) |
 | pac: staging 슬롯 대기 | **적용 (결함 수정)** | 한 pass의 파이프라인 SET이 워커당 슬롯(9)을 넘으면 10번째부터 NOT_STORED — 회수까지 자기 CQ를 걷도록 수정 |
-| **SYNC_FOR_DEVICE 배치화** | **적용·실측 통과 (`2d0290a`)** | **sync 1.90 → 0.32 µs/op**, 처리량 +20.8%, 클라이언트 p99.9 −32%, 결함 0 (§0-3). pac이 전제를 충족시켜 처음 가능해졌다 |
-| SET 고유 비용 3.25 µs (stub/loc 할당·게시·반납) | **미규명 — 다음 대상** | 같은 bed에서 SET 5.77 vs GET 2.52 µs/op. 5M까지 약 10% 절감 필요 (§0-3) |
+| **SYNC_FOR_DEVICE 배치화** | **적용 (`90f532e`, ex-`2d0290a`)** | **sync 1.90 → 0.32 µs/op** — 성분 실측은 유효. 처리량 델타(+20.8%)는 무효 → 재측정 (§0-3). pac이 전제를 충족시켜 처음 가능해졌다 |
+| **extstore_alloc 재활용 조건** | **결함 수정 적용 (`678e7a3`)** | 미스 12% → 페이지 append → 4 GiB 전소 후 전 SET `NOT_STORED`(7분). 균일 슬롯으로 free list를 완전 대체 가능하게. 신규 `extstore_alloc_failures` (§0-4) |
+| **seal을 flush로 지연** | 구현, 미측정 (`785b308`, knob 뒤) | enqueue가 아니라 flush에서 봉인 — 재측정 대상 바이너리에 포함돼 있다 |
+| loc magazine을 대체 가능하게 (len 조건 해제) | **미검증 후보** | 균일 슬롯이 전제를 이미 만들어 뒀다. 남은 미스 ~12%(= SET당 0.12회 엔진 뮤텍스)를 없앤다. `bytes_used` 회계 짝맞춤이 조건 (§2 7b) |
+| `ext_drain_spin` 상향 (SYNC 상각) | **철회** | 근거로 쓴 여유 5.06 µs는 혼합 런 GET span에서 나온 값. 이중 게이트에서 구속은 GET-only 26.7→30 µs = 3.3 µs이고 drain을 굵게 하면 초과 (§0-4) |
+| SET 고유 비용 (stub/loc 할당·게시·반납) | **미규명 — 다음 대상, 값은 재측정** | 3.25 µs(5.77−2.52)는 alloc 결함 상태의 수치라 폐기. bpftrace 프로파일은 `785b308` 재측정 후에 (§0-4) |
 
 ## 5. 바꿀 수 없는 계약 (설계 제약)
 
@@ -360,6 +497,12 @@ stats:
   ext_worker_drain_*       drain 호출/empty 횟수
   ext_loc_mag_depth        loc magazine 깊이 (0 = off, A/B용)
   ext_slot_acct_leak       loc 검증 격리 건수 (A-9)
+  extstore_alloc_failures  원격 슬롯 할당 실패 = store 만원, SET이 NOT_STORED
+                           (678e7a3 신규. 이전에는 막힌 store가 stats에서
+                            보이지 않았다 — write_failures는 RDMA 완료 오류만 센다)
+  extstore_pages_free      남은 페이지. 쓰기 부하 중 단조 감소하면 누수다
+                           (1M item 정상값 = 4장 사용, 60장 잔여)
+  ext_pac_fail/_fallback   pac 경로 실패·동기 폴백 (브랜치 전용)
 tools/obwatch.sh           get/set rate, span avg/p99, correctness footer
 프로파일                    -fno-omit-frame-pointer 빌드 + "첫 해석 프레임" 귀속
                            (libc 심볼 없음 주의, SET_COST_ATTRIBUTION.md §1)

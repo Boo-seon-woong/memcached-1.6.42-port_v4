@@ -21,6 +21,9 @@ unsigned int storage_slot_size(void *conf);
 int storage_get_item(LIBEVENT_THREAD *t, item *it, mc_resp *resp);
 int storage_prepare_workers(void *storage, int nthreads);
 void storage_flush_returns(void);
+// v3 pac: flush the deferred WRITE queue (one SYNC_FOR_DEVICE, then post N).
+// Called at the end of each event-loop pass, before the sleep decision.
+void storage_flush_pending_writes(void);
 // Commit one value remotely and return an unlinked ITEM_HDR. Caller holds
 // item_lock(hv); no local value is published on failure.
 int storage_store_item(void *e, item *it, item **hdr_it, uint32_t hv);

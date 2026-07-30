@@ -126,6 +126,12 @@ int extstore_alloc(void *ptr, unsigned int len, unsigned int bucket, struct ext_
 void extstore_free_loc(void *ptr, const struct ext_loc *loc);
 void extstore_set_loc_mag_depth(unsigned int d);
 
+/* v3: SYNC_FOR_DEVICE를 쓰기 N건에 1회로 상각. seal이 끝난 io들에 대해
+ * post 전에 호출하고, post는 presynced 변형을 쓴다. */
+int extstore_worker_sync_for_device(void *worker, obj_io *const *ios,
+                                    unsigned int n);
+int extstore_worker_post_write_presynced(void *worker, obj_io *io);
+
 /* v2 worker-inline READ/WRITE API. All *_worker functions touch only the
  * calling worker's resources (shared-nothing; see md/V2_CODE_SPEC.md P2).
  * prepare/create run in the MAIN thread before conns are dispatched. */

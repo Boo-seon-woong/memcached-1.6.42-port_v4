@@ -516,6 +516,10 @@ static void *worker_libevent(void *arg) {
          * is picked up by the 0-timeout drain event (point (b)).
          * Spin only while this worker has READs in flight. */
         if (me->ext_worker != NULL) {
+            /* v3 pac: 이 pass에서 수락된 SET들을 advise 1회로 동기화하고
+             * post한다. 수면 판단보다 반드시 앞서야 한다 — 큐가 남은 채
+             * 잠들면 그 연결들은 영원히 재개되지 않는다. */
+            storage_flush_pending_writes();
             unsigned int out = extstore_worker_outstanding(me->ext_worker);
             if (out) {
                 unsigned int spins = 0, empty = 0;

@@ -17,6 +17,8 @@
 // Single remote size-class for the fixed-size RDMA workload (P-1a).
 #define PAGE_BUCKET_DEFAULT 0
 #define PAGE_BUCKET_COUNT   1
+/* v3 pac: SYNC_FOR_DEVICE 배치 큐의 하드 상한 (ext_setq_max의 최대값) */
+#define SETQ_HARD_MAX 64
 
 static bool g_crypto_on = false;
 static unsigned int g_read_retries = 3;   // integrity-read retry cap (EXT_READ_RETRIES)
@@ -32,6 +34,10 @@ static _Atomic uint64_t g_worker_write_spins = 0;
 static _Atomic uint64_t g_pac_posted = 0;     /* pending으로 수락된 SET */
 static _Atomic uint64_t g_pac_fail = 0;       /* WRITE 실패로 게시 롤백 */
 static _Atomic uint64_t g_pac_fallback = 0;   /* 자원 부족 → 동기 폴백 */
+/* v3: SYNC_FOR_DEVICE 배치 큐. flushes 대비 writes가 상각 계수다. */
+static _Atomic uint64_t g_setq_flushes = 0;
+static _Atomic uint64_t g_setq_writes = 0;
+static unsigned int g_setq_max = SETQ_HARD_MAX;  /* ext_setq_max; 1 = 배치 없음 */
 static _Atomic uint64_t g_badcrc_log_ct = 0;      // rate-limit for the badcrc diagnostic
 static _Atomic uint64_t g_flush_log_ct = 0;       // rate-limit for the flush diagnostic
 
@@ -214,6 +220,11 @@ void storage_stats(ADD_STAT add_stats, void *c) {
                 (unsigned long long)atomic_load(&g_pac_fail));
         APPEND_STAT("ext_pac_fallback", "%llu",
                 (unsigned long long)atomic_load(&g_pac_fallback));
+        APPEND_STAT("ext_setq_max", "%u", g_setq_max);
+        APPEND_STAT("ext_setq_flushes", "%llu",
+                (unsigned long long)atomic_load(&g_setq_flushes));
+        APPEND_STAT("ext_setq_writes", "%llu",
+                (unsigned long long)atomic_load(&g_setq_writes));
         APPEND_STAT("ext_slot_acct_leak", "%llu",
                 (unsigned long long)st.slot_acct_leak);
         APPEND_STAT("extstore_alloc_failures", "%llu",
@@ -598,6 +609,12 @@ typedef struct _io_pending_storage_write_t {
     obj_io io_ctx;            /* embedded — payload가 가리킨다 */
 } io_pending_storage_write_t;
 
+/* post 대기 큐 — 이 pass에 수락된 쓰기들을 advise 1회로 함께 동기화한다. */
+static _Thread_local struct {
+    unsigned int n;
+    io_pending_storage_write_t *v[SETQ_HARD_MAX];
+} g_setq;
+
 /* 재개 시 out_string()을 쓰면 안 된다 — conn_set_state()로 연결 상태를
  * 되돌려 파이프라인 중간을 깨뜨린다. suspend해 둔 resp에만 쓴다. */
 static void setp_out_string(mc_resp *resp, const char *str) {
@@ -685,6 +702,10 @@ int storage_store_item_pac(void *e, item *it, item **hdr_out, uint32_t hv,
     uint64_t stg_spins = 0;
     while ((slot = extstore_worker_staging_get(w)) == NULL) {
         stg_spins++;
+        /* 큐에 쌓인 쓰기도 슬롯을 쥐고 있다. 그것들이 아직 post되지 않았다면
+         * drain해도 완료가 올 리 없으므로 먼저 내보내야 한다 — 이 한 줄이
+         * 없으면 큐가 슬롯을 전부 쥔 순간 이 루프가 영원히 돈다. */
+        storage_flush_pending_writes();
         if (extstore_worker_drain(w, 32) < 0) break;   /* 엔진 사망 */
     }
     if (stg_spins) atomic_fetch_add(&g_worker_write_spins, stg_spins);
@@ -739,24 +760,6 @@ int storage_store_item_pac(void *e, item *it, item **hdr_out, uint32_t hv,
         .cb = _storage_set_item_cb,
         .t_start = prof_start, .t_end = prof_crypto_done };
 
-    /* window가 차 있으면 자리가 날 때까지 drain — 동기 경로와 동일한 대기.
-     * 이 drain에서 다른 pending의 cb가 돌 수 있지만 g_ret_head 적재까지만
-     * 이고, item_lock을 잡는 return_cb는 loop 레벨에서만 불린다. */
-    int rc;
-    uint64_t spins = 0;
-    while ((rc = extstore_worker_post_write(w, &p->io_ctx)) == EAGAIN) {
-        spins++;
-        if (extstore_worker_drain(w, 32) < 0) { rc = -1; break; }
-    }
-    if (spins) atomic_fetch_add(&g_worker_write_spins, spins);
-    if (rc != 0) {
-        do_cache_free(t->io_cache, p);
-        extstore_worker_staging_put(w, slot);
-        extstore_free_loc(e, &loc);
-        do_item_remove(hdr_it);
-        return -1;   /* 엔진 사망 */
-    }
-
     item_hdr *hdr = (item_hdr *)ITEM_data(hdr_it);
     hdr->page_version = loc.page_version;
     hdr->offset = loc.offset;
@@ -767,11 +770,59 @@ int storage_store_item_pac(void *e, item *it, item **hdr_out, uint32_t hv,
         (it->it_flags & (ITEM_TOKEN_SENT|ITEM_STALE|ITEM_KEY_BINARY));
     refcount_incr(hdr_it);              /* pending 참조 — finalize에서 반납 */
     resp->io_pending = (io_pending_t *)p;
+
+    /* post는 이벤트 루프 pass 끝(storage_flush_pending_writes)까지 미룬다 —
+     * 그 pass에 수락된 쓰기들을 SYNC_FOR_DEVICE 1회로 함께 동기화하기 위해서다.
+     * 여기서 실패할 수 있는 것은 이미 다 지났으므로 enqueue는 실패하지 않는다.
+     * 이 지점 이후로 SET은 "수락됨"이고, post 실패조차 -1로 되돌릴 수 없다 —
+     * done_cb(-1) 경로로 합류해 게시가 롤백된다. */
+    g_setq.v[g_setq.n++] = p;
+    if (g_setq.n >= g_setq_max)
+        storage_flush_pending_writes();
     /* GET이 없는 워크로드에서도 CQE를 걷을 주체를 보장한다 */
     worker_storage_arm_drain(t);
     atomic_fetch_add(&g_pac_posted, 1);
     *hdr_out = hdr_it;
     return 1;
+}
+
+/* 이벤트 루프 pass 끝(worker_libevent)과 큐 상한에서 호출된다. advise 1회 +
+ * post N회.
+ *
+ * 여기서 storage_flush_returns()를 부르면 안 된다 — 큐 상한 경로는
+ * do_store_item의 item_lock(hv) 아래에서 실행되는데, 재개(return_cb)는
+ * item_lock(p->hv)을 다시 잡으므로 같은 버킷이면 데드락이다. enqueue마다
+ * worker_storage_arm_drain이 걸려 있으므로 ready 목록은 다음 drain 이벤트가
+ * 소화한다(엔진이 죽어 있어도 handler가 returns를 먼저 비운다). */
+void storage_flush_pending_writes(void) {
+    unsigned int n = g_setq.n;
+    if (n == 0) return;
+    g_setq.n = 0;
+    void *w = g_setq.v[0]->thread->ext_worker;
+
+    obj_io *ios[SETQ_HARD_MAX];
+    for (unsigned int i = 0; i < n; i++)
+        ios[i] = &g_setq.v[i]->io_ctx;
+
+    /* seal → sync → post 순서는 쓰기마다 유지된다. 배치는 sync를 공유할 뿐이다. */
+    extstore_worker_sync_for_device(w, ios, n);
+
+    uint64_t spins = 0;
+    for (unsigned int i = 0; i < n; i++) {
+        int rc;
+        while ((rc = extstore_worker_post_write_presynced(w, ios[i])) == EAGAIN) {
+            spins++;
+            if (extstore_worker_drain(w, 32) < 0) { rc = -1; break; }
+        }
+        if (rc != 0) {
+            /* 이미 수락된 SET이므로 여기서 끝낼 수 없다. WRITE 실패와 같은
+             * 경로로 보내 loop 레벨에서 게시가 롤백되게 한다. */
+            _storage_set_item_cb(NULL, ios[i], -1);
+        }
+    }
+    if (spins) atomic_fetch_add(&g_worker_write_spins, spins);
+    atomic_fetch_add(&g_setq_flushes, 1);
+    atomic_fetch_add(&g_setq_writes, n);
 }
 /* ==== v3 pac 끝 ========================================================== */
 
@@ -1005,6 +1056,7 @@ int storage_read_config(void *conf, char **subopt) {
         EXT_DRAIN_SPIN,
         EXT_DRAIN_EMPTY_MAX,
         EXT_LOC_MAG_DEPTH,
+        EXT_SETQ_MAX,
     };
 
     char *const subopts_tokens[] = {
@@ -1017,6 +1069,7 @@ int storage_read_config(void *conf, char **subopt) {
         [EXT_DRAIN_SPIN] = "ext_drain_spin",
         [EXT_DRAIN_EMPTY_MAX] = "ext_drain_empty_max",
         [EXT_LOC_MAG_DEPTH] = "ext_loc_mag_depth",
+        [EXT_SETQ_MAX] = "ext_setq_max",
         NULL
     };
 
@@ -1052,6 +1105,17 @@ int storage_read_config(void *conf, char **subopt) {
             if (subopts_value == NULL ||
                 !safe_strtoul(subopts_value, &settings.ext_drain_empty_max)) {
                 fprintf(stderr, "ext_drain_empty_max must be a number\n");
+                return 1;
+            }
+            break;
+        case EXT_SETQ_MAX:
+            /* SYNC_FOR_DEVICE 배치 상한. 1 = 쓰기당 advise 1회(배치 없음) —
+             * 같은 바이너리로 배치화를 A/B하는 대조군이다. */
+            if (subopts_value == NULL ||
+                !safe_strtoul(subopts_value, &g_setq_max) ||
+                g_setq_max < 1 || g_setq_max > SETQ_HARD_MAX) {
+                fprintf(stderr, "ext_setq_max must be 1..%d (1 = no batching)\n",
+                        SETQ_HARD_MAX);
                 return 1;
             }
             break;

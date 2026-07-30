@@ -691,8 +691,11 @@ int extstore_workers_prepare(void *ptr, unsigned int nworkers,
         return -1;
     }
 
+    /* pac은 post부터 CQE까지 슬롯을 쥐므로 워커당 window만큼 필요하고,
+     * sync 배치화 이후에는 큐에 쌓인(아직 post 전) 쓰기도 쥔다 —
+     * storage.c의 큐 상한(SETQ_HARD_MAX 64)만큼 더 얹는다. */
     e->w_staging_slots = e->write_slots / nworkers;
-    if (e->w_staging_slots < 1) e->w_staging_slots = 1;
+    if (e->w_staging_slots < window + 64) e->w_staging_slots = window + 64;
     size_t ssz = (size_t)nworkers * e->w_staging_slots * e->slot_size;
     e->wstaging_base = dma_alloc(ssz);
     if (!e->wstaging_base) return -1;
@@ -833,27 +836,58 @@ void extstore_worker_staging_put(void *worker, char *slot) {
     bm_free(w->staging_free, (int)((slot - w->staging_base) / w->e->slot_size));
 }
 
-/* P2b: post one WRITE inline. WRITE is exempt from ORD (READ-only limit) but
- * still counts against the worker window. Returns 0 on post. */
-int extstore_worker_post_write(void *worker, obj_io *io) {
+/* v3: SYNC_FOR_DEVICE를 쓰기 N건에 1회로 상각한다. GET이 SYNC_FOR_CPU를
+ * advise 1회당 ~13 read로 상각하는 것의 대칭이다(실측: sync가 1.90 µs/op로
+ * 2.8 µs 예산의 68%). seal이 끝난 obj_io들에 대해 post 전에 호출한다 —
+ * 각 쓰기에 대해 seal → sync → post 순서가 유지되면 배치해도 계약은 같다. */
+int extstore_worker_sync_for_device(void *worker, obj_io *const *ios,
+                                    unsigned int n) {
     store_worker *w = worker;
+    store_engine *e = w->e;
+    if (g_skip_dma_sync || n == 0) return 0;
+    uint64_t t_sync_start = g_prof_on ? prof_rdtsc() : 0;
+    int adv = 0;
+    while (n > 0) {
+        struct ibv_sge sg[64];
+        unsigned int c = n > 64 ? 64 : n;
+        for (unsigned int i = 0; i < c; i++)
+            sg[i] = (struct ibv_sge){ .addr = (uintptr_t)ios[i]->buf,
+                .length = ios[i]->len, .lkey = e->wstaging_mr->lkey };
+        int r = ibv_advise_mr(e->pd, IBV_ADVISE_MR_ADVICE_SYNC_FOR_DEVICE,
+                              IBV_ADVISE_MR_FLAG_FLUSH, sg, c);
+        if (r) adv = r;
+        ios += c;
+        n -= c;
+    }
+    static _Atomic int w_dev_warned;
+    if (adv && !atomic_exchange(&w_dev_warned, 1))
+        fprintf(stderr, "extstore: worker SYNC_FOR_DEVICE advise failed: %s\n",
+                strerror(adv));
+    if (g_prof_on)
+        w->prof_w_sync_ns += (uint64_t)((prof_rdtsc() - t_sync_start) * g_ns_per_cycle);
+    return adv ? -1 : 0;
+}
+
+static int worker_post_write_inner(store_worker *w, obj_io *io, int do_sync) {
     store_engine *e = w->e;
     if (atomic_load(&e->dead)) return -1;
     if (w->outstanding >= w->window) return EAGAIN;
     unsigned int qi = w->rr % w->nqp;
     struct ibv_sge sg = { .addr = (uintptr_t)io->buf, .length = io->len,
         .lkey = e->wstaging_mr->lkey };
-    /* push the sealed bytes to the device before the NIC reads them */
     uint64_t t_sync_start = g_prof_on ? prof_rdtsc() : 0;
     if (g_prof_on && io->t_start && io->t_end >= io->t_start)
         w->prof_w_crypto_ns += (uint64_t)((io->t_end - io->t_start) * g_ns_per_cycle);
-    int adv = g_skip_dma_sync ? 0
-            : ibv_advise_mr(e->pd, IBV_ADVISE_MR_ADVICE_SYNC_FOR_DEVICE,
-                            IBV_ADVISE_MR_FLAG_FLUSH, &sg, 1);
-    static _Atomic int w_dev_warned;
-    if (adv && !atomic_exchange(&w_dev_warned, 1))
-        fprintf(stderr, "extstore: worker SYNC_FOR_DEVICE advise failed: %s\n",
-                strerror(adv));
+    if (do_sync) {
+        /* push the sealed bytes to the device before the NIC reads them */
+        int adv = g_skip_dma_sync ? 0
+                : ibv_advise_mr(e->pd, IBV_ADVISE_MR_ADVICE_SYNC_FOR_DEVICE,
+                                IBV_ADVISE_MR_FLAG_FLUSH, &sg, 1);
+        static _Atomic int w_dev_warned;
+        if (adv && !atomic_exchange(&w_dev_warned, 1))
+            fprintf(stderr, "extstore: worker SYNC_FOR_DEVICE advise failed: %s\n",
+                    strerror(adv));
+    }
     if (g_prof_on) {
         uint64_t ts = prof_rdtsc();
         w->prof_w_sync_ns += (uint64_t)((ts - t_sync_start) * g_ns_per_cycle);
@@ -873,6 +907,17 @@ int extstore_worker_post_write(void *worker, obj_io *io) {
     w->outstanding++;
     w->rr = (qi + 1) % w->nqp;
     return 0;
+}
+
+/* P2b: post one WRITE inline. WRITE is exempt from ORD (READ-only limit) but
+ * still counts against the worker window. Returns 0 on post. */
+int extstore_worker_post_write(void *worker, obj_io *io) {
+    return worker_post_write_inner(worker, io, 1);
+}
+
+/* v3: extstore_worker_sync_for_device로 이미 동기화된 쓰기용 */
+int extstore_worker_post_write_presynced(void *worker, obj_io *io) {
+    return worker_post_write_inner(worker, io, 0);
 }
 
 int extstore_worker_submit(void *worker, obj_io *chain) {

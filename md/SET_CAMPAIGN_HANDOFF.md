@@ -308,3 +308,120 @@ GET의 동종 작업                ~2.2 µs
 99.6% 포화라 **혼합 목표를 막지는 않는다.** 성격 판별 도구는
 guest `~/pac-ab-20260730/blockprobe.sh`(부하 중 실행, op당 voluntary ctxsw로
 "락에 잠듦" vs "할 일 없음"을 가른다).
+
+---
+
+## 12. [2026-07-31] pac ⊕ coherent MR 통합과 게스트 내 정합성 게이트
+
+### 12-1. 배포본이 무엇이었는지부터 (genie의 지적이 맞았다)
+
+genie가 "guest memcached에 `extstore_alloc_failures`가 없다 = 678e7a3 이전
+빌드"라고 지적했고, 확인 결과 **그보다 더 뒤처져 있었다**. codex가 배포한
+`~/coherent-mr-v2/bin/memcached`에는 `ext_pac_set` 노브 자체가 없었다.
+
+```text
+판별 표지                    구버전   신버전
+extstore_alloc_failures      없음     있음     ← genie의 678e7a3 수정
+ext_pac_set (stats settings) 없음     yes      ← pac 전체
+staging 코히런트 MR 크기     64512B   236544B  ← 런타임 배치 기준 sizing
+```
+
+원인은 브랜치 분기다. codex의 coherent MR은 `main`에, pac은 `v3-set-pac`에
+있었고 둘은 `1f215e2`에서 갈라진 뒤 각각 15/10 커밋 앞서 있었다.
+**어느 한쪽 브랜치를 빌드해도 절반만 들어간다.**
+
+### 12-2. 병합 — 충돌은 한 곳, 의미는 AND
+
+겹치는 소스는 `extstore.c` 하나. 충돌 훅도 하나(`worker_post_write_inner`)이고,
+양쪽이 같은 advise 호출에 서로 다른 게이트를 달아 둔 것이었다.
+pac은 `do_sync`(사전 sync된 post를 위해), main은 `wstaging_coherent`.
+**둘 다 필요하므로 AND로 합쳤다.**
+
+```c
+    if (do_sync) {
+        int adv = (g_skip_dma_sync || e->wstaging_coherent) ? 0
+                : ibv_advise_mr(e->pd, IBV_ADVISE_MR_ADVICE_SYNC_FOR_DEVICE, ...);
+```
+
+충돌로 표시되지 **않았지만** 같이 고쳐야 했던 곳이 하나 더 있다. 배치 sync
+`extstore_worker_sync_for_device()`는 pac이 새로 만든 함수라 main과 충돌하지
+않았는데, 코히런트일 때 건너뛰는 게이트가 당연히 빠져 있었다.
+
+```c
+    if (g_skip_dma_sync || e->wstaging_coherent || n == 0) return 0;
+```
+
+병합 커밋 `31c161e`. 남은 advise 호출 지점 5곳을 전수 확인했고, 데이터 경로
+3곳(배치 sync·단건 post·READ 회수)은 모두 코히런트 게이트를 갖는다. 나머지
+2곳은 기동 시 selftest다.
+
+### 12-3. genie는 재배포할 것이 없다
+
+`genie_memd`는 4 GB MR을 등록해 `(raddr, rkey)`를 넘겨주는 **수동 단면(one-sided)
+타깃**이고 데이터 경로에 참여하지 않는다. 슬롯 배치도 암호화도 모른다.
+coherent MR 변경은 **게스트가 자기 로컬 버퍼를 어떻게 할당·등록하는가**만
+바꾸며 와이어 프로토콜도 원격 MR도 건드리지 않는다. 게다가 genie는 SEV 밖이라
+SWIOTLB 바운스 자체가 없다.
+
+실증도 이미 있다 — PID 5137을 그대로 둔 채 새 바이너리가
+`genie_connect OK (raddr=0x7722c8000000 rkey=0x182f00 ...)`로 붙었고 페이로드가
+왕복했다. genie가 관찰한 나머지도 전부 정상이다: 두 번째 기동이 죽은 것은
+5137이 포트를 쥐고 있어서고, `ss -ltnp`에 11212가 없는 것은 제어 채널이
+RDMA CM이라서다.
+
+### 12-4. 정합성 게이트 — 통과
+
+```text
+extstore: coherent MR 458752B at 0x7f69b821d000     ← wbounce (READ)
+extstore: coherent MR 236544B at 0x7f69b81e3000     ← wstaging (WRITE)
+extstore selftest: SYNC_FOR_DEVICE advise failed: No such file or directory
+extstore selftest: SYNC_FOR_CPU advise failed: No such file or directory
+extstore selftest: OK (256 bytes written and read back)
+```
+
+advise 두 개가 **실패했는데 페이로드는 왕복했다**. 코히런트 MR에는 umem이 없어
+advise 핸들러가 ENOENT를 내지만, 애초에 sync가 필요 없으므로 데이터는 옳다.
+(데이터 경로는 §12-2의 게이트로 호출조차 하지 않는다. 이 메시지는 selftest만의 것이다.)
+
+순차 쓰기 100K → 읽기 100K:
+
+```text
+cmd_set 100000  cmd_get 100001  get_hits 100000  get_misses 1(memtier 초기 probe)
+badcrc 0   read_failures 0   write_failures 0   read_retries 0
+engine_dead 0   ext_slot_acct_leak 0   curr_items 100000
+```
+
+**이것이 코히런트 MR이 실제로 코히런트하다는 증명이다.** 대조군은 §b4c9fc7의
+`EXT_SKIP_DMA_SYNC=1` 실험 — 바운스 MR에서 sync만 빼자 100,000/100,000 badcrc였다.
+같은 "sync 없음"인데 코히런트 MR에서는 0이다.
+
+### 12-5. 혼합 부하에서 badcrc가 나왔다 — 두 변경 어느 쪽도 원인이 아니다
+
+1:10 혼합 20초에서 `badcrc 1143`이 잡혔다. 순차 구간에서는 0이었으므로
+동시성이다. pac 축과 coherent 축을 각각 끄는 2×2로 분리했다.
+
+| 구성 | 코히런트 풀 | badcrc | retries | ops/s |
+|---|---|---|---|---|
+| pac + coherent | 2 | 1206 | 3618 | 3,186,179 |
+| pac + bounce | 0 | 1126 | 3378 | 2,916,888 |
+| nopac + coherent | 2 | 1210 | 3630 | 3,007,020 |
+| nopac + bounce | 0 | 1349 | 4047 | 2,822,233 |
+
+*mtT=4(c=8, pipeline=32), mcT=28, ext=28×2qp, 100K 키, 20초, 게스트 내 co-located.*
+
+**네 조합 모두 같은 비율(SET 약 5.6M건당 0.02%)이다.** pac을 꺼도, 코히런트를
+꺼도 변하지 않으므로 원인은 둘 다 아니고, 같은 슬롯을 덮어쓰는 SET과 읽는
+GET의 기존 경합이다. 모든 조합에서 `retries = 3 × badcrc`, `get_misses 0` —
+재시도가 전부 회수한다. GCM 태그가 256B 슬롯 전체를 덮으므로 찢어진 읽기는
+반드시 태그에서 걸린다. **정합성은 유지된다.**
+
+곁가지로 처리량 방향도 보인다(co-located라 절대값은 무의미, 델타만):
+coherent가 바운스 대비 +9.2%(pac) / +6.5%(nopac), pac이 nopac 대비
++6.0%(coherent) / +3.4%(바운스). 대략 가산적이며 pac+coherent가
+nopac+bounce 대비 **+12.9%**.
+
+### 12-6. 다음
+
+정본 3종(GET-only / SET-only / 1:10 혼합)을 fresh boot + 300초 창으로 off-box
+측정. 게스트는 표준 구성 + 1M 프리로드 상태로 복구해 두었다
+(`ext_pac_posted 1000000` = 전량 pac 경유, 결함 카운터 전부 0).

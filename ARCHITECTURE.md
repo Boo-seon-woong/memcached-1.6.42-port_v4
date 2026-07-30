@@ -2,8 +2,10 @@
 
 > **이 문서는 stock memcached 1.6.42 전용이다.** 모든 `file:line` 참조는
 > `../memcached-1.6.42/` 기준이며, 이 디렉터리의 RDMA port 동작을 설명하지
-> 않는다. 현재 v2 port는 [`md/V2_CODE_SPEC.md`](md/V2_CODE_SPEC.md)와
-> [`GLOSSARY.md`](GLOSSARY.md)를 본다.
+> 않는다. 현재 port(v3)는 [`md/V3_ARCHITECTURE.md`](md/V3_ARCHITECTURE.md),
+> [`md/GET_WORKFLOW.md`](md/GET_WORKFLOW.md), [`md/SET_WORKFLOW.md`](md/SET_WORKFLOW.md),
+> [`GLOSSARY.md`](GLOSSARY.md)를 본다. 운영점은
+> [`md/OPTIMAL_RUNBOOK.md`](md/OPTIMAL_RUNBOOK.md).
 
 스톡 소스가 어떻게 구성되어 있고 요청이 어떤 경로로 흐르는지 정리한 지도입니다.
 

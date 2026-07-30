@@ -2,6 +2,16 @@
 
 기준일: 2026-07-30. 기준 commit: **`7a09928` (main)**.
 
+> ### ⚠ 2026-07-31 — 이 문서의 SET 서술은 pac 이전 상태다
+>
+> §6이 "구조적 한계"로 지목한 **워커당 SET 동시성 1**은 그 뒤 `pac`
+> (publish-at-command)으로 해소됐고, SET-only는 0.311 M → 4.241 M이 됐다.
+> §6의 "현재 실측" 블록과 §7·§8의 브랜치 기준 서술은 **당시 기록으로만**
+> 읽을 것.
+>
+> 현행 수치와 구조는 [`SET_CAMPAIGN_HANDOFF.md`](SET_CAMPAIGN_HANDOFF.md) §16,
+> 운영점은 [`OPTIMAL_RUNBOOK.md`](OPTIMAL_RUNBOOK.md)가 정본이다.
+
 > **개정 이력.** 초판은 `746bcab`(branch `v3-async-set`) 기준으로 작성됐다.
 > 이후 관리자 실측으로 비동기 SET **두 갈래가 모두 main 밖으로** 처분됐다:
 >
@@ -239,12 +249,17 @@ worker: staging slot 확보 (워커 전용 bitmap)
 워커당 SET 동시성이 1**이다. 재프로파일은 `storage_store_item`(= 이 대기
 루프)을 SET CPU의 46.6%로 잡았고, 처리량은 CPU 상한의 45%에 머문다.
 
-현재 실측 (전 게이트 통과):
+당시 실측 (2026-07-30, pac 이전 — **현재 값이 아니다**):
 
 ```text
 SET-only 1.74 M/s, span 5.08 µs, CPU 7.48 µs/op
 1:9 mixed 5.28 M/s   1:1 mixed 2.73 M/s   miss 0
 ```
+
+> **이후 경과.** 위 "구조적 한계"(워커당 SET 동시성 1)는 pac이 없앴다.
+> 스텁을 커맨드 시점에 게시하고 `STORED` 응답만 CQE로 미루면 워커가 묶이지
+> 않는다. 2026-07-31 정본은 **SET-only 4.241 M/s(span 7.63 µs),
+> 1:10 혼합 10.195 M/s**이며 양 게이트를 동시에 통과한다.
 
 ---
 

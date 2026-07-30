@@ -8,20 +8,27 @@
 `md/OPTIMIZATION_HISTORY.md`, GET/SET 대조는 `md/GET_SET_CONCURRENCY.md`,
 계측 정의는 `md/SPAN_MEASUREMENT_REVIEW.md`를 따른다.
 
-## 0. 기준 수치 (mc28 / W24 / nqp2 / hp22, 2026-07-29 실측)
+## 0. 기준 수치 (mc28 / W24 / nqp2 / hp22, **2026-07-31 정본**)
 
 ```text
-GET-only 처리량          10.12~10.25 M ops/s
-READ span avg            25.4 µs
-프로세스 CPU             2.50 µs/op
-guest busyCPU            28.1 / 30
+GET-only 처리량          11.779 M ops/s
+READ span avg            15.96 µs   (p50 14.4 / p99 44.3)
+C_get                    2.369 µs/op
+guest busyCPU            27.9 / 30
 GET 동시성               worker당 최대 W=24
+1:10 혼합에서의 GET      9.268 M ops/s, span 16.03 µs
 ```
 
-이 수치는 같은 bed에서 얻은 GET-only 참고값이다. 현재 HEAD를 새로 측정한
-수치라는 뜻은 아니다. 300초 지속 검증 기록은 10.357M GET/s, span avg
-26.70µs이며, 두 기록 모두 GET miss·badcrc·RDMA failure·engine dead·slot
-accounting leak가 0이었다.
+빌드 `771ca34068c7609936b2e58a`(`ce92044`). GET miss·badcrc·RDMA failure·
+engine dead·slot accounting leak 전부 0.
+
+> **이전 판(10.12~10.25 M, span 25.4 µs)은 폐기됐다.** 그 사이 coherent MR이
+> SWIOTLB 바운스를, GCM 1회 키잉이 op당 재키잉을 걷어냈다. 경위는
+> `OPTIMIZATION_HISTORY.md` ⑨·⑪.
+
+**1:10 혼합에서 GET이 CPU의 78.1%를 쓴다.** SET이 op당 2.8배 비싸도 비중을
+곱하면 같은 1% 절감의 가치가 GET : SET = 3.6 : 1이다 — 추가 최적화의 레버는
+이쪽이 크다.
 
 `READ span`은 클라이언트 지연이 아니다. 서버의 **RDMA READ post 직전부터
 CQE, `SYNC_FOR_CPU`, AES-GCM 복호 완료까지**만 잰다. TCP 수신, 파싱, hash
@@ -308,3 +315,37 @@ span 총합은 `post 직전 → decrypt 완료`로 정확하지만, 하위 합�
 앞선 CQE callback의 decrypt를 기다리는 시간이 빠진다. 따라서
 `xfer + sync + crypto`가 `read_avg`와 정확히 같지 않은 것은 정상이며,
 클라이언트 end-to-end latency와도 같은 열에서 비교하지 않는다.
+
+
+---
+
+## 부록. 2026-07-31 연산량 감사에서 GET 경로에 대해 확인된 것
+
+perf(`mc-worker`, GET-only) 상위 항목과 판정이다.
+
+| 항목 | 비중 | 판정 |
+|---|---:|---|
+| EVP 재초기화 (`get_iv_length`+`get_key_length`+`ctrl`+libcrypto) | ~6.0% | **걷어냈다** — 아래 |
+| `pthread_mutex_lock`+`unlock` | 9.44% | item_lock. **미귀속** |
+| `mlx5_poll_cq_v1` | 3.80% | CQ 폴링 |
+| `_copy_from_iter`+`rep_movs_alternative` | 4.37% | TCP 소켓 복사, 고유 |
+| `resp_allocate` | 2.88% | 응답 객체 |
+| `assoc_find` | 2.07% | 해시 탐색, 고유 |
+
+**걷어낸 것 — GCM 컨텍스트 재키잉.** `ext_crypto_open`이 연산마다
+`EVP_DecryptInit_ex(ctx, NULL, NULL, g_key, nonce)`로 키를 넘겨, OpenSSL 3.x가
+AES 키 스케줄과 GHASH 테이블을 매번 다시 만들고 그 경로가 provider를 문자열로
+조회하고 있었다. 키는 기동 시 한 번 정해진다. 스레드별 ctx에 키를 한 번만 넣고
+IV만 바꾸도록 고쳐 `open` 630 → 471 ns, `C_get` 2.523 → 2.369 µs.
+
+**하지 않기로 한 것.**
+
+- **도어벨 배칭** — GET은 **이미 한다.** `worker_post`가 최대 `w->batch`(=32)개
+  WR을 체인으로 묶어 `ibv_post_send`를 한 번만 친다.
+- **`sev_es_ghcb_hv_call` 2.13%** — 워크로드 비용이 아니다. 호출자가
+  `__perf_event_task_sched_out → amd_pmu_disable_all → native_read_msr`로,
+  **perf 자신의 PMU MSR 접근이 SEV에서 트랩**하는 것이다. 관측하지 않으면 없다.
+
+**남은 것.** `pthread_mutex_lock`+`unlock` 9.44%가 GET 경로 최대 미귀속
+항목이다. 콜그래프가 프레임 포인터 없이 끊겨 어느 락인지 확정하지 못했다 —
+`-fno-omit-frame-pointer` 빌드가 있어야 한다.

@@ -3,6 +3,25 @@
 작성 2026-07-29. 프레임 포인터 빌드(`-fno-omit-frame-pointer`)로 SET-only
 부하를 프로파일해 비용을 귀속시키고, GET 경로와 대조해 걷어낼 대상을 찾는다.
 
+> ### 2026-07-31 — 이 문서의 26.9 µs는 `C_set 6.63 µs`가 됐다 (4.1배 절감)
+>
+> 여기서 귀속한 항목들이 이후 순서대로 처리됐다. 경위는
+> [`OPTIMIZATION_HISTORY.md`](OPTIMIZATION_HISTORY.md) ⑧~⑪:
+>
+> | | 처리 |
+> |---|---|
+> | 워커 동기 점유 | pac이 제거 (SET-only 0.311 M → 2.348 M) |
+> | SWIOTLB sync | coherent MR이 제거 (`write_sync` 1,996 → 13 ns) |
+> | `extstore_alloc` 전역 락 | loc magazine 스캔 (SET-only 2.640 → 4.121 M) |
+> | crypto | GCM 1회 키잉 (`seal` 986 → 817 ns) |
+>
+> **귀속 방법론은 그대로 유효하다** — 실제로 마지막 두 건도 같은 방식
+> (프레임 포인터 없는 스택을 첫 해석 프레임으로 귀속)으로 찾았다. 다만
+> **아래 표의 절대값과 비율은 당시 것**이며 현재 구성을 설명하지 않는다.
+>
+> 현재 SET 프로파일과 남은 항목은 [`SET_WORKFLOW.md`](SET_WORKFLOW.md) 말미와
+> [`SET_CAMPAIGN_HANDOFF.md`](SET_CAMPAIGN_HANDOFF.md) §15-2.
+
 ## 1. 방법과 판독 주의
 
 leaf가 libc 내부 주소로 잡히는데 **libc는 프레임 포인터도 dynsym 엔트리도

@@ -1,20 +1,27 @@
 # Optimal 시행 런북 (v3 최종 운영점)
 
-기준일: 2026-07-29, 태그 `v3-10.35M-sustained` 시점. 이 문서 하나로 최적
-시행을 재현할 수 있도록 조건·세팅·환경·기대치·주의사항을 모두 담는다.
+기준일: **2026-07-31**, 빌드 `771ca34068c7609936b2e58a`(`ce92044`, 브랜치
+`v3-set-pac`). 이 문서 하나로 최적 시행을 재현할 수 있도록 조건·세팅·환경·
+기대치·주의사항을 모두 담는다.
 
-> **2026-07-30 갱신 (2차).** 5M 캠페인 측정 중이라 guest의
-> `~/kvs-port-v3/memcached`는 **`memcached.pacb-2d0290a`**(pac +
-> SYNC 배치화, sha256 `39bf32e68dff1af3…`)를 가리킨다. 런북 명령줄을 그대로
-> 쓰면 pac이 기동된다(`ext_pac_set=yes`, `ext_setq_max=64`가 기본).
-> 동기 기준선은 `memcached.main-7a09928`(sha256 `7f190a55ce232c54…`)로
-> 보존돼 있고, 같은 pac 바이너리에서 `-o no_ext_pac_set`으로도 동기 경로를
-> 낼 수 있다.
+> ### 계약과 달성 상태
 >
-> **기동 후 `stats settings | grep ext_pac_set`으로 어느 경로인지 반드시
-> 확인할 것** — `grep -ac assoc_prefetch`는 GET prefetch만 보므로 두 빌드를
-> 구분하지 못한다(`MANUAL_TEST_PROCEDURE.md` D-0의 사고 기록 참조).
-> 게이트 절대값 재판정은 fresh bed W1로 할 것.
+> ```text
+> 계약   1:10 혼합(SET:GET) 10 M ops/s  AND  GET-only 10 M ops/s — 동시 충족
+>        두 워크로드 모두 GET span < 30 µs  AND  SET span < 30 µs
+> 우선   span < 30 µs 가 10 M ops/s 보다 앞선다. 상충하면 span을 지킨다.
+> ```
+>
+> **2026-07-31 정본에서 전부 충족됐다.** 1:10 혼합 10.195 M(Gspan 16.03 /
+> Sspan 14.51), GET-only 11.779 M(span 15.96). 근거·귀속은
+> [`SET_CAMPAIGN_HANDOFF.md`](SET_CAMPAIGN_HANDOFF.md) §16.
+>
+> 이전 판의 "GET-only 10.357M 단일 게이트"는 **폐기**됐다. 그 수치는 pac·
+> coherent MR 이전 것이라 현재 스택과 비교 대상이 아니다.
+
+> **구성 요소는 한 벌로만 유효하다.** 커널 모듈·사용자 lib·바이너리 셋 중
+> 하나라도 옛 경로(`~/covlib`, `~/kvs-port-v3`)를 쓰면 조용히 sync 경로로
+> 폴백해 **패치 이전을 재게 된다.** 판별은 §4의 로그 게이트로 한다.
 
 > 사람이 직접 순차 실행할 목적이라면 **`md/MANUAL_TEST_PROCEDURE.md`**(양측
 > 명령을 실행 위치와 함께 단계별로 나열하고 결과 검증까지 포함)를 쓰고, 이
@@ -22,19 +29,25 @@
 
 ## 0. 기대 성능 (무엇이 나와야 정상인가)
 
-| bed 상태 | 기대 throughput | 기대 span avg |
-|---|---:|---:|
-| fresh boot 직후 | 10.0~10.36M ops/s | 23.5~26.7 µs |
-| 재시작 누적 후 | −2~3%까지 하강 가능 | +1~2 µs |
+fresh boot, W=24, 1 M 프리로드 기준. 셋 다 나와야 정상이다.
 
-범위 상한 10.36M은 **W=28에서 측정된 300초 지속치**다(태그
-`v3-10.35M-sustained`). 이 런북의 권장값은 W=24인데, 교대 A/B에서 둘은
-throughput 동등(쌍 부호 엇갈림)이고 W=24가 span만 2.4 µs 유리해 운영값으로
-채택했다. 즉 상한 수치와 권장 구성의 측정 지점이 다르며, 그 차이는 측정
-오차 범위 안이다.
+| 워크로드 | 기대 throughput | GET span | SET span |
+|---|---:|---:|---:|
+| **1:10 혼합** (게이트) | 10.1~10.2 M ops/s | ~16.0 µs | ~14.5 µs |
+| **GET-only** (게이트) | 11.7~11.8 M ops/s | ~16.0 µs | — |
+| SET-only (참고) | 4.2 M ops/s | — | ~7.6 µs |
+| 재시작 누적 후 | −2~3%까지 하강 가능 | +1~2 µs | |
 
-- 게이트: **span avg < 30 µs** (`read_avg_ns`, 서버 측 post→decrypt).
-  W=24 운영 시 여유 ~6.4 µs.
+op당 CPU는 `C_get 2.369 µs`, `C_set 6.63 µs`다. 혼합 처리량을 예측하려면
+`avg = f·C_set + (1−f)·C_get`, `throughput = busyCPU / avg`를 쓴다
+(1:10이면 f = 1/11 = 0.0909). 세 창에서 ±1% 안으로 맞는다.
+
+**1:10에서 GET이 CPU의 78.1%를 쓴다.** 같은 1% 절감의 가치가
+GET : SET = 3.6 : 1이므로, 추가 최적화는 GET 쪽이 레버가 크다.
+
+- 게이트: **span avg < 30 µs**, GET(`read_avg_ns`)과 SET(`write_avg_ns`)
+  **둘 다**. 현재 여유는 GET 14.0 µs / SET 15.5 µs.
+  obwatch의 `gate` 줄은 GET만 판정하므로 **`Sspan avg` 열을 직접 읽을 것.**
 - 정합성 0-오차가 정상: `get_misses = badcrc_from_extstore =
   extstore_read/write_failures = engine_dead = ext_slot_acct_leak = 0`.
 - span 표본 커버리지: `extstore_prof_read_count`가 `cmd_get` 대비 **−1.0% ~
@@ -110,7 +123,7 @@ sudo ~/2026/sev/guestctl.sh up        # 30 vCPU + identity pin + direct-kernel-b
 
 # guest에서 (ssh -i ~/.ssh/snp_guest -p 2222 ubuntu@localhost)
 sudo insmod ~/pb-guest/snp_shared-6.16.0-snp-guest-038d61fd6422-cachemode.ko
-sudo rmmod mlx5_ib && sudo insmod ~/covlib/mlx5_ib.ko    # 반드시 covlib 빌드
+sudo rmmod mlx5_ib && sudo insmod ~/coherent-mr-v2/mlx5_ib.ko   # coherent data MR 빌드
 sleep 3
 sudo ip addr add 10.99.0.3/24 dev ibp1s0
 sudo ip link set ibp1s0 up
@@ -118,26 +131,56 @@ sudo ip link set ibp1s0 mtu 4092      # SM이 4K일 때만 적용됨 (아니면 
 ping -c2 10.99.0.2                    # genie 도달 확인
 ```
 
+모듈이 실제로 새것인지는 **기능으로 판별한다.** `lsmod`는 이름만 보고
+`modinfo`는 디스크 파일을 읽을 뿐이다.
+
+```sh
+LD_LIBRARY_PATH=$HOME/coherent-mr-v2/lib $HOME/coherent-mr-v2/bin/coherent_mr_smoke
+# => coherent MR OK addr=0x... length=2097152 lkey=0x...
+```
+
 함정: `modprobe mlx5_core`류를 건드리면 stock mlx5_ib가 자동 로드된다 —
 stock에서는 `create_cq EINVAL`. 모듈 상태가 꼬이면 재부팅이 가장 빠르다.
-coherent-mr-20260724 모듈 세트는 사용 금지(GCM 전량 실패 확인됨).
+
+> 옛 `coherent-mr-20260724` 세트는 여전히 **사용 금지**다(GCM 전량 실패).
+> 지금 쓰는 것은 그것과 다른 `~/coherent-mr-v2`이며, `dma_alloc_coherent`로
+> 받은 비바운스 메모리를 MR로 등록해 SYNC advise 자체를 없앤 빌드다.
 
 ## 4. 서버 기동 (최종 운영값)
 
 ```sh
 cd $HOME/kvs-port && taskset -c 0-27 env \
-  LD_LIBRARY_PATH=$HOME/covlib:$HOME/kvs-port \
+  LD_LIBRARY_PATH=$HOME/coherent-mr-v2/lib:$HOME/kvs-port \
   MLX5_COHERENT_QP=1 MLX5_COHERENT_CQ=1 \
-  EXT_RDMA_PROF=1 \
+  EXT_RDMA_PROF=1 EXT_SELFTEST=1 \
   EXT_CRYPTO_KEY=$HOME/kvs-port/ext.key \
   EXT_SLOT_SIZE=256 EXT_READ_SLOTS=64 \
-  $HOME/kvs-port-v3/memcached -p 11411 -U 0 -t 28 -m 2048 -c 16384 -R 1024 \
+  $HOME/coherent-mr-v2/bin/memcached -p 11411 -U 0 -t 28 -m 2048 -c 16384 -R 1024 \
   -o ext_path=10.99.0.2:11212:4g,ext_worker_window=24,ext_qp_per_worker=2,ext_drain_spin=1024,hashpower=22
 ```
 
+**기동 로그 게이트 — 이 줄이 없으면 이후 측정은 전부 무효다.**
+
+```sh
+grep -icE "coherent MR [0-9]+B" /tmp/mc.log     # => 2  (READ 458752B + WRITE 236544B)
+pid=$(pgrep -x "memcached[.a-z]*")
+tr '\0' '\n' < /proc/$pid/environ | grep -c EXT_DISABLE_COHERENT_MR   # => 0
+```
+
+`selftest`의 `SYNC_FOR_{DEVICE,CPU} advise failed: No such file or directory`
+두 줄은 **정상이며 통과 신호다** — coherent MR에는 umem이 없어 advise가
+ENOENT를 내는데, 바로 다음 줄에서 페이로드가 왕복한다. 데이터 경로는 애초에
+advise를 호출하지 않는다.
+
+로그 파일은 낡을 수 있으므로 `/proc/$pid/environ` 쪽이 권위 있는 확인이다
+(2026-07-31에 이 함정을 밟았다 — `MANUAL_TEST_PROCEDURE.md` §D-1).
+
 | 항목 | 값 | 이유(한 줄) |
 |---|---|---|
-| binary | main `7a09928` = `memcached.main-7a09928` (sha256 `7f190a55ce232c54…`; 게이트 지속 실측 자체는 태그 `v3-10.35M-sustained`, `ed219244c5621570…`에서 수행) | prefetch ⑥⑦ 포함 + SET step ①②③③′ + A-결함 수정. **`grep -ac assoc_prefetch`로 2 확인할 것** — 없으면 −6.9% |
+| binary | `771ca34068c7609936b2e58a` (`ce92044`, `v3-set-pac`) | pac ⊕ coherent MR ⊕ magazine 스캔 ⊕ GCM 1회 키잉. **sha로 확인할 것** — `grep -ac assoc_prefetch`는 GET prefetch만 보므로 SET 경로를 구별 못 한다 |
+| `ext_pac_set` (기본 on) | SET 완료를 비동기 수거 | 끄면 워커가 WRITE CQE에 묶여 SET-only 0.31 M로 붕괴 |
+| `ext_setq_max=1` (기본) | SET 배치 없음 | 2 이상은 span 계약을 깬다(64에서 SET span 255 µs). coherent MR에서는 상각할 SYNC가 없어 배치할 이유도 없다 |
+| `ext_loc_mag_depth=64` (기본) | 워커 전용 loc magazine | 0으로 끄면 전역 `e->mutex`로 몰려 SET −40% |
 | `taskset 0-27` / `-t 28` | worker 28 | 29부터 softirq 경합(p99.9 +30%), 30은 게이트 붕괴 |
 | `ext_worker_window=24` | W=24 | W28과 동등 throughput, span −2.4 µs (교대 A/B 확정) |
 | `ext_qp_per_worker=2` | QP 56개 | 4와 동등, 절반으로 단순화; 1은 ORD<W 파킹으로 −4% |
@@ -146,7 +189,8 @@ cd $HOME/kvs-port && taskset -c 0-27 env \
 | `EXT_READ_SLOTS=64` | worker당 bounce 64 | W보다 크게 유지 |
 | `MLX5_COHERENT_QP/CQ=1` | patched verbs 경로 | SEV에서 필수 |
 | `EXT_RDMA_PROF=1` | span 계측 | 게이트 판정의 데이터 소스 |
-| DMA sync (기본 ON) | `ibv_advise_mr` | 끄면 GCM 전량 실패 — 절대 스킵 금지 |
+| DMA sync | **coherent MR에서 자동 비활성** | `*_sync_avg_ns`가 계측 하한(<100 ns)이어야 정상. 수천 ns면 폴백이 떠 있는 것이다 |
+| `EXT_SKIP_DMA_SYNC` | **절대 설정 금지** | 바운스 MR에서 sync만 빼면 100 %(100,000/100,000) 손상된다. coherent MR과 혼동하지 말 것 |
 
 ## 5. keyspace 프리로드 (guest 로컬, 셋업 단계)
 
@@ -166,11 +210,18 @@ LD_LIBRARY_PATH=$HOME/memtier:$HOME/kvs-port taskset -c 0-27 \
 ## 6. 부하 (genie 측에서 실행)
 
 ```sh
-memtier_benchmark -s 10.99.0.3 -p 11411 -P memcache_text \
-  --ratio=0:1 -d 64 --key-prefix=m- --key-minimum=1 --key-maximum=1000000 \
-  --key-pattern=R:R --distinct-client-seed --hide-histogram \
-  -t 28 -c 4 --pipeline=160 --test-time=300
+COMMON="-s 10.99.0.3 -p 11411 -P memcache_text -d 64 --key-prefix=m- \
+  --key-minimum=1 --key-maximum=1000000 --key-pattern=R:R \
+  --distinct-client-seed --hide-histogram -t 28 -c 4 --pipeline=160"
+
+memtier_benchmark $COMMON --ratio=0:1  --test-time=300   # GET-only  (게이트)
+memtier_benchmark $COMMON --ratio=1:10 --test-time=300   # 1:10 혼합 (게이트)
+memtier_benchmark $COMMON --ratio=1:0  --test-time=300   # SET-only  (참고)
 ```
+
+**게이트는 앞의 둘이고 동시에 충족해야 한다.** 혼합 비율은 1:9에서
+**1:10**으로 바뀌었다(2026-07-30) — 이전 기록의 1:9 수치와 직접 비교하지
+말 것, 비율 변경만으로 +1.4%가 붙는다.
 
 - `t28 c4 p160` = 112 conns × 160 = 17,920 in-flight.
   depth-on-fewer-connections가 실측 우세 방향.

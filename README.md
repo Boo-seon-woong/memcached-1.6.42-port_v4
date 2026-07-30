@@ -1,45 +1,82 @@
-# memcached-1.6.42 remote-memory port v2
+# memcached-1.6.42 remote-memory port (v3)
 
 memcached extstore를 AES-256-GCM 보호 one-sided RDMA remote memory로 바꾼
 remote-only port다. client protocol은 TCP 그대로이며 local hash에는
-`ITEM_HDR` stub만 남는다.
+`ITEM_HDR` stub만 남는다. 서버는 AMD SEV-SNP guest 안에서 돌고, 값은 원격
+박스의 RDMA MR에 있다.
 
-## 현재 상태
+## 현재 상태 — 이중 게이트 충족 (2026-07-31)
 
-P0~P2b 구현과 clean-binary Ariel↔Genie 검증은 완료됐다. GET과 SET은 모두 memcached worker가 자기
-QP/CQ/bounce/staging으로 처리하며 extstore IO thread와 구형 submit queue는
-삭제됐다. clean build, `testapp` 56/56, remote-only smoke, mixed-size,
-torn-write stress가 모두 통과했다.
+```text
+계약   1:10 혼합(SET:GET) 10 M ops/s  AND  GET-only 10 M ops/s — 동시 충족
+       두 워크로드 모두 GET span < 30 µs  AND  SET span < 30 µs
+우선   span 이 처리량보다 앞선다. 상충하면 span을 지킨다.
+```
 
-완전 삭제 binary `2f1e283f...abd43c`의 3회 측정 중앙값은
-`mcT=12, window=16, pipeline=64, drain_spin=1024`에서
-5.797M GET/s, 1.943 server CPU µs/op, span-v2 avg/p50/p99
-13.951/13.3/31.6 µs였다. 세 run 모두 miss, badcrc, RDMA failure,
-engine dead, slot accounting leak가 0이고 `cmd_get == remote_reads`였다.
+빌드 `771ca34068c7609936b2e58a`(`ce92044`, 브랜치 `v3-set-pac`), off-box
+fresh boot, mcT=28 / W=24 / QP 2·워커 / hashpower 22, 1 M 키 × 64 B:
 
-후속 throughput-max 탐색 129 trials에서 `avg span-v2 <30µs`를 만족하는
-안정 설정의 10초 3회 중앙값은 7.091M GET/s, avg 27.325µs다. 전체 trial은
-[md/V2_THROUGHPUT_MAXIMIZATION.md](md/V2_THROUGHPUT_MAXIMIZATION.md)에 있다.
+| 워크로드 | 총 ops/s | GET span | SET span | 판정 |
+|---|---:|---:|---:|---|
+| **1:10 혼합** | **10,194,599** | 16.03 µs | 14.51 µs | PASS |
+| **GET-only** | **11,778,792** | 15.96 µs | — | PASS |
+| SET-only | 4,240,796 | — | 7.63 µs | 참고 |
 
-canonical topology는 Ariel guest 안의 memtier가 localhost TCP로 Ariel
-memcached를 구동하고, memcached만 RDMA로 Genie `genie_memd`의 remote MR을
-사용하는 구조다. Genie는 load generator나 memcached worker가 아니다.
+`get_misses = read_fail = write_fail = engine_dead = slot_acct_leak = 0`,
+hit 100%. op당 CPU는 `C_get 2.369 µs`, `C_set 6.63 µs`.
+
+여기까지 온 경로 네 단계 — 각각이 필요했고 어느 하나만으로는 못 간다:
+
+| 단계 | 1:10 | GET-only | SET-only |
+|---|---:|---:|---:|
+| pac (SET 완료 수거 비동기화) | 8.035 M¹ | 10.241 M | 2.348 M |
+| + coherent MR (SWIOTLB 바운스 제거, 커널 패치) | 9.466 M | 11.322 M | 2.640 M |
+| + loc magazine 스캔 (전역 뮤텍스 이탈) | 9.670 M | 11.138 M | 4.121 M |
+| + GCM 컨텍스트 1회 키잉 | **10.195 M** | **11.779 M** | 4.241 M |
+
+¹ 1:9 측정. 비율 변경만으로 +1.4%.
+
+## 토폴로지
+
+```text
+host (ariel)   AMD EPYC 9124, guest = SEV-SNP 30 vCPU, HCA vfio passthrough
+memory node    genie — ConnectX 200 Gb/s, genie_memd가 4 GiB MR을 노출
+fabric         IB 직결, IPoIB 4092 MTU
+부하           genie의 memtier → guest 10.99.0.3:11411 (TCP over IPoIB)
+데이터 경로     guest memcached → genie MR, IBV_WR_RDMA_READ/WRITE만
+```
+
+genie는 부하 생성기이자 수동 메모리 타깃이다. **데이터 경로에서 CPU를 쓰지
+않는다**(one-sided). v2 시절의 guest 내 co-located 구성은 델타 관측용으로만
+쓰며 절대값 판정에 쓰지 않는다.
 
 ## 문서 읽기 순서
 
-1. [md/V2_ARCHITECTURE.md](md/V2_ARCHITECTURE.md) — v2 구조와 GET/SET 경로, v1 변수 대응
-2. [GLOSSARY.md](GLOSSARY.md) — v2 변수, 단위, correctness 계약
-3. [md/V2_REMODIFICATION_SPEC.md](md/V2_REMODIFICATION_SPEC.md) — 계획과 현재 단계
-4. [md/V2_THROUGHPUT_MAXIMIZATION.md](md/V2_THROUGHPUT_MAXIMIZATION.md) — avg<30µs 최대 throughput 129 trials
-5. [md/V2_CODE_SPEC.md](md/V2_CODE_SPEC.md) — 실제 call path와 검증 게이트
-6. [SOURCE_CHANGE_SPEC.md](SOURCE_CHANGE_SPEC.md) — v1 source history
-7. [EXTSTORE_RDMA_PORTING.md](EXTSTORE_RDMA_PORTING.md) — v1 설계/실측 history
+**운영·현행**
 
-6~7의 `ext_threads/ext_io_depth` 설명은 v1 기록이며 v2 실행 계약이 아니다.
+1. [md/OPTIMAL_RUNBOOK.md](md/OPTIMAL_RUNBOOK.md) — 최적 운영점 한 벌(조건·세팅·기대치)
+2. [md/MANUAL_TEST_PROCEDURE.md](md/MANUAL_TEST_PROCEDURE.md) — 사람이 순차 실행하는 단계별 절차
+3. [md/SET_CAMPAIGN_HANDOFF.md](md/SET_CAMPAIGN_HANDOFF.md) — 캠페인 전 기록. **수치의 단일 출처**
+4. [md/OPTIMIZATION_HISTORY.md](md/OPTIMIZATION_HISTORY.md) — 어떤 최적화가 얼마를 벌었나
+
+**구조**
+
+5. [md/V3_ARCHITECTURE.md](md/V3_ARCHITECTURE.md) — v3 구조
+6. [md/GET_WORKFLOW.md](md/GET_WORKFLOW.md) / [md/SET_WORKFLOW.md](md/SET_WORKFLOW.md) — 경로별 타임라인과 코드 앵커
+7. [GLOSSARY.md](GLOSSARY.md) — 변수, 단위, correctness 계약
+
+**이력 (당시 기록이며 현재 상태가 아니다)**
+
+8. [md/V2_ARCHITECTURE.md](md/V2_ARCHITECTURE.md), [md/V2_THROUGHPUT_MAXIMIZATION.md](md/V2_THROUGHPUT_MAXIMIZATION.md) — v2 캠페인
+9. [SOURCE_CHANGE_SPEC.md](SOURCE_CHANGE_SPEC.md), [EXTSTORE_RDMA_PORTING.md](EXTSTORE_RDMA_PORTING.md) — v1 이력
+
+8~9의 `ext_threads`/`ext_io_depth` 설명은 v1 기록이며 현재 실행 계약이 아니다
+(삭제된 옵션이다).
 
 ## 빌드
 
 ```bash
+git checkout v3-set-pac      # main은 pac이 없다 — 절반만 들어간다
 ./configure
 make clean
 make -j"$(nproc)"
@@ -51,31 +88,38 @@ make -j"$(nproc)"
 변경된 source 대신 오래된 object를 relink할 수 있다. 검증 binary는 반드시
 `make clean` 뒤 빌드하고 SHA-256을 보존한다.
 
-upstream 전체 `make test`에는 v2가 의도적으로 제거한 eviction, chunked
-remote object, flash extstore 옵션 테스트가 포함된다. v2 호환 suite와 skip
+upstream 전체 `make test`에는 v3가 의도적으로 제거한 eviction, chunked
+remote object, flash extstore 옵션 테스트가 포함된다. 호환 suite와 skip
 사유는 `tools/test-v2.sh`, `t/SKIPPED_V2.list`가 authority다.
 
-## v2 실행 예
+암호화 경로만 따로 검증하려면:
 
 ```bash
-LD_LIBRARY_PATH="$HOME/covlib:$HOME/kvs-port:$PWD" \
-MLX5_COHERENT_QP=1 MLX5_COHERENT_CQ=1 \
-EXT_CRYPTO_KEY="$PWD/ext.key" EXT_SELFTEST=1 \
-EXT_SLOT_SIZE=256 EXT_READ_SLOTS=64 EXT_RDMA_PROF=1 \
-./memcached -p 11211 -U 0 -t 12 -m 2048 -c 8192 -R 1024 \
-  -o ext_path=10.99.0.2:11212:4g,ext_worker_window=16,\
-ext_qp_per_worker=1,ext_drain_spin=1024
+cc -O2 -o /tmp/tc test_ext_crypto.c ext_crypto.c -lcrypto && /tmp/tc
+cc -O2 -I. -o /tmp/cost tools/ext-crypto-cost.c ext_crypto.c -lcrypto -lpthread && /tmp/cost
 ```
 
-정상 시작은 server log의 `genie_connect OK`와
-`extstore selftest: OK`로 확인한다. `ext_threads`, `ext_io_depth`는
-삭제된 v1 옵션이다.
+## 실행 예 (최적 운영점)
 
-canonical 실행 도구는 `tools/config-matrix-10s.sh`와
-`tools/cpu-stage-detail.sh`다. 결과는 binary hash, 정확한 command,
-server/memtier raw text, stats 시작/종료, CSV를 함께 보존한다.
-두 도구 모두 memtier와 memcached를 Ariel guest에서 분리된 CPU set으로
-실행하며 Genie에는 `genie_memd`만 요구한다.
+```bash
+cd $HOME/kvs-port && taskset -c 0-27 env \
+  LD_LIBRARY_PATH=$HOME/coherent-mr-v2/lib:$HOME/kvs-port \
+  MLX5_COHERENT_QP=1 MLX5_COHERENT_CQ=1 \
+  EXT_RDMA_PROF=1 EXT_SELFTEST=1 \
+  EXT_CRYPTO_KEY=$HOME/kvs-port/ext.key \
+  EXT_SLOT_SIZE=256 EXT_READ_SLOTS=64 \
+  $HOME/coherent-mr-v2/bin/memcached -p 11411 -U 0 -t 28 -m 2048 -c 16384 -R 1024 \
+  -o ext_path=10.99.0.2:11212:4g,ext_worker_window=24,ext_qp_per_worker=2,\
+ext_drain_spin=1024,hashpower=22
+```
+
+정상 시작은 log의 `genie_connect OK`, **`coherent MR` 두 줄**,
+`extstore selftest: OK`로 확인한다. selftest의 `advise failed` 두 줄은
+정상이며 오히려 통과 신호다(coherent MR에는 umem이 없어 ENOENT인데 페이로드는
+왕복한다 — sync 없이 데이터가 옳다는 뜻).
+
+커널 모듈·사용자 lib·바이너리 셋은 **한 벌로만 유효하다.** 섞으면 죽지 않고
+조용히 sync 경로로 폴백한다. 판별은 `OPTIMAL_RUNBOOK.md` §4의 로그 게이트로.
 
 ---
 

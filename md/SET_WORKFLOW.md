@@ -23,6 +23,13 @@
 > 재측정 대상 바이너리: `v3-set-pac` **`785b308`** (alloc 수정 + pac +
 > SYNC 배치화 + seal 지연). 5M·10M 산수는 재측정 후 다시 세운다.
 
+> ## ✅ 2026-07-31 — 재측정 완료, 계약 충족. §0-5를 먼저 읽을 것
+>
+> 위 무효화 이후 세 건이 더 들어갔고(coherent MR, loc magazine 스캔,
+> GCM 1회 키잉) **이중 게이트가 충족됐다.** §0~§0-4의 수치는 전부 그 이전
+> 상태이며 **현행 값은 §0-5**다. §1~§2의 경로 서술과 §5의 계약은 유효하고,
+> §4 레버 원장에 새 항목이 붙었다.
+
 ## 0. 기준 수치 (mc28 / W24 / nqp2 / hp22, 2026-07-29 실측)
 
 ```text
@@ -251,6 +258,56 @@ sync (SYNC_FOR_CPU)    0.544 µs   = 지연 5.49 ÷ advise당 10.1건
 **다음 행동**: genie가 `785b308`로 GET-only / SET-only / 1:9 재측정.
 그 결과가 §0-1~§0-3을 대체한다.
 
+### 0-5. 2026-07-31 정본 — **현행 수치는 이것이다**
+
+빌드 `771ca34068c7609936b2e58a`(`ce92044`). off-box, fresh boot, obwatch 창.
+
+```text
+SET-only 처리량        4.241 M ops/s        (7-29 기준선 0.311 M 대비 13.6배)
+C_set                  6.63 µs/op           (26.9 → 6.63, 4.1배 절감)
+SET span               7.63 µs (SET-only) / 14.51 µs (1:10 혼합)
+busyCPU                28.0 / 30            ← 포화. 오래 미해결이던 유휴가 사라졌다
+1:10 혼합 총 처리량     10.195 M ops/s       GET span 16.03 / SET span 14.51 → PASS
+```
+
+**§0의 두 상한은 둘 다 무너졌다.** "동기 구조 하드 상한 5.57M"은 pac이
+동기 구조 자체를 없애 무의미해졌고, "CPU 상한의 45%밖에 못 낸다"던 미달은
+전역 `e->mutex` 경합이었다(§4의 새 항목).
+
+crypto·sync 성분도 바뀌었다:
+
+```text
+             7-29        7-31
+crypto      1.05 µs     0.82 µs      GCM 1회 키잉
+sync        1.90 µs     0.013 µs     coherent MR — 사실상 소멸
+```
+
+### 0-6. SET에 남은 비용 (2026-07-31 perf, `mc-worker`)
+
+| 항목 | 비중 | 판정 |
+|---|---:|---|
+| `do_item_unlink`+`do_item_link`+`item_acct_add` | 16.3% | 덮어쓰기마다 새 item 할당·link·옛 것 unlink. **손대지 않기로 함** |
+| `storage_store_item_pac` | 7.80% | pac 진입점 |
+| `assoc_find` | 5.52% | GET의 2.7배. **미귀속**(프레임 포인터 없음) |
+| EVP + `ext_crypto_seal` | ~5.4% | 걷어냄 |
+| `extstore_alloc` | 1.85% | magazine 수정 후 잔여 |
+
+`native_queued_spin_lock_slowpath` 13.21%는 **사라졌다**(§4).
+
+item 재할당 16.3%를 손대지 않는 이유: memcached 코어가 item을 불변으로 두어
+독자가 락 없이 읽게 하는 설계다. 제자리 갱신은 그 전제를 무너뜨린다.
+
+### 0-7. 그리고 레버는 이제 SET이 아니다
+
+**1:10 혼합에서 SET은 CPU의 21.9%뿐이고 GET이 78.1%를 쓴다.** SET이 op당
+2.8배 비싸다는 사실이 "SET이 병목"처럼 보이게 하지만, 비중을 곱하면 같은 1%
+절감의 가치가 **GET : SET = 3.6 : 1**이다. 실제로 마지막 3.4%를 넘긴 것은
+GET 쪽 절감이었다(상승분의 105%).
+
+그렇다고 SET 작업이 헛일이었던 것은 아니다 — magazine 수정 없이는 `C_set`이
+7.71에 묶여 9.846 M에서 멈춘다. 상세는
+[`SET_CAMPAIGN_HANDOFF.md`](SET_CAMPAIGN_HANDOFF.md) §16.
+
 ## 1. 타임라인 한눈에
 
 워커 스레드 하나가 SET 1건을 처리하는 전 구간. ★는 SET에만 있는 비용,
@@ -473,6 +530,29 @@ off-CPU 프로파일(예: sched switch 스택)이 도구다.
 | loc magazine을 대체 가능하게 (len 조건 해제) | **미검증 후보** | 균일 슬롯이 전제를 이미 만들어 뒀다. 남은 미스 ~12%(= SET당 0.12회 엔진 뮤텍스)를 없앤다. `bytes_used` 회계 짝맞춤이 조건 (§2 7b) |
 | `ext_drain_spin` 상향 (SYNC 상각) | **철회** | 근거로 쓴 여유 5.06 µs는 혼합 런 GET span에서 나온 값. 이중 게이트에서 구속은 GET-only 26.7→30 µs = 3.3 µs이고 drain을 굵게 하면 초과 (§0-4) |
 | SET 고유 비용 (stub/loc 할당·게시·반납) | **미규명 — 다음 대상, 값은 재측정** | 3.25 µs(5.77−2.52)는 alloc 결함 상태의 수치라 폐기. bpftrace 프로파일은 `785b308` 재측정 후에 (§0-4) |
+
+### 4-1. 2026-07-31에 추가된 항목
+
+**당겨진 것**
+
+| 레버 | 효과 | 비고 |
+|---|---|---|
+| coherent data MR | `write_sync` 1,996 → 13 ns, `C_set` 9.97 → 7.71 µs | 커널 패치. `EXT_DISABLE_COHERENT_MR=1`이 대조군 |
+| loc magazine 스캔 | SET-only 2.640 → 4.121 M, busyCPU 23.3 → 28.0 | 최상단 대신 배열 스캔. 정확한 len 제약은 유지 |
+| GCM 컨텍스트 1회 키잉 | `seal` 986 → 817 ns | `seal`/`open` 공유이므로 GET에 10배로 실린다 |
+
+**기각 / 불가**
+
+| 레버 | 사유 |
+|---|---|
+| SET 도어벨 배칭 | `ext_setq_max=1`이라 묶을 것이 없고, 2 이상은 span 계약을 깬다(64에서 SET span 255 µs). coherent MR에서는 상각할 SYNC도 없다 |
+| item 제자리 갱신 | memcached의 item 불변 전제(락 없는 독자)를 무너뜨린다. 이득 16.3% 대비 위험이 나쁘다 |
+| magazine의 len 제약 완화 | push 때 회계를 빼지 않으므로 다른 len으로 pop하면 `bytes_used`가 표류하고, `free_loc_global`이 잔액 부족을 `slot_acct_leak`으로 보고 **슬롯을 버린다**. 통계 오차가 아니라 실제 누수다 |
+
+> **`sev_es_ghcb_hv_call`을 비용으로 읽지 말 것.** 프로파일에 1.32%로 뜨지만
+> 호출자가 `__perf_event_task_sched_out → amd_pmu_disable_all →
+> native_read_msr`다 — perf 자신의 PMU MSR 접근이 SEV에서 트랩하는 것이고,
+> 관측하지 않으면 존재하지 않는다.
 
 ## 5. 바꿀 수 없는 계약 (설계 제약)
 

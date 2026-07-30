@@ -16,13 +16,13 @@
 #include <unistd.h>
 #include <errno.h>
 #include <sched.h>
+#include <dlfcn.h>
 #include <sys/socket.h>
 #include <sys/mman.h>
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <infiniband/verbs.h>
-#include <infiniband/mlx5dv.h>
 #include <rdma/rdma_cma.h>
 #include "extstore.h"
 #include <time.h>
@@ -89,16 +89,27 @@ static char *dma_alloc(size_t sz) {
 
 static char *dma_mr_alloc(struct ibv_pd *pd, size_t sz, int access,
                           struct ibv_mr **mr, bool *coherent) {
+    typedef struct ibv_mr *(*alloc_fn)(struct ibv_pd *, size_t, int);
+    static alloc_fn coherent_alloc;
+    static bool looked_up;
+
     if (!getenv("EXT_DISABLE_COHERENT_MR")) {
-        *mr = mlx5dv_alloc_coherent_mr(pd, sz, access);
+        if (!looked_up) {
+            void *lib = dlopen("libmlx5.so.1", RTLD_NOW | RTLD_LOCAL);
+            void *sym = lib ? dlsym(lib, "mlx5dv_alloc_coherent_mr") : NULL;
+            memcpy(&coherent_alloc, &sym, sizeof(coherent_alloc));
+            looked_up = true;
+        }
+        *mr = coherent_alloc ? coherent_alloc(pd, sz, access) : NULL;
         if (*mr) {
             *coherent = true;
             fprintf(stderr, "extstore: coherent MR %zuB at %p\n",
                     sz, (*mr)->addr);
             return (*mr)->addr;
         }
-        fprintf(stderr, "extstore: coherent MR %zuB unavailable: %s; "
-                "using sync fallback\n", sz, strerror(errno));
+        fprintf(stderr, "extstore: coherent MR %zuB unavailable%s%s; "
+                "using sync fallback\n", sz, coherent_alloc ? ": " : "",
+                coherent_alloc ? strerror(errno) : "");
     }
 
     char *p = dma_alloc(sz);

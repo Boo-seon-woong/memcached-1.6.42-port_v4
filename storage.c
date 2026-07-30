@@ -37,7 +37,11 @@ static _Atomic uint64_t g_pac_fallback = 0;   /* 자원 부족 → 동기 폴백
 /* v3: SYNC_FOR_DEVICE 배치 큐. flushes 대비 writes가 상각 계수다. */
 static _Atomic uint64_t g_setq_flushes = 0;
 static _Atomic uint64_t g_setq_writes = 0;
-static unsigned int g_setq_max = SETQ_HARD_MAX;  /* ext_setq_max; 1 = 배치 없음 */
+/* 기본 1 = 배치 없음. 실측(축소 규모 스윕): batch 64는 Sspan 254.7 µs, 1은
+ * 13.7 µs이고 처리량 차이는 2.68M → 2.24M(−16%)뿐이다. 관리자 우선순위가
+ * "span < 30 µs가 10M보다 중요"이므로 span 쪽을 기본으로 둔다. 처리량을
+ * 되찾으려면 ext_setq_max를 올리되 span을 함께 확인할 것. */
+static unsigned int g_setq_max = 1;              /* ext_setq_max */
 static _Atomic uint64_t g_badcrc_log_ct = 0;      // rate-limit for the badcrc diagnostic
 static _Atomic uint64_t g_flush_log_ct = 0;       // rate-limit for the flush diagnostic
 
@@ -1348,6 +1352,11 @@ void storage_flush_returns(void) {
 
 /* v2 (P2a): called from main after thread init, before conns are dispatched. */
 int storage_prepare_workers(void *storage, int nthreads) {
+    /* staging은 "post돼 미완료(window)" + "큐에 있고 아직 post 전(setq_max)"
+     * 만큼 필요하다. 상한(64)으로 고정하면 batch=1일 때도 워커당 104슬롯을
+     * 잡아 DMA 등록이 745 KB가 되고, SEV의 SWIOTLB가 파편화됐을 때
+     * ibv_reg_mr이 EIO로 죽는다(실측). 실제 설정값으로 잡는다. */
+    extstore_set_staging_need(storage, g_setq_max);
     return extstore_workers_prepare(storage, nthreads,
                                     g_qp_per_worker, g_worker_window);
 }

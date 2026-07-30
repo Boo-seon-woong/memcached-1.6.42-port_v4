@@ -131,6 +131,8 @@ void extstore_set_loc_mag_depth(unsigned int d);
 int extstore_worker_sync_for_device(void *worker, obj_io *const *ios,
                                     unsigned int n);
 int extstore_worker_post_write_presynced(void *worker, obj_io *io);
+/* v3: staging 산정에 쓸 "워커당 post 전 큐 길이"를 알린다. prepare 전에 호출. */
+void extstore_set_staging_need(void *ptr, unsigned int n);
 
 /* v2 worker-inline READ/WRITE API. All *_worker functions touch only the
  * calling worker's resources (shared-nothing; see md/V2_CODE_SPEC.md P2).

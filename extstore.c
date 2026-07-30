@@ -360,6 +360,11 @@ static _Thread_local struct {
     unsigned int n;
 } g_loc_mag;
 static unsigned int g_loc_mag_depth = 64;   /* ext_loc_mag_depth, 0 = 비활성 */
+/* 워커당 "post 전 큐에 머무는 쓰기" 최대치. storage.c의 ext_setq_max와 같다. */
+static unsigned int g_staging_need = 1;
+void extstore_set_staging_need(void *ptr, unsigned int n) {
+    (void)ptr; g_staging_need = n ? n : 1;
+}
 
 void extstore_set_loc_mag_depth(unsigned int d) {
     g_loc_mag_depth = d > LOC_MAG_MAX ? LOC_MAG_MAX : d;
@@ -692,10 +697,12 @@ int extstore_workers_prepare(void *ptr, unsigned int nworkers,
     }
 
     /* pac은 post부터 CQE까지 슬롯을 쥐므로 워커당 window만큼 필요하고,
-     * sync 배치화 이후에는 큐에 쌓인(아직 post 전) 쓰기도 쥔다 —
-     * storage.c의 큐 상한(SETQ_HARD_MAX 64)만큼 더 얹는다. */
+     * 큐에 쌓인(아직 post 전) 쓰기도 쥔다 — 그 수는 storage.c가
+     * extstore_set_staging_need로 알려준다. 상한으로 고정하면 batch가 작아도
+     * DMA 등록이 커져 SWIOTLB 파편화 시 reg_mr이 EIO로 죽는다. */
+    unsigned int need = window + g_staging_need + 8;
     e->w_staging_slots = e->write_slots / nworkers;
-    if (e->w_staging_slots < window + 64 + 16) e->w_staging_slots = window + 64 + 16;
+    if (e->w_staging_slots < need) e->w_staging_slots = need;
     size_t ssz = (size_t)nworkers * e->w_staging_slots * e->slot_size;
     e->wstaging_base = dma_alloc(ssz);
     if (!e->wstaging_base) return -1;

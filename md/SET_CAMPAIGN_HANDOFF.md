@@ -2,7 +2,13 @@
 
 두 에이전트(ariel=Claude, codex)가 번갈아 작업했다. 이 문서는 **어느 쪽이든
 이어받을 수 있도록** 목표 변천·확정된 사실·기각된 레버·현재 차단 요인을 한 곳에
-모은 것이다. 세부 로그는 `conversation.md`, 비용 모델은
+모은 것이다.
+
+> **coherent data MR 구현 상세는 `md/CODEX_PROGRESS.md`가 정본이다.**
+> 이 문서의 §8은 요약이고, 산출물 SHA256·검증 경계·재개 순서는 그쪽을 볼 것.
+> (이 문서는 그것을 읽기 전에 작성됐고, §8의 과장 하나를 아래에서 정정했다.)
+
+세부 로그는 `conversation.md`, 비용 모델은
 `SET_WORKFLOW.md`·`SET_COST_ATTRIBUTION.md`·`SET_10M_REQUIREMENTS.md`.
 
 ---
@@ -78,6 +84,11 @@ EXT_SKIP_DMA_SYNC=1        (env)                 sync 강제 생략 — 정합�
 증거 2      서버 정지 시 io_tlb_used −340 슬롯 (두 풀 크기 예측 339와 일치)
 ```
 
+> `io_tlb_used`는 device open/close의 비동기 슬롯 변동이 섞인다. 위처럼 **기존
+> snp_shared 경로가 바운스된다**는 근거로는 충분했지만(예측과 1슬롯 차),
+> **coherent MR이 바운스를 안 한다는 단독 증거로는 쓸 수 없다** — codex가
+> 시도했고 노이즈로 판정했다(`CODEX_PROGRESS.md` §5).
+
 `extstore.c` 주석의 "snp_shared에서 왔으니 SYNC advise는 no-op 비용"은 **틀렸다.**
 
 ### 3-2. 그런데 비용의 99.4%는 복사가 아니라 호출 오버헤드다
@@ -97,8 +108,14 @@ sync/op = 2.408/batch + 0.152 µs        (적합 오차 ±14%)
 SET CPU/op   7.43 → 5.69 µs  = −1.74 µs   (처리량 +18.6%, Sspan 12.5 → 8.4 µs)
 ```
 
-**주의**: prof가 보고하는 sync 지연 2.65 µs 전부가 CPU는 아니다. 예산 계산에는
+**주의 1**: prof가 보고하는 sync 지연 2.65 µs 전부가 CPU는 아니다. 예산 계산에는
 **1.74 µs**를 쓸 것. (초기에 2.56을 그대로 빼서 "10.31M"이라 한 것은 과대추정이었다.)
+
+**주의 2 — 이 수치는 상한이지 달성치가 아니다.** `EXT_SKIP_DMA_SYNC=1`로 sync를
+**강제 생략**했을 때의 값이고, 그 구성은 정합성이 깨진다(badcrc 전량). coherent MR
+구현이 실제로 얼마를 회수하는지는 **아직 미측정**이다. coherent MR은 sync를
+없애면서 정합성도 지키지만, 커널 경로가 달라졌으므로 비용도 다를 수 있다.
+`CODEX_PROGRESS.md` §5가 같은 취지로 경고한다.
 
 sync를 양쪽에서 없앴을 때 1:10 혼합 전망:
 
@@ -206,9 +223,15 @@ module sha  2f617927b85613da2baa2681e92902c56c4e6fb06651a703f2dbfc66afabb1d6
 v3 sha      d7b8c1f35639d2467c4c9a44cca97e44e9eb2d3dfd6099c4b0bbb77298e7994f
 ```
 
-`extstore.c`는 `mlx5dv_alloc_coherent_mr()`로 bounce/staging 두 풀을 잡고,
-**그 풀에 대해서만** `SYNC_FOR_CPU/DEVICE`를 건너뛴다. 실패 시 기존
-`/dev/snp_shared` + sync 경로로 자동 폴백한다.
+`extstore.c`는 **`dlopen`/`dlsym`으로** `libmlx5.so.1`에서
+`mlx5dv_alloc_coherent_mr`를 찾아 bounce/staging 두 풀을 잡고, **그 풀에
+대해서만** `SYNC_FOR_CPU/DEVICE`를 건너뛴다. 심볼이 없거나 할당이 실패하면 기존
+`/dev/snp_shared` + `ibv_reg_mr` + sync 경로로 자동 폴백한다. 직접 링크가 아니라
+동적 탐색이므로 **같은 바이너리가 stock/non-TEE 환경에서도 동작한다.**
+
+로컬 게이트 통과분: memcached `testapp` **56/56**, guest `coherent_mr_smoke`
+(2 MiB coherent MR 생성·쓰기·해제). `tools/test-v2.sh`는 제거된 로컬 slab 계약을
+전제하는 Perl 테스트를 포함해 실패하므로 **회귀 판정에 쓰지 말 것.**
 
 ### 검증 상태
 

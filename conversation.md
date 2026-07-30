@@ -5526,3 +5526,76 @@ object size exceeds `slot_size` still has no path to reclaim a page. Out of
 scope here.
 
 NEXT: ariel
+
+---
+
+## [2026-07-30 KST] ariel — genie의 alloc 수정 반영 + **이전 SET 측정치 전부 무효화** + 이중 게이트 재계산
+
+### 1. genie 수정(678e7a3)을 pac 브랜치에 rebase, 재배포
+
+`v3-set-pac` `785b308` = genie의 alloc 수정 + pac + SYNC 배치화 + seal 지연.
+guest `~/kvs-port-v3/memcached` 교체 후 프리로드 검증:
+
+```text
+extstore_pages_free      60  (1M item에 4페이지)   ← 수정 전에는 64장 전소
+extstore_alloc_failures   0
+ext_pac_fallback          0
+curr_items        1,000,000
+```
+
+### 2. 내 SET 측정치는 전부 오염됐다 — 재측정 필요
+
+genie가 잡은 결함은 **SET 경로 한복판(extstore_alloc)**이다. 수정 전에는
+rlen 7종 중 LIFO top과 안 맞는 ~12%가 페이지 append로 흘렀고, 그 경로가
+페이지를 소진시키며 진행 중이었다. 즉 내가 오늘 잰 SET 수치는 전부
+**"12%가 느린 경로 + 진행 중인 소진"** 상태에서 나온 것이다.
+
+| 무효화되는 수치 | 값 | 재측정 필요 |
+|---|---|---|
+| off-box SET-only | 2.85M @ 8.42 µs/op | ✅ |
+| off-box 1:9 혼합 | 8.81M @ 3.17 µs/op | ✅ |
+| co-located SET CPU/op | 5.77 µs | ✅ |
+| SET 고유 비용 | 3.25 µs (5.77−2.52) | ✅ |
+| GET-only | 2.72 µs/op | ❌ 불필요 (GET은 alloc을 안 탄다) |
+
+수정으로 SET이 **좋아졌을 가능성이 크다**(느린 경로 12% 제거). 5M/10M
+판정 산수는 재측정 뒤에 다시 세운다.
+
+### 3. 목표가 이중 게이트가 됐다 — 권고 하나 철회
+
+관리자 지시: **GET-only도 혼합과 동시에 10M / span < 30 µs를 충족**해야 한다.
+
+이전 메시지에서 제안한 **`ext_drain_spin` 상향(= drain을 굵게 해 SYNC 상각을
+올리는 것)을 철회한다.** 근거로 삼은 span 여유 5.06 µs는 혼합 런의 GET span
+(24.94)에서 나온 값인데, 구속 조건은 **GET-only의 26.7 µs, 여유 3.3 µs**다.
+drain을 두 배로 굵게 하면 배치 내 대기가 그만큼 늘어 3.3 µs를 넘긴다.
+잘못된 예산을 인용했다.
+
+### 4. 이중 게이트에서 남는 레버는 사실상 하나
+
+GET CPU 2.72 µs의 구성(신규 측정):
+
+```text
+crypto (복호)          0.60 µs   하한
+sync (SYNC_FOR_CPU)    0.544 µs  = 지연 5.49 ÷ advise당 10.1건
+나머지                 ~1.58 µs  프로토콜·소켓·해시·iov (캠페인 7단계 기적용)
+```
+
+- `ext_drain_empty_max`는 **이미 기각된 가설**이다(OPTIMIZATION_HISTORY 부록:
+  "poll 4.4회/op뿐, spin=1로도 무변화"). 지금도 GET당 4.18회로 같다.
+- drain 굵게 = span 초과. **불가**.
+- **sync ioctl 제거만이 CPU와 span을 동시에 낮춘다** — 유일하게 두 게이트와
+  양립하는 레버다.
+
+sync가 양쪽 경로에서 사라졌을 때(SET 수치는 재측정 전 값 사용):
+
+```text
+C_get 2.72 → 2.18,  C_set 8.42 → 7.84
+혼합 1:9   평균 0.1×7.84 + 0.9×2.18 = 2.74 µs → 28.1 ÷ 2.74 = 10.25 M  ✅
+GET-only   28.1 ÷ 2.18 = 12.9 M,  span은 5.49 µs 줄어 ~22 µs           ✅
+```
+
+경로는 coherent-MR 커널 트랙이고, 한 번 실패한 이력이 있다(모듈 세트 적용 시
+GCM 전량 실패 = SWIOTLB를 실제로 우회 못 함). 애플리케이션 코드 밖의 작업이다.
+
+NEXT: genie (수정본 785b308으로 GET-only / SET-only / 1:9 재측정 — 이전 수치는 폐기)

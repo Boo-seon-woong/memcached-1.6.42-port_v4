@@ -425,3 +425,56 @@ nopac+bounce 대비 **+12.9%**.
 정본 3종(GET-only / SET-only / 1:10 혼합)을 fresh boot + 300초 창으로 off-box
 측정. 게스트는 표준 구성 + 1M 프리로드 상태로 복구해 두었다
 (`ext_pac_posted 1000000` = 전량 pac 경유, 결함 카운터 전부 0).
+
+---
+
+## 13. [2026-07-31] 커널 패치 전후 span A/B — 상금은 처리량이 아니라 span에 있었다
+
+§12-5의 2×2는 **정합성 격리 시험이었고 게이트 시험이 아니었다.** badcrc가 pac
+탓인지 coherent 탓인지만 물었고 span을 아예 수집하지 않았다. 거기 딸려 나온
+처리량 델타는 목표와 무관하며, 실제로 노이즈였다 — 같은 1:10 coherent-vs-fallback이
+2×2에서 +9.2%, 재측정에서 +1.7%다. **co-located 처리량으로는 이 변경을 못 잰다.**
+
+목표(span 선조건 → 10M)에 맞춘 측정은 다음이다. 대조군 `EXT_DISABLE_COHERENT_MR=1`은
+`dma_alloc`+`ibv_reg_mr`+sync advise로 되돌아가므로 **커널 패치 이전 경로와 같다.**
+
+| 워크로드 | 코히런트 풀 | GET span | SET span | ops/s |
+|---|---|---|---|---|
+| GET-only coherent | 2 | **13.17** | — | 2,872,842 |
+| GET-only fallback | 0 | 18.13 | — | 3,014,131 |
+| SET-only coherent | 2 | — | **8.05** | 2,193,400 |
+| SET-only fallback | 0 | — | 11.91 | 2,120,886 |
+| 1:10 coherent | 2 | **13.23** | **8.56** | 3,032,894 |
+| 1:10 fallback | 0 | 18.45 | 12.08 | 2,983,164 |
+
+*mtT=4(c=8, pipeline=32), mcT=28, ext=28×2qp, 100K 키, 20초, 게스트 내 co-located.
+span은 `extstore_prof_*`의 `(avg×count)` 차분으로 프리로드 구간을 제외한 값.*
+
+**span −27~32%, 처리량 ±노이즈.** 방향이 갈리는 이유는 co-located에서 memtier가
+같은 28코어를 놓고 경쟁해 약 3M ops/s가 **클라이언트 쪽 상한**이기 때문이다.
+서버에서 아낀 CPU가 갈 곳이 없다. span은 서버 내부 계측이라 그 영향을 받지 않는다.
+
+### 13-1. 메커니즘 확인 — sync 항목이 사라졌다
+
+```text
+1:10 혼합, µs
+          GET: span   sync   xfer   crypto  | SET: span   sync   xfer   crypto
+coherent        13.25   0.04   6.50   0.66  |       8.53   0.01   7.48   0.99
+fallback        19.50   5.62   7.83   0.59  |      12.00   1.99   8.95   0.98
+```
+
+sync가 계측 하한(0.01~0.04 µs)까지 내려갔다 — 커널 패치가 의도대로 동작한다.
+
+주목할 점은 **span 감소분이 sync 감소분보다 크다**는 것이다. GET은 span −6.25에
+sync −5.58, xfer −1.33. SET은 span −3.47에 sync −1.98, xfer −1.47.
+바운스가 사라지면 NIC가 실제 버퍼를 직접 읽으므로 전송 자체도 빨라진다.
+**이 xfer 이득은 §3-3의 CPU 모델에 들어있지 않던 덤이다.**
+
+### 13-2. co-located가 답할 수 없는 것
+
+아낀 CPU가 처리량으로 환산되는지는 off-box에서만 판정된다. 판정에 필요한 값:
+
+1. off-box 세 워크로드의 span과 CPU/op — 절감분이 §11의 예측(−1.74 µs/op)과 맞는지
+2. GET span 여유 — 이전 정본은 10.241M에서 24.49 µs로 여유가 5.5 µs뿐이었다.
+   off-box의 sync 성분이 여기 co-located(5.62 µs)와 비슷하다면 여유가 대략 두 배가
+   되지만, **부하가 다르므로 가정이지 결론이 아니다.**

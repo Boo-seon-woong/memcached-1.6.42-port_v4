@@ -676,13 +676,23 @@ int storage_store_item_pac(void *e, item *it, item **hdr_out, uint32_t hv,
         atomic_fetch_add(&g_pac_fallback, 1);
         return 0;
     }
-    char *slot = extstore_worker_staging_get(w);
+    /* staging이 말랐다면 이 워커의 pending들이 슬롯을 쥐고 있는 것이고, 그
+     * CQE들은 µs 안에 도착한다. 거부(NOT_STORED)하지 말고 자기 CQ를 걷어
+     * 회수될 때까지 기다린다 — 파이프라인 버스트에서 워커당 슬롯 수(9)를
+     * 넘는 SET이 한 pass에 들어오는 것은 정상 상황이다. cb는 staging 반납과
+     * g_ret_head 적재까지만 하므로 item_lock 아래인 여기서도 안전하다. */
+    char *slot;
+    uint64_t stg_spins = 0;
+    while ((slot = extstore_worker_staging_get(w)) == NULL) {
+        stg_spins++;
+        if (extstore_worker_drain(w, 32) < 0) break;   /* 엔진 사망 */
+    }
+    if (stg_spins) atomic_fetch_add(&g_worker_write_spins, stg_spins);
     if (slot == NULL) {
-        /* staging 배압: 워커당 in-flight 상한 도달 — 동기 경로가 받는다 */
         extstore_free_loc(e, &loc);
         do_item_remove(hdr_it);
         atomic_fetch_add(&g_pac_fallback, 1);
-        return 0;
+        return 0;   /* 엔진이 죽었다 — 동기 경로도 -1로 끝난다 */
     }
 
     uint64_t prof_start = extstore_prof_stamp();

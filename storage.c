@@ -874,6 +874,21 @@ void storage_flush_pending_writes(void) {
         }
     }
     if (spins) atomic_fetch_add(&g_worker_write_spins, spins);
+
+    /* 4단계 — 완료 수거. 이 배치를 post한 김에 앞선 배치의 CQE를 거둔다.
+     *
+     * 이전 버전에서는 enqueue 시점의 staging 대기가 이 일을 우연히 대신하고
+     * 있었다 — 측정상 drain 호출의 93%가 그 spin에서 나왔다. seal(과 staging
+     * 확보)을 flush로 옮기자 워커당 104슬롯을 배치 하나가 다 쓰지 못해 압력이
+     * 사라졌고, 그와 함께 수거도 멎어 post→CQE가 11 → 383 µs로 뛰고 처리량이
+     * window(24)에 묶였다. 수거를 부작용이 아니라 의도로 만든다.
+     *
+     * 여기서 storage_flush_returns()를 부르면 안 되는 것은 위와 같다 —
+     * 큐 상한 경로가 item_lock 아래라 재개가 같은 버킷을 다시 잡는다.
+     * cb는 staging 반납과 ready 목록 적재까지만 하므로 안전하다. */
+    for (int k = 0; k < 8 && extstore_worker_drain(w, 32) > 0; k++)
+        ;
+
     atomic_fetch_add(&g_setq_flushes, 1);
     atomic_fetch_add(&g_setq_writes, m);
 }

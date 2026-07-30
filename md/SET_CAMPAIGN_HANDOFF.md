@@ -582,3 +582,108 @@ m-100000 .. m-199999   (길이 1종)   3,103,480 set/s   p99 0.655 ms   +46.6%
 2. **SET span** — 1:19에서 이미 21.3 µs다. 처리량이 오르면 더 올라간다
 3. SET-only의 유휴 4.7코어 — magazine 수정으로 줄었는지. 남아 있다면
    `~/pac-ab-20260730/blockprobe.sh`가 "락에 잠듦" vs "할 일 없음"을 가른다
+
+---
+
+## 15. [2026-07-31] magazine 수정 후 정본, 그리고 연산량 감사
+
+### 15-1. magazine 수정의 off-box 효과
+
+| 워크로드 | 수정 전 | 수정 후 | |
+|---|---:|---:|---|
+| GET-only | 11.322 M / span 18.18 | 11.138 M / span 18.40 | 편차 안 |
+| SET-only | 2.640 M / busyCPU **23.3** | **4.121 M** / busyCPU **28.0** | **+56%, 포화 회복** |
+| 1:10 혼합 | 9.466 M | 9.670 M | +2.2% |
+
+**SET-only의 유휴 4.7코어가 사라졌다.** §14-2에서 미해결로 남겼던
+"SET-only가 CPU 포화가 아니다"의 원인이 곧 magazine 미스였다 — 워커들이
+전역 `e->mutex`에서 서로를 깨우느라 일을 못 하고 있었다. 이제 SET-only의
+실효 CPU/op(6.79 µs)와 혼합에서 푼 C_set(6.55 µs)이 처음으로 일치한다.
+
+| | 이전 | 이번 |
+|---|---:|---:|
+| C_get | 2.473 µs | 2.523 µs |
+| C_set | 7.71 µs | **6.55 µs (−15.0%)** |
+
+혼합이 +2.2%에 그친 것은 **SET이 혼합 CPU의 20.6%뿐**이기 때문이다. 1:10에서
+GET이 79.4%를 쓴다. 10 M까지 +3.4%가 남았고, **레버는 이제 GET 쪽이 크다**:
+C_set −13.3% 또는 **C_get −3.5%**.
+
+> obwatch 창 3(19:07:16)의 `Gspan 20.02 µs`는 읽지 말 것. 행 값이 31.66에서
+> 20.03으로 단조 감소하는데, 이는 리셋 직후 표본이 섞인 누적 평균의 수렴
+> 모양이다. 같은 부하의 창 1·2가 18.60 / 18.62다.
+
+### 15-2. 연산량 감사 — 없어도 되는 일을 찾는다
+
+perf(`mc-worker`, 게스트 내, 구성비만 유효).
+
+**GET (C_get 2.523 µs, 혼합 CPU의 79.4%)**
+
+| 항목 | 비중 | 판정 |
+|---|---:|---|
+| EVP 재초기화 (`get_iv_length`+`get_key_length`+`ctrl`+libcrypto) | ~6.0% | **없어도 되는 일 → 고쳤다 (§15-3)** |
+| `pthread_mutex_lock`+`unlock` | 9.44% | item_lock. 미귀속 |
+| `mlx5_poll_cq_v1` | 3.80% | CQ 폴링 |
+| `_copy_from_iter`+`rep_movs_alternative` | 4.37% | TCP 소켓 복사, 고유 |
+| `resp_allocate` | 2.88% | 응답 객체 |
+| `assoc_find` | 2.07% | 해시 탐색, 고유 |
+
+**SET (C_set 6.55 µs, 20.6%)**
+
+| 항목 | 비중 | 판정 |
+|---|---:|---|
+| `do_item_unlink`+`do_item_link`+`item_acct_add` | 16.3% | 덮어쓰기마다 새 item 할당·link·옛 것 unlink |
+| `storage_store_item_pac` | 7.80% | |
+| `assoc_find` | 5.52% | GET의 2.7배 |
+| EVP 재초기화 + `ext_crypto_seal` | ~5.4% | **고쳤다** |
+| `extstore_alloc` | 1.85% | magazine 수정 후 잔여 |
+
+`native_queued_spin_lock_slowpath` 13.21%는 **SET 상위에서 사라졌다**(§14-4 확인).
+
+### 15-3. 고친 것 — GCM 컨텍스트를 매번 다시 키잉하고 있었다
+
+`ext_crypto_{seal,open}`이 연산마다 `EVP_{Encrypt,Decrypt}Init_ex(ctx, NULL,
+NULL, **g_key**, nonce)`로 키를 넘겼다. OpenSSL 3.x는 그때마다 AES 키 스케줄을
+다시 펴고 GHASH 테이블(`CRYPTO_gcm128_init`)을 다시 만들며, 그 재초기화 경로가
+provider를 **문자열 파라미터로 조회**한다. 키는 `ext_crypto_init`에서 한 번
+정해지고 바뀌지 않으므로 전부 불필요하다.
+
+ctx는 이미 스레드별이므로 키를 `get_ctx`에서 한 번만 넣고, 연산은 IV만 간다.
+
+```text
+격리 측정 (tools/ext-crypto-cost)   open 275.6 -> 169.0 ns   seal 291.6 -> 183.4 ns
+서버 계측 (extstore_prof)            read 630  -> 471 ns      seal 986  -> 817 ns
+```
+
+이 변경의 위험은 **재사용 ctx에 GCM 상태(카운터·GHASH 누산기)가 남는 것**이라,
+`test_ext_crypto.c`에 거부 경로 뒤에서 길이를 바꿔 가며 1,000회 왕복하는 검사를
+넣었다. 실패한 open이 상태를 남기지 않는지도 같이 본다.
+
+### 15-4. 감사 결과 **하지 않기로 한 것들**
+
+- **도어벨 배칭** — GET은 **이미 한다**. `worker_post`가 최대 `w->batch`(=32)개
+  WR을 체인으로 묶어 `ibv_post_send` 한 번이다. SET은 `ext_setq_max=1`이라 묶을
+  것이 없고, 2 이상은 span 계약을 깬다(§SET_WORKFLOW).
+- **`sev_es_ghcb_hv_call` 2.13%** — 워크로드 비용이 **아니다.** 호출자가
+  `__perf_event_task_sched_out → amd_pmu_disable_all → native_read_msr`로,
+  **perf 자신의 PMU MSR 접근이 SEV에서 트랩하는 것**이다. 관측하지 않으면 없다.
+  프로파일에서 이 심볼을 비용으로 읽으면 안 된다.
+- **SET의 item 재할당 16.3%** — memcached 코어가 item을 불변으로 두어 독자가
+  락 없이 읽게 하는 설계다. 제자리 갱신으로 바꾸면 그 전제가 무너진다.
+  이득 대비 위험이 나쁘다.
+
+### 15-5. 예상과 다음
+
+서버 계측 감소분(read −160 ns, seal −169 ns)을 그대로 대입하면:
+
+```text
+C_get 2.523 -> 2.363     C_set 6.55 -> 6.38
+1:10  9.670 M -> 10.30 M          GET-only 11.138 M -> 11.89 M
+```
+
+**예상일 뿐이고 off-box가 판정한다.** co-located 처리량은 이번에도 방향이
+갈렸다(GET-only −8.8%, SET-only +7.2%) — memtier가 같은 코어를 쓰는 한
+서버 CPU 절감은 처리량으로 나타나지 않는다. 믿을 것은 `*_crypto_avg_ns`다.
+
+배포본 `771ca34068c7609936b2e58a` (`ce92044`). 함께 볼 것:
+SET span은 1:19에서 21.3 µs였고 처리량이 오르면 더 오른다 — 여기가 먼저 닿는다.

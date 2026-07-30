@@ -187,7 +187,8 @@ scp -i ~/.ssh/snp_guest -P 2222 memcached-1.6.42-port_v3/tools/obwatch.sh ubuntu
 
 ```sh
 sha256sum ~/coherent-mr-v2/bin/memcached | cut -c1-24
-# => fdf3850421c09c727872084f     (pac ⊕ coherent MR ⊕ loc magazine 스캔, e477670)
+# => 771ca34068c7609936b2e58a     (pac ⊕ coherent MR ⊕ magazine 스캔 ⊕ GCM 1회 키잉, ce92044)
+#    fdf3850421c09c727872084f = GCM 수정 이전 (memcached.precrypto)
 #    20a016056d6d1f1b57571243 = magazine 스캔 이전 (memcached.premagscan)
 #    d7b8c1f35639d2467c4c9a44 = pac 이전 (memcached.pre-pac)
 ```

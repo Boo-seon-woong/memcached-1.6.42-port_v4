@@ -48,10 +48,17 @@ SET-only 처리량 궤적 (교대 A/B, 전부 pair 부호 일치):
 | (동기 경로, 브랜치 시점 재측정) | **1.74 M/s** span 5.08 µs | 7.48 µs | `746bcab` |
 | (비동기 watermark — **미해결, 브랜치**) | 0.90 M/s | 8.48 µs | `746bcab` |
 | (비동기 연결 파킹 — **실측 기각, 브랜치**) | 1.0 M/s, 혼합 GET −50% | — | `cca9807` |
-| **(main 배포 재측정, memtier@genie)** | **2.27 M/s** span 6.21 µs | guest 11.3 µs | `7a09928` |
+| (동기 재측정, memtier@genie) | **2.27 M/s** span 6.21 µs | guest 11.3 µs | `cca9807`+`no_ext_async_set` |
+| (동기, **co-located** A/B 기준선) | 1.99 M/s span 6.0 µs | guest 12.0 µs | `cca9807` / pac-off |
+| **(pac — publish-at-command, co-located)** | **2.41 M/s** (+21%) | guest **9.6 µs** | `e424305` (`v3-set-pac`) |
 
-> 마지막 두 행은 bed·클라이언트 배치가 위 행들과 달라 절대값 비교 불가.
-> 7a09928 재측정 상세는 `SET_WORKFLOW.md` §0-1.
+> 아래 세 행은 bed·클라이언트 배치가 위 행들과 달라 위쪽과 절대값 비교 불가.
+> 특히 마지막 두 행은 클라이언트를 guest 안에 둔 것이라 서로끼리만 비교된다.
+> 상세는 `SET_WORKFLOW.md` §0-1(동기 재측정) / §0-2(pac A/B).
+>
+> 초판은 2.27M 행을 main `7a09928`으로 적었으나 실제 서버는
+> `cca9807`+`no_ext_async_set`였다 — co-located A/B가 두 바이너리의 동기
+> 경로 동일 성능을 보였으므로 동기 대표값으로는 유효하다.
 
 **5.4배가 전부 전역 락 제거에서 나왔다.** RDMA도 AES-GCM도 비용이 아니었다
 (프로파일에서 각각 4.4%, 0.6%).
@@ -393,16 +400,20 @@ suspend 대상 resp를 알아야 하는데 그 시그니처에 conn이 없기 �
 ## 10. 남은 순서 (2026-07-30 갱신, main 기준)
 
 ```text
-1) 동기 경로의 off-CPU 8.7 µs 규명   ← 워커 점유 16 µs vs CPU 7.29 µs의 간극.
-                                       실측이 CPU 상한(3.84M)의 45%에 그치는 이유
-                                       (SET_WORKFLOW.md §3)
-2) publish-at-command 설계            ← 연결 파킹 없는 비동기. 게시는 명령 시점,
-                                       응답만 CQE까지 지연. stub write-in-flight
-                                       표시 + GET 대기 기구 필요
-                                       (V3_REVIEW_FINDINGS.md §6.5)
-3) 브랜치 미측정분 A/B                ← SYNC 배치화·SET prefetch (v3-set-10m).
-                                       단, SYNC 배치화는 비동기 구조 전제
+2) publish-at-command  ← 구현 완료(v3-set-pac e424305), co-located 1차 통과
+                         (+21%, 클라이언트 p99 -18%, 결함 0 — SET_WORKFLOW §0-2)
+   다음: off-box 정본 bed에서 W2/W3 재판정 → 통과 시 main 병합 심사
+
+1') off-CPU 간극 규명   ← 순서를 2) 뒤로 돌린다. 간극의 일부를 pac이 이미
+                         제거했으므로(CPU/op 12.0→9.6), 재는 것은 pac 적용
+                         상태여야 한다 (SET_WORKFLOW.md §3 갱신 주석)
+
+3) 브랜치 미측정분 A/B  ← SYNC 배치화(v3-set-10m 756e45c)·SET prefetch.
+                         SYNC 배치화는 비동기 전제였고 pac이 그 문을 열었다.
+                         단 배치는 span에 (a)를 더하므로 마감시간 정책과
+                         함께 설계할 것
 ```
 
-3)의 loc magazine `-o` 배선은 완료됐다(58d24b5). 배포 구성은 main의 동기
-경로다 — `ext_async_set` knob 자체가 main에 없다.
+loc magazine `-o` 배선은 완료됐다(58d24b5). 현재 배포 구성은 여전히 main의
+동기 경로이고(`ext_async_set`/`ext_pac_set` knob 모두 main에 없다), pac은
+guest에 변종 바이너리 `memcached.pac-e424305`로만 올라가 있다.

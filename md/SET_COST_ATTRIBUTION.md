@@ -212,10 +212,16 @@ adbdda8이고, 대기 중 CPU 1.097 → 0.104 core-s/s를 확인했다.
 |---|---|---|
 | `v3-async-set` | watermark gating (연결 파킹 없음, 응답 전송만 게이트) | 정확하나 동기 대비 2배 손실(0.90M vs 1.74M), op당 ~7µs 유휴 미규명. 브랜치 보존 |
 | `v3-set-10m` | 연결 파킹 (STORE_PENDING 시 conn_mwrite 파킹, B-1 순서 수정의 대가) | **실 호스트 기각**: SET-only 1.0M(동기 대비 −40%), 1:9 혼합 GET 10.7M→5.1M. 상한 = 연결수÷파킹시간 |
+| **`v3-set-pac`** (세 번째, 2026-07-30) | publish-at-command — 게시는 명령 시점, 응답만 CQE까지. GET의 io_pending 수거 구조 재사용, 배치 없음 | **1차 통과**: co-located A/B에서 +21%(1.99→2.41M), 클라이언트 p99 −18%, CPU/op −20%, 결함 0 |
 
 동기 경로(step ①②③③′ + A-결함 수정)가 main이고, A/B 계열 기준선은
-1.71~1.74M @ CPU 7.29 µs/op이다. 2026-07-30 main(`7a09928`) 배포 재측정은
-**2.27M @ span 6.21 µs**(memtier@genie — bed·클라이언트 상이, 절대값 비교
-불가, `SET_WORKFLOW.md` §0-1). 다음 순서는 **off-CPU 간극 규명(공급 조건
-민감성 확인됨) → publish-at-command**(`SET_WORKFLOW.md` §3·§4,
-`V3_REVIEW_FINDINGS.md` §6.5).
+1.71~1.74M @ CPU 7.29 µs/op이다. 2026-07-30 동기 재측정은
+**2.27M @ span 6.21 µs**(memtier@genie, 서버는 `cca9807`+`no_ext_async_set`
+— bed·클라이언트 상이로 절대값 비교 불가, `SET_WORKFLOW.md` §0-1).
+
+**세 시도의 차이가 말하는 것**: 실패한 둘은 응답을 미루면서 **게시까지**
+미뤘고(그래서 순서를 지키려 연결이나 전송을 묶어야 했다), pac은 게시를
+동기 경로 그대로 두고 응답만 미룬다. 즉 비동기화의 비용은 "기다리는 방식"이
+아니라 **"게시를 미룬 대가"**였다. 다음 순서는 off-box 정본 bed에서의 pac
+재판정이고, off-CPU 간극 규명은 pac 적용 후 상태에서 하는 것이 맞다
+(`SET_WORKFLOW.md` §0-2·§3).

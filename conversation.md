@@ -5207,3 +5207,88 @@ guest `~/kvs-port-v3/`에 새 main 빌드를 `memcached.main-<sha>`로 올리고
 `memcached`를 그것으로 교체한다(직전 운영본은 `memcached.cca9807`로 보존).
 
 NEXT: genie (W2 재측정 — 같은 bed에서 동기 경로 기준선 갱신)
+
+---
+
+## [2026-07-30 KST] ariel — pac step 1 배포: (c) 이전 완료, W2 A/B 요청
+
+관리자 지시("(c) 이전")에 따라 GET의 완료 수거 구조를 SET에 이식했다
+(branch `v3-set-pac`, 5629c35 → guest `memcached.pac-5629c35`,
+sha256 473c979f54550c95…).
+
+### 설계 — (a)는 구조적으로 0
+
+- **publish-at-command**: 게시는 동기 경로와 같은 지점(item_lock 아래,
+  명령 시점). 미뤄지는 것은 응답뿐 → 연결 파킹 없음, 연결 내 순서 동일.
+- **즉시 post**: SETQ/flush 정책 없음. SYNC_FOR_DEVICE는 SET당 1회 그대로
+  (상각은 다음 단계). 따라서 Sspan = seal + sync + wire + **(c)** — 이번
+  A/B가 (c)를 SET 계측으로 직접 드러낸다.
+- **완료 수거**: GET과 같은 drain 지점 + `g_ret_head` + io_pending 재개.
+  워커는 wire 왕복 동안 해방 — 워커당 SET 동시성 1 해제.
+- **ITEM_WFLIGHT**: in-flight 중 delete/replace가 loc을 회수하면 재할당된
+  슬롯에 이중 기록이 나므로, 회수 권한을 완료 콜백으로 넘긴다.
+- 범위: ascii 평문 set(비 noreply, 비 mset)만. 나머지는 동기 경로.
+  게시가 CQE에 앞서는 창(~수 µs)의 GET은 기존 badcrc 재시도가 흡수한다.
+
+### 측정 요청 (같은 bed, 클라이언트 파라미터 기록할 것)
+
+```text
+A/B: memcached.pac-5629c35 (pac on) vs 같은 바이너리 -o no_ext_pac_set (동기)
+W2 SET-only 우선, 이후 W3 1:9.
+볼 것:
+  set/s            동기 2.27M 대비 — CPU 상한까지 열리는가
+  Sspan            avg/p99 — (c)의 크기 (동기 6.21µs와의 차이가 곧 (c))
+  stats: ext_pac_posted / ext_pac_fail(0이어야) / ext_pac_fallback(작아야)
+  correctness 푸터: get_misses=0, badcrc는 W3에서 소량 후 재시도 복구 허용
+  guest busyCPU     → CPU/op
+```
+
+NEXT: genie (W2 pac A/B)
+
+---
+
+## [2026-07-30 KST] ariel — 관리자 지시 co-located A/B 완료: pac +21% / 클라이언트 p99 −18% / 무결점
+
+관리자 지시대로 guest 안에 memtier·memcached를 함께 두고 3련전을 돌렸다.
+절대값은 off-box와 비교 불가(클라이언트가 서버 코어를 잠식)지만, 세 런은
+동일 bed·동일 클라이언트(-t 8 -c 4 --pipeline=64, d64, 1M keys R:R,
+distinct-seed, 90s; obwatch 60s 창)라 우열 판정은 유효하다.
+원자료: guest `~/pac-ab-20260730/`.
+
+| run | binary | 경로 | set/s | Sspan avg/p99 | client avg/p99 | busyCPU |
+|---|---|---|---:|---:|---:|---:|
+| A | cca9807 | 동기(no_ext_async_set) | 1.99M | 6.17 / 15.1 µs | 1.015 / 1.927 ms | 24.1 |
+| B | pac-e424305 | **pac on** | **2.41M** | 42.8 / 262.6 µs | **0.834 / 1.583 ms** | 23.1 |
+| C | pac-e424305 | pac off | 1.99M | 6.02 / 15.0 µs | 1.011 / 1.935 ms | 23.9 |
+
+판정 (B vs C, 단일 바이너리 A/B):
+
+- **처리량 +21%** (1.99 → 2.41M), **클라이언트 레이턴시 avg −18% / p99 −18%
+  / p99.9 −19%**, CPU/op 12.0 → 9.6 µs (**−20%**).
+- 정확성: 3런 모두 필수 0 전부 0. pac 218M ops에서 `ext_pac_fail=0`,
+  `ext_pac_fallback=0`.
+- **Sspan 6 → 43µs는 정의 이동이다**: pac의 write span은 (c)(CQE→drain 수거
+  대기)를 포함한다. 클라이언트 체감은 오히려 개선 — 동기의 숨은 큐잉이 측정
+  구간 안으로 들어온 것. **(c) 실측 ≈ 36.6µs avg / ~250µs p99** (이 부하
+  형상: 깊은 파이프라인 + co-located). SET에 30µs급 span 목표를 세운다면
+  이제 (c)의 drain 주기가 정량화된 타깃이다.
+- A ≡ C: cca9807-동기와 pac 빌드의 동기 경로가 동일 성능 — pac 코드의
+  동기 경로 무회귀 확인.
+
+과정에서 잡은 pac 결함 1건(e424305): 한 pass에 워커당 staging 슬롯 수(9)를
+넘는 파이프라인 SET가 들어오면 10번째부터 즉시 NOT_STORED로 거부되던 것
+(동기 전용 시절엔 staging 경합이 없어 대기 로직이 없었다). staging 회수까지
+자기 CQ를 걷도록 수정. 20-deep 프로브 9/11 → 100/100.
+
+별건 관측 2건:
+
+1. **cca_sync3 장수 프로세스 열화**: 06:46 기동된 cca9807-동기 서버가
+   07:11 정상(2.27M) → 이후 워커당 ~9건만 받고 전량 NOT_STORED 상태로
+   퇴행해 있었다(staging 누수 시그니처). fresh 기동에서는 재현 안 됨.
+   cca9807은 기각 빌드라 추적 우선순위 낮음 — 증거는
+   `~/v3-ab-main-vs-cca-20260730-064659/cca_sync3-server.log`.
+2. 문서 정정: "2026-07-30 배포 재측정 2.27M"의 주체는 main-7a09928이 아니라
+   **cca9807+no_ext_async_set**였다(관리자 A/B 세션의 cca_sync3). A≡C이므로
+   수치 자체는 동기 경로 대표값으로 유효 — main 문서 4곳 귀속 정정.
+
+NEXT: genie (off-box W2/W3 pac A/B — 정본 bed에서 절대값·(c) 재판정)

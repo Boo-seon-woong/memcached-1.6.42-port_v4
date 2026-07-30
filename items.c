@@ -98,17 +98,54 @@ static size_t item_make_header(const uint8_t nkey, const client_flags_t flags, c
  * magazine에 든 항목의 상태는 slab 자유 목록에 있을 때와 동일하게
  * (ITEM_SLABBED, slabs_clsid) 유지하고, 꺼낼 때 do_slabs_alloc과 같은
  * 전이(플래그 해제 + refcount=1)를 적용한다. chunked item은 별도 해제
- * 경로가 필요하므로 제외한다. */
+ * 경로가 필요하므로 제외한다.
+ *
+ * 파킹된 chunk는 sl_curr에 보이지 않고 소유 워커만 쓸 수 있다. eviction이 없는
+ * 포트에서 이는 곧 "메모리가 남았는데 다른 워커가 OOM"이 될 수 있다는 뜻이므로
+ * 두 가지로 막는다.
+ *
+ * (1) 깊이를 개수가 아니라 **바이트로** 제한한다. 클래스당 파킹 예산을 두면
+ *     stub/transient 같은 작은 클래스는 item_mag_depth 그대로 쓰고, 큰 클래스는
+ *     자동으로 얕아지거나 0이 된다. remote_only_mode가 아닐 때 chunk 클래스는
+ *     (512 KB) 0이 되어 아예 관여하지 않는다 — chunk는 do_slabs_free로만
+ *     돌아오므로 refill된 것이 magazine에 영구히 남던 경로였다.
+ * (2) slab 할당이 실패하면 자기 magazine을 전부 되돌리고 한 번 재시도한다.
+ *     자기 워커가 쥐고 있던 몫은 이걸로 회수된다.
+ *
+ * 남는 것은 워커 간 hoarding인데, (1) 때문에 최대 파킹량이
+ * ITEM_MAG_MAX_BYTES × 클래스수 × 워커수로 유계다(remote_only_mode에서
+ * 64 KB × 2 × 28 ≈ 3.5 MB). */
+#define ITEM_MAG_MAX_BYTES (64 * 1024)   /* 워커·클래스당 파킹 예산 */
+
 static _Thread_local struct {
     void *v[ITEM_MAG_MAX];
     unsigned int n;
 } g_item_mag[MAX_NUMBER_OF_SLAB_CLASSES];
 
+/* 이 클래스에 허용되는 magazine 깊이. alloc/free 양쪽이 같은 값을 봐야 한다. */
+static inline unsigned int item_mag_depth_for(const unsigned int id) {
+    unsigned int depth = settings.item_mag_depth;
+    if (depth == 0 || id >= MAX_NUMBER_OF_SLAB_CLASSES) return 0;
+    if (depth > ITEM_MAG_MAX) depth = ITEM_MAG_MAX;
+    unsigned int chunk = slabs_size((int)id);
+    if (chunk == 0) return 0;
+    unsigned int by_bytes = ITEM_MAG_MAX_BYTES / chunk;
+    return by_bytes < depth ? by_bytes : depth;
+}
+
+/* 이 스레드가 쥐고 있는 chunk를 전부 슬랩으로 되돌린다. */
+static void item_mag_spill_all(void) {
+    for (unsigned int id = 0; id < MAX_NUMBER_OF_SLAB_CLASSES; id++) {
+        if (g_item_mag[id].n == 0) continue;
+        slabs_free_batch(g_item_mag[id].v, g_item_mag[id].n, id);
+        g_item_mag[id].n = 0;
+    }
+}
+
 /* No eviction in v2: allocation failure is an OOM error, never an evict. */
 item *do_item_alloc_pull(const size_t ntotal, const unsigned int id) {
-    unsigned int depth = settings.item_mag_depth;
-    if (depth > ITEM_MAG_MAX) depth = ITEM_MAG_MAX;
-    if (depth > 0 && id < MAX_NUMBER_OF_SLAB_CLASSES) {
+    unsigned int depth = item_mag_depth_for(id);
+    if (depth > 0) {
         if (g_item_mag[id].n == 0)
             g_item_mag[id].n = slabs_alloc_batch(id, g_item_mag[id].v, depth);
         if (g_item_mag[id].n > 0) {
@@ -120,6 +157,13 @@ item *do_item_alloc_pull(const size_t ntotal, const unsigned int id) {
         }
     }
     item *it = slabs_alloc(id, 0);
+    if (it == NULL) {
+        /* 이 워커의 magazine이 다른 클래스의 chunk를 쥐고 있을 수 있다.
+         * eviction이 없으므로 여기서 포기하면 곧 클라이언트 에러다 — 전부
+         * 되돌리고 한 번만 재시도한다. */
+        item_mag_spill_all();
+        it = slabs_alloc(id, 0);
+    }
     if (it == NULL) {
         pthread_mutex_lock(&lru_locks[id]);
         itemstats[id].outofmemory++;
@@ -253,10 +297,8 @@ void item_free(item *it) {
     clsid = ITEM_clsid(it);
     DEBUG_REFCNT(it, 'F');
     {
-        unsigned int depth = settings.item_mag_depth;
-        if (depth > ITEM_MAG_MAX) depth = ITEM_MAG_MAX;
-        if (depth > 0 && clsid < MAX_NUMBER_OF_SLAB_CLASSES &&
-            (it->it_flags & ITEM_CHUNKED) == 0 &&
+        unsigned int depth = item_mag_depth_for(clsid);
+        if (depth > 0 && (it->it_flags & ITEM_CHUNKED) == 0 &&
             g_item_mag[clsid].n < depth) {
             /* do_slabs_free와 동일한 전이 (자유 목록 연결만 생략) */
             it->it_flags = ITEM_SLABBED;

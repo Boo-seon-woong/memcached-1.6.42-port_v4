@@ -4092,7 +4092,8 @@ static void usage(void) {
            "   - ext_worker_window:   outstanding operations per worker (default: 16)\n"
            "   - ext_qp_per_worker:   RC QPs per worker, 1..4 (default: 1)\n"
            "   - ext_drain_spin:      CQ drain spin budget, 0..4096 (default: 1024)\n"
-           "   - ext_drain_empty_max: stop spinning after N consecutive empty CQ polls, 0=never (default: 0)\n");
+           "   - ext_drain_empty_max: stop spinning after N consecutive empty CQ polls, 0=never (default: 0)\n"
+           "   - ext_loc_mag_depth:   worker-private remote-loc magazine depth, 0=off (default: 64)\n");
 #endif
 #ifdef PROXY
     printf("   - proxy_config:        path to lua library file. separate with ':' for multiple files\n"

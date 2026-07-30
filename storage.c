@@ -25,6 +25,7 @@ static _Thread_local iop_head_t g_ret_head;
 static _Thread_local bool g_ret_init = false;
 static unsigned int g_worker_window = 16; // v2 P2a (ext_worker_window)
 static unsigned int g_qp_per_worker = 1;  // v2 P2a (ext_qp_per_worker)
+static unsigned int g_loc_mag_depth = 64; // v3 (ext_loc_mag_depth); extstore.c의 기본값과 일치
 static _Atomic uint64_t g_read_retry_ct = 0;
 static _Atomic uint64_t g_worker_write_spins = 0;
 static _Atomic uint64_t g_badcrc_log_ct = 0;      // rate-limit for the badcrc diagnostic
@@ -187,6 +188,8 @@ void storage_stats(ADD_STAT add_stats, void *c) {
                 (unsigned long long)atomic_load(&g_plaintext_slab_fallback));
         APPEND_STAT("ext_worker_window", "%llu",
                 (unsigned long long)st.worker_window);
+        APPEND_STAT("ext_loc_mag_depth", "%llu",
+                (unsigned long long)g_loc_mag_depth);
         APPEND_STAT("ext_worker_drain_calls", "%llu",
                 (unsigned long long)st.worker_drain_calls);
         APPEND_STAT("ext_worker_drain_empty", "%llu",
@@ -760,6 +763,7 @@ int storage_read_config(void *conf, char **subopt) {
         EXT_BATCH,
         EXT_DRAIN_SPIN,
         EXT_DRAIN_EMPTY_MAX,
+        EXT_LOC_MAG_DEPTH,
     };
 
     char *const subopts_tokens[] = {
@@ -771,6 +775,7 @@ int storage_read_config(void *conf, char **subopt) {
         [EXT_BATCH] = "ext_batch",
         [EXT_DRAIN_SPIN] = "ext_drain_spin",
         [EXT_DRAIN_EMPTY_MAX] = "ext_drain_empty_max",
+        [EXT_LOC_MAG_DEPTH] = "ext_loc_mag_depth",
         NULL
     };
 
@@ -808,6 +813,17 @@ int storage_read_config(void *conf, char **subopt) {
                 fprintf(stderr, "ext_drain_empty_max must be a number\n");
                 return 1;
             }
+            break;
+        case EXT_LOC_MAG_DEPTH:
+            /* 0 = 끈다. 파킹된 loc은 소유 워커만 재사용하므로 스토어가 거의
+             * 찼을 때 다른 워커의 할당을 실패시킬 수 있다 — 그때 낮추거나 끄는
+             * 노브이고, A/B 검증에도 필요하다. */
+            if (subopts_value == NULL ||
+                !safe_strtoul(subopts_value, &g_loc_mag_depth)) {
+                fprintf(stderr, "ext_loc_mag_depth must be a number (0 = off)\n");
+                return 1;
+            }
+            extstore_set_loc_mag_depth(g_loc_mag_depth);
             break;
         case EXT_QP_PER_WORKER:
             if (subopts_value == NULL ||

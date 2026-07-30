@@ -214,19 +214,25 @@ static int _logger_parse_ise(logentry *e, char *scratch) {
     const char *cmd = "na";
     char keybuf[KEY_MAX_URI_ENCODED_LENGTH];
     struct logentry_item_store *le = (struct logentry_item_store *) e->data;
+    const char *status = "unknown";
+    /* keep in step with enum store_item_type; STORE_PENDING is last */
     const char * const status_map[] = {
-        "not_stored", "stored", "exists", "not_found", "too_large", "no_memory" };
+        "not_stored", "stored", "exists", "not_found", "too_large", "no_memory",
+        "pending" };
     const char * const cmd_map[] = {
         "null", "add", "set", "replace", "append", "prepend", "cas", "append", "prepend" };
 
     if (le->cmd <= 8)
         cmd = cmd_map[le->cmd];
+    if (le->status >= 0 &&
+        (size_t)le->status < sizeof(status_map) / sizeof(status_map[0]))
+        status = status_map[le->status];
 
     uriencode(le->key, keybuf, le->nkey, KEY_MAX_URI_ENCODED_LENGTH);
     total = snprintf(scratch, LOGGER_PARSE_SCRATCH,
             "ts=%lld.%d gid=%llu type=item_store key=%s status=%s cmd=%s ttl=%u clsid=%u cfd=%d size=%d\n",
             (long long int)e->tv.tv_sec, (int)e->tv.tv_usec, (unsigned long long) e->gid,
-            keybuf, status_map[le->status], cmd, le->ttl, le->clsid, le->sfd,
+            keybuf, status, cmd, le->ttl, le->clsid, le->sfd,
             le->nbytes > 0 ? le->nbytes - 2 : 0); // CLRF
     return total;
 }

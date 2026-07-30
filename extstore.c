@@ -348,8 +348,12 @@ static store_page *grab_active(store_engine *e, unsigned int bucket, unsigned in
  * 핵심 성질: magazine에 든 loc은 **여전히 '사용 중'으로 회계된다.**
  * 따라서 (a) push/pop 시 회계 변경이 없어 전역 상태를 건드리지 않고,
  * (b) obj_count가 줄지 않으므로 해당 페이지가 재활용될 수 없어 loc이
- * stale해지지 않는다 — 전역 경로의 version 검증을 우회해도 안전한 이유다.
- * 통계는 magazine 점유분만큼 사용량을 과대 보고한다(보수적, 유계). */
+ * stale해지지 않는다. 통계는 magazine 점유분만큼 사용량을 과대 보고한다
+ * (보수적, 유계 — 정확히 같은 len만 재사용하므로 표류하지 않는다).
+ *
+ * 파킹된 loc은 소유 스레드만 재사용할 수 있으므로 스토어가 거의 찼을 때는
+ * 다른 워커에서 할당 실패를 만들 수 있다. depth를 낮추거나 0으로 끄는 것이
+ * 그때의 대응이고, ext_loc_mag_depth로 설정한다. */
 #define LOC_MAG_MAX 256
 static _Thread_local struct {
     struct ext_loc v[LOC_MAG_MAX];
@@ -366,12 +370,16 @@ int extstore_alloc(void *ptr, unsigned int len, unsigned int bucket, struct ext_
     if (bucket >= e->page_bucketcount) bucket = 0;
     if (len > e->slot_size) return -1;
     /* 워커 전용 magazine: 회계가 이미 '사용 중'이므로 전역 락 없이 재사용.
-     * 전역 경로와 동일하게 LIFO 최상단만 검사한다(크기 축소만 허용). */
+     * 전역 경로와 달리 **정확히 같은 len만** 재사용한다. 축소 재사용은 슬롯이
+     * 예전 큰 len으로 청구된 채 out->len만 작아지고, 나중 free_loc_global이
+     * 작은 len만 빼주므로 bytes_used가 차이만큼 영구히 표류한다. 전역 경로는
+     * free 시 이미 감산했다가 alloc에서 새 len으로 재가산하므로 균형이 맞지만,
+     * magazine 경로에는 그 감산/재가산이 없다. 고정 크기 워크로드에서는 모든
+     * len이 일치하므로 이 제한으로 잃는 적중은 없다. */
     if (g_loc_mag_depth && g_loc_mag.n > 0) {
         struct ext_loc *t = &g_loc_mag.v[g_loc_mag.n - 1];
-        if (t->len >= len) {
+        if (t->len == len) {
             *out = *t;
-            out->len = len;
             g_loc_mag.n--;
             return 0;
         }
@@ -461,8 +469,17 @@ static void free_loc_global(store_engine *e, const struct ext_loc *loc) {
 
 void extstore_free_loc(void *ptr, const struct ext_loc *loc) {
     store_engine *e = ptr;
-    if (g_loc_mag_depth && g_loc_mag.n < g_loc_mag_depth &&
-            loc->len > 0 && loc->page_id < e->page_count) {
+    /* magazine은 free_loc_global의 검증을 우회한다. 구조가 성립하지 않는 loc을
+     * 그냥 캐시하면 다음 SET이 그것을 원격 WRITE 대상으로 집어 들어 이웃
+     * 페이지의 살아있는 객체를 덮어쓴다. 따라서 여기서 걸러 전역 경로로
+     * 보내고, 거기서 slot_acct_leak로 격리시킨다.
+     * page_size/page_count/version은 init에서만 쓰이고 이 포트에는 페이지
+     * 재활용이 없으므로 락 없이 읽어도 경합이 없다. */
+    bool sound = loc->len > 0 && loc->page_id < e->page_count &&
+                 loc->offset + loc->len <= e->page_size &&
+                 e->pages[loc->page_id].version == loc->page_version;
+    if (!sound) { free_loc_global(e, loc); return; }
+    if (g_loc_mag_depth && g_loc_mag.n < g_loc_mag_depth) {
         /* 회계를 건드리지 않고 로컬 보관 — 이 loc은 계속 '사용 중'이다 */
         g_loc_mag.v[g_loc_mag.n++] = *loc;
         return;
@@ -785,6 +802,16 @@ static void worker_post(store_worker *w, obj_io *chain) {
     }
 }
 
+/* Fail every op parked on the wait list. The refill paths skip a dead engine,
+ * so without this the parked ops keep their connections waiting for a
+ * completion that can never arrive. A parked op holds no bounce slot and no
+ * window credit, so the callback is the only thing owed to it. */
+static void worker_fail_parked(store_worker *w) {
+    obj_io *p = w->wait_head, *nx;
+    w->wait_head = w->wait_tail = NULL;
+    for (; p; p = nx) { nx = p->next; p->next = NULL; p->cb(w->e, p, -1); }
+}
+
 /* P2b: worker-private staging slot (no lock; owner-only). */
 char *extstore_worker_staging_get(void *worker) {
     store_worker *w = worker;
@@ -847,6 +874,7 @@ int extstore_worker_submit(void *worker, obj_io *chain) {
     if (!w) return -1;
     if (atomic_load(&w->e->dead)) {
         obj_io *nx; for (obj_io *p = chain; p; p = nx) { nx = p->next; p->cb(w->e, p, -1); }
+        worker_fail_parked(w);
         return -1;
     }
     /* FIFO fairness: drain any parked ops first */
@@ -871,9 +899,19 @@ int extstore_worker_drain(void *worker, int budget) {
 
     atomic_fetch_add(&w->drain_calls, 1);
     int c = ibv_poll_cq(w->cq, budget, wc);
-    if (c <= 0) {
+    if (c < 0) {
+        /* A poll failure is not an empty CQ. Reporting it as 0 makes the
+         * callers that wait on their own completion spin forever, since they
+         * only give up on a negative return. */
+        atomic_store(&e->dead, 1);
+        STAT_L(e); e->stats.engine_dead = 1; STAT_UL(e);
+        worker_fail_parked(w);
+        return -1;
+    }
+    if (c == 0) {
         atomic_fetch_add(&w->drain_empty, 1);
-        return atomic_load(&e->dead) ? -1 : 0;
+        if (atomic_load(&e->dead)) { worker_fail_parked(w); return -1; }
+        return 0;
     }
 
     uint64_t t_poll = g_prof_on ? prof_rdtsc() : 0;
@@ -945,10 +983,14 @@ int extstore_worker_drain(void *worker, int budget) {
     }
 
     /* refill from the wait list with the freed capacity */
-    if (w->wait_head && !atomic_load(&e->dead)) {
-        obj_io *parked = w->wait_head;
-        w->wait_head = w->wait_tail = NULL;
-        worker_post(w, parked);
+    if (w->wait_head) {
+        if (atomic_load(&e->dead)) {
+            worker_fail_parked(w);
+        } else {
+            obj_io *parked = w->wait_head;
+            w->wait_head = w->wait_tail = NULL;
+            worker_post(w, parked);
+        }
     }
     return atomic_load(&e->dead) ? -1 : c;
 }

@@ -5885,3 +5885,55 @@ Sspan 12.5 → 8.4 µs, SWIOTLB 340슬롯 반납.
 `legacy/sev-to-mn-backup-2026-07-06/mlx5_ib.ko.working`.
 
 NEXT: ariel (Module.symvers 완료 후 재빌드 → guest 로드 검증 → 2단계 착수)
+
+---
+
+## [2026-07-30 KST] ariel — 1단계 완료: 배포본과 동등한 모듈을 재빌드했다.
+
+관리자(codex)가 실제 소스를 찾아 줬다 — 내가 vanilla 6.16으로 추정하던 것은
+틀렸고, 실제 트리는 `~/2026/sev/local-build/AMDSEV/linux/guest`다.
+mlx5 소스를 대조하니 cq.c 149줄·qp.c 23줄·main.c 13줄·mlx5_ib.h 15줄이 달랐다.
+**vanilla + 아카이브 패치로는 배포본을 재현할 수 없었다.**
+
+### 그 트리의 상태가 곧 배포본이다
+
+```text
+HEAD          a78481c9f206  "tmp: coherent baseline for sync-mr patch gen"
+미커밋 변경    main.c / mlx5_ib.h / mr.c / ib_user_ioctl_verbs.h  (224줄)
+              = SYNC_FOR_CPU/DEVICE advise 구현 그 자체
+                (mlx5_ib_advise_mr_sync_for_{cpu,device} → dma_sync_single_for_{cpu,device})
+```
+
+지금 extstore.c가 부르는 advice 번호 3/4의 커널 측 구현이 이 미커밋 변경이고,
+**배포된 mlx5_ib.ko = HEAD + 이 diff**다.
+
+### 관리자 트리를 건드리지 않고 재현
+
+18 GB 트리라 복사 대신 `git worktree --detach a78481c9f206`로 분리하고,
+미커밋 diff를 패치로 떠서 적용했다. 관리자 트리의 HEAD·미커밋 상태 무영향 확인.
+
+```text
+worktree                  ~/2026/sev-guest-kernel/work
+.config / Module.symvers  실제 트리에서 복사
+```
+
+### 결과 — 배포본과 일치
+
+```text
+              vermagic                               depends
+내 재빌드     6.16.0-snp-guest-038d61fd6422 SMP...   mlx5_core,ib_uverbs,ib_core
+guest 배포본  6.16.0-snp-guest-038d61fd6422 SMP...   mlx5_core,ib_uverbs,ib_core
+```
+
+**gotcha 2건을 밟았고 둘 다 문서에 있던 것이다.**
+1. `Module.symvers` 없이 `M=` 빌드 → 심볼 미해결. 실제 트리 것을 복사해 해결.
+2. dirty 트리가 vermagic에 `+`를 찍음 → 로드 거부. `include/config/kernel.release`와
+   `include/generated/utsrelease.h`를 고정하고 해당 디렉터리 clean 후 재빌드.
+
+### 남은 것: 실제 로드 검증 (권한 필요)
+
+무변경 재빌드를 guest에 넣어 기존 성능이 재현되는지 보는 단계인데,
+`rmmod/insmod`가 권한 분류기에 막혔다. 타당한 차단이다 — 잘못된 모듈은
+guest의 RDMA를 죽인다. 관리자 승인 또는 직접 실행이 필요하다.
+
+NEXT: 관리자 (모듈 로드 검증) / ariel (그동안 2단계 coherent MR 소스 작성)

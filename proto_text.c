@@ -61,6 +61,12 @@ static void _finalize_mset(conn *c, int nbytes, enum store_item_type ret, uint64
     case NOT_STORED:
       memcpy(p, "NS", 2);
       break;
+    case STORE_PENDING:
+      /* v3 pac: mset은 cur_async_ok를 세우지 않으므로 도달 불가다. 도달한다면
+       * WRITE가 post된 채 여기서 응답을 끝내는 것이고, 뒤늦은 완료 콜백이
+       * 전송·회수된 resp에 쓴다 — 불변식을 눈에 보이게 끝낸다. */
+      out_errstring(c, "SERVER_ERROR unexpected pending store");
+      return;
     default:
       out_errstring(c, "SERVER_ERROR Unhandled storage type.");
       return;
@@ -160,7 +166,19 @@ void complete_nread_ascii(conn *c) {
     } else {
       uint64_t cas = 0;
       c->thread->cur_sfd = c->sfd; // cuddle sfd for logging.
+      /* v3 pac: STORE_PENDING을 처리할 수 있는 호출자임을 명시 선언.
+       * ascii 평문 set만 — mset은 _finalize_mset이 응답을 만들고, noreply는
+       * 응답 재개가 무의미하다. 호출 직전 set / 직후 clear: cur_conn이 비지
+       * 않았는지로 추론하면 proxy internal(cur_sfd만 세운다)에서 직전 명령의
+       * 값이 남아 pending이 엉뚱한 연결에 묶인다. */
+      c->thread->cur_conn = c;
+      c->thread->cur_resp = c->resp;
+      c->thread->cur_async_ok = (comm == NREAD_SET && !c->resp->noreply &&
+                                 !c->resp->mset_res);
       ret = store_item(it, comm, c->thread, &nbytes, &cas, c->cas ? c->cas : get_cas_id(), c->resp->set_stale);
+      c->thread->cur_async_ok = false;
+      c->thread->cur_conn = NULL;
+      c->thread->cur_resp = NULL;
       c->cas = 0;
 
 #ifdef ENABLE_DTRACE
@@ -196,6 +214,18 @@ void complete_nread_ascii(conn *c) {
           _finalize_mset(c, nbytes, ret, cas);
       } else {
           switch (ret) {
+          case STORE_PENDING:
+              /* v3 pac: 게시는 끝났고 응답은 CQE 콜백(storage_set_return_cb)이
+               * suspend된 resp에 쓴다. GET과 동일한 suspend 패턴. 정상 경로의
+               * out_string()이 하던 상태 전이를 여기서 해줘야 drive_machine이
+               * conn_nread로 되돌아와 해제된 c->item을 역참조하지 않는다.
+               * 연결은 파킹하지 않는다 — 후속 명령은 계속 처리되고, 전송
+               * 순서는 resp 체인이 지킨다. */
+              assert(c->resp->io_pending != NULL);
+              c->resp->io_pending->c = c;
+              conn_resp_suspend(c, c->resp);
+              conn_set_state(c, conn_new_cmd);
+              break;
           case STORED:
               out_string(c, "STORED");
               break;

@@ -24,6 +24,11 @@ void storage_flush_returns(void);
 // Commit one value remotely and return an unlinked ITEM_HDR. Caller holds
 // item_lock(hv); no local value is published on failure.
 int storage_store_item(void *e, item *it, item **hdr_it, uint32_t hv);
+// v3 pac: publish-at-command async SET. Returns 1 = pending accepted
+// (*hdr_it is ready to publish now; response is written at WRITE CQE),
+// 0 = not taken (caller falls back to the sync path), -1 = hard failure.
+int storage_store_item_pac(void *e, item *it, item **hdr_it, uint32_t hv,
+                           LIBEVENT_THREAD *t);
 #else
 #define storage_get_item NULL
 #endif

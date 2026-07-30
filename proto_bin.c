@@ -422,6 +422,11 @@ static void complete_update_bin(conn *c) {
     case NOT_FOUND:
         write_bin_error(c, PROTOCOL_BINARY_RESPONSE_KEY_ENOENT, NULL, 0);
         break;
+    case STORE_PENDING:
+        /* v3 pac: binary는 cur_async_ok를 세우지 않으므로 도달 불가.
+         * 도달하면 완료 콜백이 회수된 resp에 쓰게 되므로 명시적으로 끝낸다. */
+        write_bin_error(c, PROTOCOL_BINARY_RESPONSE_EINVAL, NULL, 0);
+        break;
     case NOT_STORED:
     case TOO_LARGE:
     case NO_MEMORY:

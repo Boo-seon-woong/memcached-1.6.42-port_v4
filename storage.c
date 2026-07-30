@@ -28,6 +28,10 @@ static unsigned int g_qp_per_worker = 1;  // v2 P2a (ext_qp_per_worker)
 static unsigned int g_loc_mag_depth = 64; // v3 (ext_loc_mag_depth); extstore.c의 기본값과 일치
 static _Atomic uint64_t g_read_retry_ct = 0;
 static _Atomic uint64_t g_worker_write_spins = 0;
+/* v3 pac 카운터 */
+static _Atomic uint64_t g_pac_posted = 0;     /* pending으로 수락된 SET */
+static _Atomic uint64_t g_pac_fail = 0;       /* WRITE 실패로 게시 롤백 */
+static _Atomic uint64_t g_pac_fallback = 0;   /* 자원 부족 → 동기 폴백 */
 static _Atomic uint64_t g_badcrc_log_ct = 0;      // rate-limit for the badcrc diagnostic
 static _Atomic uint64_t g_flush_log_ct = 0;       // rate-limit for the flush diagnostic
 
@@ -113,6 +117,12 @@ bool storage_validate_item(void *e, item *it) {
 
 void storage_delete(void *e, item *it) {
     if (it->it_flags & ITEM_HDR) {
+        /* v3 pac: WRITE가 아직 wire에 있는 stub. 지금 loc을 회수하면 그 슬롯을
+         * 재할당받은 다른 SET의 WRITE와 겹친다 — 회수는 완료 콜백
+         * (storage_set_return_cb)이 unlink 여부를 보고 한다. 이 검사와 플래그
+         * 해제는 모두 item_lock(hv) 아래에서 일어난다 (유일한 락-밖 호출자인
+         * GET-miss 경로는 badcrc면 stub을 남기므로 WFLIGHT stub을 지우지 않는다). */
+        if (it->it_flags & ITEM_WFLIGHT) return;
         item_hdr *hdr = (item_hdr *)ITEM_data(it);
         struct ext_loc loc = { hdr->page_version, hdr->offset, hdr->len, hdr->page_id };
         extstore_free_loc(e, &loc);
@@ -198,6 +208,12 @@ void storage_stats(ADD_STAT add_stats, void *c) {
                 (unsigned long long)st.worker_wait_enq);
         APPEND_STAT("ext_worker_write_spins", "%llu",
                 (unsigned long long)atomic_load(&g_worker_write_spins));
+        APPEND_STAT("ext_pac_posted", "%llu",
+                (unsigned long long)atomic_load(&g_pac_posted));
+        APPEND_STAT("ext_pac_fail", "%llu",
+                (unsigned long long)atomic_load(&g_pac_fail));
+        APPEND_STAT("ext_pac_fallback", "%llu",
+                (unsigned long long)atomic_load(&g_pac_fallback));
         APPEND_STAT("ext_slot_acct_leak", "%llu",
                 (unsigned long long)st.slot_acct_leak);
         APPEND_STAT("extstore_alloc_failures", "%llu",
@@ -548,6 +564,206 @@ static void storage_finalize_cb(io_pending_t *pending) {
     storage_release_pending(pending);
     // don't need to free the main context, since it's embedded.
 }
+
+/* ==== v3 pac: publish-at-command 비동기 SET ==============================
+ *
+ * (c) 이식: GET이 검증한 완료 수거 구조(post 후 워커 해방, 공유 drain에서
+ * CQE 수거, g_ret_head → loop 레벨 재개)를 SET에 태운다. 게시(item_replace/
+ * do_item_link)는 명령 시점에 끝나므로 연결 내 순서는 동기 경로와 동일하고,
+ * 연결 파킹이 필요 없다. 이 구조가 미루는 것은 STORED 응답뿐이다
+ * (STORED-after-CQE 계약 유지).
+ *
+ * (a)는 도입하지 않는다: post는 SET마다 즉시(SYNC_FOR_DEVICE도 SET당 1회,
+ * 상각 없음). 따라서 write span = seal + sync + wire + (c)가 되어 (c)가
+ * 실측으로 드러난다. SYNC 배치화는 이 단계의 A/B가 끝난 뒤의 일이다.
+ *
+ * 게시가 CQE보다 앞서므로 그 사이 GET은 아직 쓰이지 않은 원격을 읽을 수
+ * 있다 — GCM open이 실패하고 기존 badcrc 재시도 경로가 흡수한다(수 µs 창).
+ * 미검증 데이터는 전달되지 않는다. */
+typedef struct _io_pending_storage_write_t {
+    uint8_t io_queue_type;
+    uint8_t io_sub_type;
+    uint8_t payload;
+    LIBEVENT_THREAD *thread;
+    conn *c;
+    mc_resp *resp;
+    io_queue_cb return_cb;
+    io_queue_cb finalize_cb;
+    STAILQ_ENTRY(io_pending_t) iop_next;
+                              /* original struct ends here */
+    item *hdr_it;             /* 게시된 stub — pending이 참조 1개를 쥔다 */
+    uint32_t hv;
+    struct ext_loc loc;       /* WRITE 실패/unlink 시 회수용 사본 */
+    bool write_ok;
+    obj_io io_ctx;            /* embedded — payload가 가리킨다 */
+} io_pending_storage_write_t;
+
+/* 재개 시 out_string()을 쓰면 안 된다 — conn_set_state()로 연결 상태를
+ * 되돌려 파이프라인 중간을 깨뜨린다. suspend해 둔 resp에만 쓴다. */
+static void setp_out_string(mc_resp *resp, const char *str) {
+    size_t len = strlen(str);
+    assert(len + 2 <= WRITE_BUFFER_SIZE);
+    memcpy(resp->wbuf, str, len);
+    memcpy(resp->wbuf + len, "\r\n", 2);
+    resp_add_iov(resp, resp->wbuf, len + 2);
+}
+
+/* drain 문맥(소유 워커 스레드). staging만 반납하고 결과를 적어 GET과 같은
+ * 반환 목록에 올린다 — 락/게시/응답은 전부 loop 레벨에서. */
+static void _storage_set_item_cb(void *e, obj_io *io, int ret) {
+    io_pending_storage_write_t *p = (io_pending_storage_write_t *)io->data;
+    extstore_worker_staging_put(p->thread->ext_worker, io->buf);
+    io->buf = NULL;
+    p->write_ok = (ret == (int)io->len);
+    if (!g_ret_init) { STAILQ_INIT(&g_ret_head); g_ret_init = true; }
+    STAILQ_INSERT_TAIL(&g_ret_head, (io_pending_t *)p, iop_next);
+    (void)e;
+}
+
+/* loop 레벨 (storage_flush_returns → conn_io_queue_return). item_lock을 잡을
+ * 수 있다 — WFLIGHT 해소와 loc 소유권 판정을 여기서 끝낸 뒤 응답을 쓴다. */
+static void storage_set_return_cb(io_pending_t *pending) {
+    io_pending_storage_write_t *p = (io_pending_storage_write_t *)pending;
+    item *it = p->hdr_it;
+    item_lock(p->hv);
+    it->it_flags &= ~ITEM_WFLIGHT;
+    bool linked = (it->it_flags & ITEM_LINKED) != 0;
+    if (!p->write_ok) {
+        /* 쓰이지 않은 원격을 가리키는 stub을 남길 수 없다 — 게시를 되물린다 */
+        if (linked) do_item_unlink(it, p->hv);
+        extstore_free_loc(ext_storage, &p->loc);
+        atomic_fetch_add(&g_pac_fail, 1);
+    } else if (!linked) {
+        /* in-flight 동안 delete/replace됨. storage_delete가 WFLIGHT를 보고
+         * 건너뛰었으므로 회수는 우리 몫이다 */
+        extstore_free_loc(ext_storage, &p->loc);
+    }
+    item_unlock(p->hv);
+    setp_out_string(p->resp,
+        p->write_ok ? "STORED" : "SERVER_ERROR remote write failed");
+    conn_resp_unsuspend(p->c, p->resp);
+}
+
+/* 전송 후 (resp_finish → finalize_cb). io_pending 본체는 호출자가
+ * do_cache_free로 돌려놓는다. */
+static void storage_set_finalize_cb(io_pending_t *pending) {
+    io_pending_storage_write_t *p = (io_pending_storage_write_t *)pending;
+    item_remove(p->hdr_it);   /* pending의 참조 반납 (내부에서 잠근다) */
+    p->io_ctx.next = NULL;
+}
+
+/* 반환: 1 = pending 수락(*hdr_out 게시할 것, 응답은 CQE 이후),
+ *       0 = 이 SET은 못 받음(호출자가 동기 경로로),  -1 = 하드 실패. */
+int storage_store_item_pac(void *e, item *it, item **hdr_out, uint32_t hv,
+                           LIBEVENT_THREAD *t) {
+    size_t ntotal = ITEM_ntotal(it);
+    unsigned int rlen = ntotal + (g_crypto_on ? EXT_CRYPTO_OVERHEAD : 0);
+    if (it->it_flags & (ITEM_CHUNKED|ITEM_HDR)) return 0;
+    void *w = t->ext_worker;
+    mc_resp *resp = t->cur_resp;
+    conn *c = t->cur_conn;
+    if (w == NULL || resp == NULL || c == NULL || resp->io_pending != NULL)
+        return 0;
+
+    client_flags_t flags;
+    FLAGS_CONV(it, flags);
+    item *hdr_it = do_item_alloc(ITEM_key(it), it->nkey, flags, it->exptime,
+                                 sizeof(item_hdr));
+    if (hdr_it == NULL) { atomic_fetch_add(&g_pac_fallback, 1); return 0; }
+    struct ext_loc loc;
+    if (extstore_alloc(e, rlen, PAGE_BUCKET_DEFAULT, &loc) != 0) {
+        do_item_remove(hdr_it);
+        atomic_fetch_add(&g_pac_fallback, 1);
+        return 0;
+    }
+    char *slot = extstore_worker_staging_get(w);
+    if (slot == NULL) {
+        /* staging 배압: 워커당 in-flight 상한 도달 — 동기 경로가 받는다 */
+        extstore_free_loc(e, &loc);
+        do_item_remove(hdr_it);
+        atomic_fetch_add(&g_pac_fallback, 1);
+        return 0;
+    }
+
+    uint64_t prof_start = extstore_prof_stamp();
+    int sealed;
+    if (g_crypto_on) {
+        struct ext_aad aad = { .hv = hv, .page_id = loc.page_id, .pad = 0,
+            .offset = loc.offset, .page_version = loc.page_version };
+        sealed = ext_crypto_seal((uint8_t *)slot, it, ntotal, &aad);
+    } else {
+        memcpy(slot, it, ntotal);
+        sealed = (int)ntotal;
+    }
+    uint64_t prof_crypto_done = extstore_prof_stamp();
+    if (sealed != (int)rlen) {
+        extstore_worker_staging_put(w, slot);
+        extstore_free_loc(e, &loc);
+        do_item_remove(hdr_it);
+        return -1;
+    }
+
+    io_pending_storage_write_t *p = do_cache_alloc(t->io_cache);
+    if (p == NULL) {
+        extstore_worker_staging_put(w, slot);
+        extstore_free_loc(e, &loc);
+        do_item_remove(hdr_it);
+        atomic_fetch_add(&g_pac_fallback, 1);
+        return 0;
+    }
+    assert(sizeof(io_pending_t) >= sizeof(io_pending_storage_write_t));
+    memset(p, 0, sizeof(*p));
+    p->thread = t;
+    p->c = c;
+    p->resp = resp;
+    p->return_cb = storage_set_return_cb;
+    p->finalize_cb = storage_set_finalize_cb;
+    p->io_queue_type = IO_QUEUE_EXTSTORE;
+    p->payload = offsetof(io_pending_storage_write_t, io_ctx);
+    p->hdr_it = hdr_it;
+    p->hv = hv;
+    p->loc = loc;
+    p->io_ctx = (obj_io){ .data = p, .next = NULL, .buf = slot,
+        .page_version = loc.page_version, .len = rlen, .offset = loc.offset,
+        .page_id = loc.page_id, .mode = OBJ_IO_WRITE,
+        .cb = _storage_set_item_cb,
+        .t_start = prof_start, .t_end = prof_crypto_done };
+
+    /* window가 차 있으면 자리가 날 때까지 drain — 동기 경로와 동일한 대기.
+     * 이 drain에서 다른 pending의 cb가 돌 수 있지만 g_ret_head 적재까지만
+     * 이고, item_lock을 잡는 return_cb는 loop 레벨에서만 불린다. */
+    int rc;
+    uint64_t spins = 0;
+    while ((rc = extstore_worker_post_write(w, &p->io_ctx)) == EAGAIN) {
+        spins++;
+        if (extstore_worker_drain(w, 32) < 0) { rc = -1; break; }
+    }
+    if (spins) atomic_fetch_add(&g_worker_write_spins, spins);
+    if (rc != 0) {
+        do_cache_free(t->io_cache, p);
+        extstore_worker_staging_put(w, slot);
+        extstore_free_loc(e, &loc);
+        do_item_remove(hdr_it);
+        return -1;   /* 엔진 사망 */
+    }
+
+    item_hdr *hdr = (item_hdr *)ITEM_data(hdr_it);
+    hdr->page_version = loc.page_version;
+    hdr->offset = loc.offset;
+    hdr->len = loc.len;
+    hdr->page_id = loc.page_id;
+    hdr_it->nbytes = it->nbytes;
+    hdr_it->it_flags |= ITEM_HDR | ITEM_WFLIGHT |
+        (it->it_flags & (ITEM_TOKEN_SENT|ITEM_STALE|ITEM_KEY_BINARY));
+    refcount_incr(hdr_it);              /* pending 참조 — finalize에서 반납 */
+    resp->io_pending = (io_pending_t *)p;
+    /* GET이 없는 워크로드에서도 CQE를 걷을 주체를 보장한다 */
+    worker_storage_arm_drain(t);
+    atomic_fetch_add(&g_pac_posted, 1);
+    *hdr_out = hdr_it;
+    return 1;
+}
+/* ==== v3 pac 끝 ========================================================== */
 
 /*
  * Remote-only SET commit. The input item is a transient request buffer and is

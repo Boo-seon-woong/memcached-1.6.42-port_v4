@@ -247,6 +247,7 @@ static void settings_init(void) {
     settings.idle_timeout = 0; /* disabled */
     settings.hashpower_init = 0;
     settings.item_mag_depth = 32;
+    settings.ext_pac_set = true;   /* v3 pac 브랜치 기본 on — A/B는 no_ext_pac_set */
     settings.item_lock_power = 0;   /* 0 = derive from threadcount */
     settings.shutdown_command = false;
     settings.tail_repair_time = TAIL_REPAIR_TIME_DEFAULT;
@@ -1652,7 +1653,19 @@ enum store_item_type do_store_item(item *it, int comm, LIBEVENT_THREAD *t, const
             item *publish_it = it;
 #ifdef EXTSTORE
             item *remote_it = NULL;
-            if (t->storage &&
+            int pac = 0;
+            /* v3 pac: 단순 SET은 게시를 지금 하고 응답만 CQE로 미룬다.
+             * cur_async_ok는 STORE_PENDING을 처리할 수 있는 호출자(ascii 평문
+             * set)만 세운다 — proxy internal 등은 cur_conn조차 세우지 않는다. */
+            if (t->storage && comm == NREAD_SET && settings.ext_pac_set &&
+                    t->cur_async_ok && t->cur_conn && t->cur_resp) {
+                pac = storage_store_item_pac(t->storage, it, &remote_it, hv, t);
+            }
+            if (pac < 0) {
+                do_store = false;
+            } else if (pac == 1) {
+                publish_it = remote_it;
+            } else if (t->storage &&
                 storage_store_item(t->storage, it, &remote_it, hv) != 0) {
                 do_store = false;
             } else if (remote_it != NULL) {
@@ -1664,8 +1677,10 @@ enum store_item_type do_store_item(item *it, int comm, LIBEVENT_THREAD *t, const
 #ifdef EXTSTORE
                 if (t->storage && (old_it->it_flags & ITEM_HDR))
                     storage_delete(t->storage, old_it);
-#endif
+                stored = (pac == 1) ? STORE_PENDING : STORED;
+#else
                 stored = STORED;
+#endif
                 if (publish_it != it) {
                     it = publish_it;
                     do_item_remove(publish_it);
@@ -1710,7 +1725,17 @@ enum store_item_type do_store_item(item *it, int comm, LIBEVENT_THREAD *t, const
             item *publish_it = it;
 #ifdef EXTSTORE
             item *remote_it = NULL;
-            if (t->storage &&
+            int pac = 0;
+            /* v3 pac: 신규 키도 동일 — 게시 즉시, 응답만 CQE 이후 */
+            if (t->storage && comm == NREAD_SET && settings.ext_pac_set &&
+                    t->cur_async_ok && t->cur_conn && t->cur_resp) {
+                pac = storage_store_item_pac(t->storage, it, &remote_it, hv, t);
+            }
+            if (pac < 0) {
+                do_store = false;
+            } else if (pac == 1) {
+                publish_it = remote_it;
+            } else if (t->storage &&
                 storage_store_item(t->storage, it, &remote_it, hv) != 0) {
                 do_store = false;
             } else if (remote_it != NULL) {
@@ -1719,7 +1744,11 @@ enum store_item_type do_store_item(item *it, int comm, LIBEVENT_THREAD *t, const
 #endif
             if (do_store) {
                 do_item_link(publish_it, hv, cas_in);
+#ifdef EXTSTORE
+                stored = (pac == 1) ? STORE_PENDING : STORED;
+#else
                 stored = STORED;
+#endif
                 if (publish_it != it) {
                     it = publish_it;
                     do_item_remove(publish_it);
@@ -1932,6 +1961,7 @@ void process_stat_settings(ADD_STAT add_stats, void *c) {
     APPEND_STAT("hashpower_init", "%d", settings.hashpower_init);
     APPEND_STAT("item_lock_power", "%d", item_lock_power_used());
     APPEND_STAT("item_mag_depth", "%u", settings.item_mag_depth);
+    APPEND_STAT("ext_pac_set", "%s", settings.ext_pac_set ? "yes" : "no");
     APPEND_STAT("slab_chunk_max", "%d", settings.slab_chunk_size_max);
     APPEND_STAT("tail_repair_time", "%d", settings.tail_repair_time);
     APPEND_STAT("flush_enabled", "%s", settings.flush_enabled ? "yes" : "no");
@@ -4093,7 +4123,8 @@ static void usage(void) {
            "   - ext_qp_per_worker:   RC QPs per worker, 1..4 (default: 1)\n"
            "   - ext_drain_spin:      CQ drain spin budget, 0..4096 (default: 1024)\n"
            "   - ext_drain_empty_max: stop spinning after N consecutive empty CQ polls, 0=never (default: 0)\n"
-           "   - ext_loc_mag_depth:   worker-private remote-loc magazine depth, 0=off (default: 64)\n");
+           "   - ext_loc_mag_depth:   worker-private remote-loc magazine depth, 0=off (default: 64)\n"
+           "   - ext_pac_set / no_ext_pac_set: publish-at-command async SET (default: on)\n");
 #endif
 #ifdef PROXY
     printf("   - proxy_config:        path to lua library file. separate with ':' for multiple files\n"
@@ -4662,6 +4693,8 @@ int main (int argc, char **argv) {
         HASHPOWER_INIT,
         ITEM_LOCK_POWER,
         ITEM_MAG_DEPTH,
+        EXT_PAC_SET,
+        NO_EXT_PAC_SET,
         NO_HASHEXPAND,
         TAIL_REPAIR_TIME,
         HASH_ALGORITHM,
@@ -4711,6 +4744,8 @@ int main (int argc, char **argv) {
         [HASHPOWER_INIT] = "hashpower",
         [ITEM_LOCK_POWER] = "item_lock_power",
         [ITEM_MAG_DEPTH] = "item_mag_depth",
+        [EXT_PAC_SET] = "ext_pac_set",
+        [NO_EXT_PAC_SET] = "no_ext_pac_set",
         [NO_HASHEXPAND] = "no_hashexpand",
         [TAIL_REPAIR_TIME] = "tail_repair_time",
         [HASH_ALGORITHM] = "hash_algorithm",
@@ -5138,6 +5173,14 @@ int main (int argc, char **argv) {
                     goto error;
                 }
                 settings.item_mag_depth = atoi(subopts_value);
+                break;
+            case EXT_PAC_SET:
+                /* 값 없는 플래그 쌍. ext_pac_set=yes 류의 값은 받지 않는다 —
+                 * atoi("yes")==0으로 켜려던 것이 꺼지는 사고(A-8)의 재발 방지 */
+                settings.ext_pac_set = true;
+                break;
+            case NO_EXT_PAC_SET:
+                settings.ext_pac_set = false;
                 break;
             case NO_HASHEXPAND:
                 start_assoc_maint = false;

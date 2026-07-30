@@ -248,7 +248,12 @@ static void settings_init(void) {
     settings.hashpower_init = 0;
     settings.item_mag_depth = 32;
     settings.ext_pac_set = true;   /* v3 pac 브랜치 기본 on — A/B는 no_ext_pac_set */
-    settings.ext_seal_at_flush = true;  /* A/B는 no_ext_seal_at_flush */
+    /* 기본 off: flush 봉인은 co-located A/B에서 처리량 3.15배 하락(2.68M →
+     * 0.85M). 원인은 예상했던 seal 캐시 지역성이 아니다 — crypto/op는 909 →
+     * 1019 ns로 12%만 늘었다. 배치 전체가 free보다 alloc을 먼저 몰아 하므로
+     * item magazine(기본 깊이 32)이 마르고 slabs_lock을 타는 것으로 의심되나
+     * 미확정. span 목적으로 다시 켜려면 그 규명이 선행이다. */
+    settings.ext_seal_at_flush = false;
     settings.item_lock_power = 0;   /* 0 = derive from threadcount */
     settings.shutdown_command = false;
     settings.tail_repair_time = TAIL_REPAIR_TIME_DEFAULT;

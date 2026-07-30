@@ -140,7 +140,7 @@ ping -c2 -W2 10.99.0.2                 # => 0% packet loss
 
 ```sh
 # ariel 호스트에서
-scp -i ~/.ssh/snp_guest -P 2222 <repo>/tools/obwatch.sh ubuntu@localhost:/tmp/
+scp -i ~/.ssh/snp_guest -P 2222 memcached-1.6.42-port_v3/tools/obwatch.sh ubuntu@localhost:/tmp/
 ```
 
 ### D-0. **바이너리 확인** — 최적 구성의 전제
@@ -153,7 +153,7 @@ guest의 `~/kvs-port-v3/`에는 A/B용 변종들이 함께 있고, 평범한 `me
 grep -ac assoc_prefetch ~/kvs-port-v3/memcached
 # => 1 이상이어야 정상. 0이면 구버전이므로 아래로 교체:
 #    (서버가 실행 중이면 "Text file busy" — 먼저 내리고 실행)
-cp ~/kvs-port-v3/memcached.pacb-2d0290a ~/kvs-port-v3/memcached
+cp ~/kvs-port-v3/memcached.span-1f3390a ~/kvs-port-v3/memcached
 grep -ac assoc_prefetch ~/kvs-port-v3/memcached    # => 재확인
 ```
 
@@ -168,7 +168,7 @@ grep -ac assoc_prefetch ~/kvs-port-v3/memcached    # => 재확인
 printf 'stats settings\r\nquit\r\n' | nc 127.0.0.1 11411 | grep ext_pac_set
 # => STAT ext_pac_set yes      (없으면 동기 바이너리다)
 printf 'stats\r\nquit\r\n' | nc 127.0.0.1 11411 | grep ext_setq_max
-# => STAT ext_setq_max 64      (1이면 배치화 꺼진 대조군)
+# => STAT ext_setq_max 1       (기본값. SET span < 30 µs를 위한 설정이다)
 
 # 부하를 조금 준 뒤 pac 경로가 실제로 타는지 (핵심 확인)
 printf 'stats\r\nquit\r\n' | nc 127.0.0.1 11411 | grep -E "cmd_set|ext_pac_posted"
@@ -184,9 +184,18 @@ printf 'stats\r\nquit\r\n' | nc 127.0.0.1 11411 | grep -E "cmd_set|ext_pac_poste
 
 ### D-1. 서버 기동 (tmux — ssh 세션이 끊겨도 유지)
 
+> ⚠️ **kill 직후 바로 기동하면 안 된다.** `kill -9` 뒤 28워커 + QP 56개 +
+> MR 해제가 끝나야 포트가 풀리는데, 그 전에 새 서버가 bind하면
+> `failed to listen on TCP port 11411: Address already in use`로 **새 서버가
+> 조용히 죽고**, 이후 측정은 옛 프로세스(또는 아무것도 없는 상태)를 잰다.
+> 2026-07-30에 이 레이스로 GET 회귀를 오판할 뻔했다. 아래 대기 루프 필수.
+
 ```sh
 tmux kill-session -t mc 2>/dev/null
 for p in $(pgrep -x "memcached[.a-z]*"); do kill -9 $p; done
+# 포트가 실제로 풀릴 때까지 대기 — 생략 금지
+for i in $(seq 1 30); do ss -ltn | grep -q ':11411 ' || break; sleep 1; done
+ss -ltn | grep -q ':11411 ' && { echo "포트가 아직 잡혀 있다"; ss -ltnp | grep 11411; }
 
 tmux new-session -d -s mc "cd \$HOME/kvs-port && exec taskset -c 0-27 env \
 LD_LIBRARY_PATH=\$HOME/covlib:\$HOME/kvs-port \
@@ -199,8 +208,11 @@ EXT_CRYPTO_KEY=\$HOME/kvs-port/ext.key EXT_SLOT_SIZE=256 EXT_READ_SLOTS=64 \
 sleep 8
 pgrep -x "memcached[.a-z]*" >/dev/null && echo "server UP" || tail -5 /tmp/mc.log
 # => "server UP"
-grep -i "genie_connect OK" /tmp/mc.log
-# => raddr/rkey/size와 workers=28 qps/worker=2 window=24 ord=16 이 보이면 정상
+grep -iE "genie_connect OK|Address already in use|reg_mr" /tmp/mc.log
+# => genie_connect OK 한 줄만 나와야 정상.
+#    "Address already in use" → 위 대기 루프를 건너뛴 것. 처음부터 다시.
+#    "reg_mr(...) failed"     → SWIOTLB 파편화. 서버 중복 기동이 없는지 확인하고,
+#                               계속되면 Phase C(모듈 재적재)부터 다시 한다.
 ```
 
 ### D-2. 프리로드 (1M × 64 B) — **`--key-prefix=m-` 필수**
@@ -328,9 +340,19 @@ E-3 출력이 곧 판정 자료다. 아래 기준으로 읽는다.
 
 ### F-1. 합격 기준
 
+> **2026-07-30 판정 기준 변경 — 이전 기록을 그대로 읽지 말 것.**
+> 1. 게이트는 **GET-only와 1:9 혼합 둘 다** 충족해야 한다(각 10 M ops/s,
+>    span < 30 µs). 예전 문서의 "GET-only 기준이며 W2~W4는 게이트 대상이
+>    아니다"는 **폐기**됐다.
+> 2. **SET span도 30 µs 미만이어야 한다.** obwatch의 `gate` 줄은 GET span만
+>    보므로, SET이 있는 워크로드에서는 `Sspan avg` 열을 직접 확인할 것.
+> 3. **span < 30 µs가 10 M ops/s보다 우선한다.** 둘이 상충하면 span을 지킨다
+>    (배치 크기 `ext_setq_max`가 그 조절 손잡이다 — 크면 처리량, 작으면 span).
+
 | 항목 | 기준 | 비고 |
 |---|---|---|
-| gate | `span avg < 30us` **PASS** | 계약. GET이 있는 워크로드에만 적용 |
+| gate (GET span) | `span avg < 30us` **PASS** | obwatch가 자동 판정 |
+| **SET span** | `Sspan avg < 30 µs` | **obwatch가 판정해 주지 않는다.** 표에서 직접 읽을 것. batch=1에서 ~14 µs, batch=64에서 ~255 µs |
 | correctness 필수 5종 | 전부 0 | `get_misses`/`read_fail`/`write_fail`/`engine_dead`/`leak`. 하나라도 0이 아니면 **성능 수치 무효** |
 | `badcrc_from_extstore` | GET-only(W1): **0**<br>혼합(W3/W4): **0이 아닐 수 있음** | 아래 근거 참조 |
 | span 표본 커버리지 | `OK` | 아래 근거 참조. 범위 밖이면 계측 이상 |

@@ -16,6 +16,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <sched.h>
+#include <dlfcn.h>
 #include <sys/socket.h>
 #include <sys/mman.h>
 #include <fcntl.h>
@@ -84,6 +85,37 @@ static char *dma_alloc(size_t sz) {
     }
     void *p = mmap(NULL, sz, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     return p == MAP_FAILED ? NULL : p;
+}
+
+static char *dma_mr_alloc(struct ibv_pd *pd, size_t sz, int access,
+                          struct ibv_mr **mr, bool *coherent) {
+    typedef struct ibv_mr *(*alloc_fn)(struct ibv_pd *, size_t, int);
+    static alloc_fn coherent_alloc;
+    static bool looked_up;
+
+    if (!getenv("EXT_DISABLE_COHERENT_MR")) {
+        if (!looked_up) {
+            void *lib = dlopen("libmlx5.so.1", RTLD_NOW | RTLD_LOCAL);
+            void *sym = lib ? dlsym(lib, "mlx5dv_alloc_coherent_mr") : NULL;
+            memcpy(&coherent_alloc, &sym, sizeof(coherent_alloc));
+            looked_up = true;
+        }
+        *mr = coherent_alloc ? coherent_alloc(pd, sz, access) : NULL;
+        if (*mr) {
+            *coherent = true;
+            fprintf(stderr, "extstore: coherent MR %zuB at %p\n",
+                    sz, (*mr)->addr);
+            return (*mr)->addr;
+        }
+        fprintf(stderr, "extstore: coherent MR %zuB unavailable%s%s; "
+                "using sync fallback\n", sz, coherent_alloc ? ": " : "",
+                coherent_alloc ? strerror(errno) : "");
+    }
+
+    char *p = dma_alloc(sz);
+    if (!p) return NULL;
+    *mr = ibv_reg_mr(pd, p, sz, access);
+    return *mr ? p : NULL;
 }
 
 /* Custom advice added by the SEV SWIOTLB-sync kernel patch (rdma-porting-refs/).
@@ -173,8 +205,10 @@ struct store_engine {
     unsigned int worker_count, w_nqp, w_window;
     char *wbounce_base;
     struct ibv_mr *wbounce_mr;
+    bool wbounce_coherent;
     char *wstaging_base;                 /* P2b */
     struct ibv_mr *wstaging_mr;
+    bool wstaging_coherent;
     unsigned int w_staging_slots, write_slots;
     unsigned int ord_limit, batch;
     struct sockaddr_in peer;
@@ -686,10 +720,8 @@ int extstore_workers_prepare(void *ptr, unsigned int nworkers,
             e->ord_limit ? " pinned" : " negotiated", e->batch);
 
     size_t bsz = (size_t)nworkers * e->read_slots * e->slot_size;
-    e->wbounce_base = dma_alloc(bsz);
-    if (!e->wbounce_base) return -1;
-    e->wbounce_mr = ibv_reg_mr(e->pd, e->wbounce_base, bsz,
-                               IBV_ACCESS_LOCAL_WRITE);
+    e->wbounce_base = dma_mr_alloc(e->pd, bsz, IBV_ACCESS_LOCAL_WRITE,
+                                   &e->wbounce_mr, &e->wbounce_coherent);
     if (!e->wbounce_mr) {
         fprintf(stderr, "extstore: reg_mr(worker bounce %zuB) failed: %s\n",
                 bsz, strerror(errno));
@@ -704,10 +736,9 @@ int extstore_workers_prepare(void *ptr, unsigned int nworkers,
     e->w_staging_slots = e->write_slots / nworkers;
     if (e->w_staging_slots < need) e->w_staging_slots = need;
     size_t ssz = (size_t)nworkers * e->w_staging_slots * e->slot_size;
-    e->wstaging_base = dma_alloc(ssz);
-    if (!e->wstaging_base) return -1;
-    e->wstaging_mr = ibv_reg_mr(e->pd, e->wstaging_base, ssz,
-                                IBV_ACCESS_LOCAL_WRITE);
+    e->wstaging_base = dma_mr_alloc(e->pd, ssz, IBV_ACCESS_LOCAL_WRITE,
+                                    &e->wstaging_mr,
+                                    &e->wstaging_coherent);
     if (!e->wstaging_mr) {
         fprintf(stderr, "extstore: reg_mr(worker staging %zuB) failed: %s\n",
                 ssz, strerror(errno));
@@ -851,7 +882,7 @@ int extstore_worker_sync_for_device(void *worker, obj_io *const *ios,
                                     unsigned int n) {
     store_worker *w = worker;
     store_engine *e = w->e;
-    if (g_skip_dma_sync || n == 0) return 0;
+    if (g_skip_dma_sync || e->wstaging_coherent || n == 0) return 0;
     uint64_t t_sync_start = g_prof_on ? prof_rdtsc() : 0;
     int adv = 0;
     while (n > 0) {
@@ -887,7 +918,7 @@ static int worker_post_write_inner(store_worker *w, obj_io *io, int do_sync) {
         w->prof_w_crypto_ns += (uint64_t)((io->t_end - io->t_start) * g_ns_per_cycle);
     if (do_sync) {
         /* push the sealed bytes to the device before the NIC reads them */
-        int adv = g_skip_dma_sync ? 0
+        int adv = (g_skip_dma_sync || e->wstaging_coherent) ? 0
                 : ibv_advise_mr(e->pd, IBV_ADVISE_MR_ADVICE_SYNC_FOR_DEVICE,
                                 IBV_ADVISE_MR_FLAG_FLUSH, &sg, 1);
         static _Atomic int w_dev_warned;
@@ -980,7 +1011,7 @@ int extstore_worker_drain(void *worker, int budget) {
             sync_sg[nsync++] = (struct ibv_sge){ .addr = (uintptr_t)io->buf,
                 .length = io->len, .lkey = e->wbounce_mr->lkey };
     }
-    if (nsync && !g_skip_dma_sync) {
+    if (nsync && !g_skip_dma_sync && !e->wbounce_coherent) {
         int adv = ibv_advise_mr(e->pd, IBV_ADVISE_MR_ADVICE_SYNC_FOR_CPU,
                                 IBV_ADVISE_MR_FLAG_FLUSH, sync_sg, nsync);
         static _Atomic int w_advise_warned;

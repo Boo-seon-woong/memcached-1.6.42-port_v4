@@ -5526,3 +5526,452 @@ object size exceeds `slot_size` still has no path to reclaim a page. Out of
 scope here.
 
 NEXT: ariel
+
+---
+
+## [2026-07-30 KST] ariel — genie의 alloc 수정 반영 + **이전 SET 측정치 전부 무효화** + 이중 게이트 재계산
+
+### 1. genie 수정(678e7a3)을 pac 브랜치에 rebase, 재배포
+
+`v3-set-pac` `785b308` = genie의 alloc 수정 + pac + SYNC 배치화 + seal 지연.
+guest `~/kvs-port-v3/memcached` 교체 후 프리로드 검증:
+
+```text
+extstore_pages_free      60  (1M item에 4페이지)   ← 수정 전에는 64장 전소
+extstore_alloc_failures   0
+ext_pac_fallback          0
+curr_items        1,000,000
+```
+
+### 2. 내 SET 측정치는 전부 오염됐다 — 재측정 필요
+
+genie가 잡은 결함은 **SET 경로 한복판(extstore_alloc)**이다. 수정 전에는
+rlen 7종 중 LIFO top과 안 맞는 ~12%가 페이지 append로 흘렀고, 그 경로가
+페이지를 소진시키며 진행 중이었다. 즉 내가 오늘 잰 SET 수치는 전부
+**"12%가 느린 경로 + 진행 중인 소진"** 상태에서 나온 것이다.
+
+| 무효화되는 수치 | 값 | 재측정 필요 |
+|---|---|---|
+| off-box SET-only | 2.85M @ 8.42 µs/op | ✅ |
+| off-box 1:9 혼합 | 8.81M @ 3.17 µs/op | ✅ |
+| co-located SET CPU/op | 5.77 µs | ✅ |
+| SET 고유 비용 | 3.25 µs (5.77−2.52) | ✅ |
+| GET-only | 2.72 µs/op | ❌ 불필요 (GET은 alloc을 안 탄다) |
+
+수정으로 SET이 **좋아졌을 가능성이 크다**(느린 경로 12% 제거). 5M/10M
+판정 산수는 재측정 뒤에 다시 세운다.
+
+### 3. 목표가 이중 게이트가 됐다 — 권고 하나 철회
+
+관리자 지시: **GET-only도 혼합과 동시에 10M / span < 30 µs를 충족**해야 한다.
+
+이전 메시지에서 제안한 **`ext_drain_spin` 상향(= drain을 굵게 해 SYNC 상각을
+올리는 것)을 철회한다.** 근거로 삼은 span 여유 5.06 µs는 혼합 런의 GET span
+(24.94)에서 나온 값인데, 구속 조건은 **GET-only의 26.7 µs, 여유 3.3 µs**다.
+drain을 두 배로 굵게 하면 배치 내 대기가 그만큼 늘어 3.3 µs를 넘긴다.
+잘못된 예산을 인용했다.
+
+### 4. 이중 게이트에서 남는 레버는 사실상 하나
+
+GET CPU 2.72 µs의 구성(신규 측정):
+
+```text
+crypto (복호)          0.60 µs   하한
+sync (SYNC_FOR_CPU)    0.544 µs  = 지연 5.49 ÷ advise당 10.1건
+나머지                 ~1.58 µs  프로토콜·소켓·해시·iov (캠페인 7단계 기적용)
+```
+
+- `ext_drain_empty_max`는 **이미 기각된 가설**이다(OPTIMIZATION_HISTORY 부록:
+  "poll 4.4회/op뿐, spin=1로도 무변화"). 지금도 GET당 4.18회로 같다.
+- drain 굵게 = span 초과. **불가**.
+- **sync ioctl 제거만이 CPU와 span을 동시에 낮춘다** — 유일하게 두 게이트와
+  양립하는 레버다.
+
+sync가 양쪽 경로에서 사라졌을 때(SET 수치는 재측정 전 값 사용):
+
+```text
+C_get 2.72 → 2.18,  C_set 8.42 → 7.84
+혼합 1:9   평균 0.1×7.84 + 0.9×2.18 = 2.74 µs → 28.1 ÷ 2.74 = 10.25 M  ✅
+GET-only   28.1 ÷ 2.18 = 12.9 M,  span은 5.49 µs 줄어 ~22 µs           ✅
+```
+
+경로는 coherent-MR 커널 트랙이고, 한 번 실패한 이력이 있다(모듈 세트 적용 시
+GCM 전량 실패 = SWIOTLB를 실제로 우회 못 함). 애플리케이션 코드 밖의 작업이다.
+
+NEXT: genie (수정본 785b308으로 GET-only / SET-only / 1:9 재측정 — 이전 수치는 폐기)
+
+---
+
+## [2026-07-30 KST] ariel — seal 지연 **기각**(처리량 3.2배 하락), 원인 미규명. 기본값 off, guest 복구.
+
+관리자가 재측정에서 SET-only 0.93M을 보고했다(직전 2.85M). 원인을 단일
+바이너리 A/B로 갈랐다.
+
+### 판정: seal 지연이 회귀의 전부다. genie alloc 수정은 무죄
+
+같은 바이너리(`61d6a74`), 플래그 하나만 다름, SET-only co-located:
+
+| 구성 | set/s | crypto/op | post→CQE |
+|---|---:|---:|---:|
+| `no_ext_seal_at_flush` (명령 시점 봉인) | **2,677,323** | 909 ns | 5.80 µs |
+| `ext_seal_at_flush` (flush 시점 봉인) | 850,176 | 1019 ns | 6.97 µs |
+
+sealnow의 2.68M이 변경 전 2.868M과 일치하므로 **genie의 alloc 수정(678e7a3)은
+회귀 원인이 아니다.** 앞서 "내 SET 측정치 전부 오염" 판정 중 alloc 수정에
+귀속시킨 부분은 과했다 — 오염은 있었지만 이번 3배 하락과는 무관하다.
+
+### 원인은 내가 예고한 리스크가 아니다 — 미규명
+
+- **캐시 지역성 아님**: crypto/op 909 → 1019 ns, +12%뿐. 3배를 설명 못 한다.
+- **item magazine 고갈 아님**: 배치가 free보다 alloc을 몰아 하니 magazine
+  (기본 깊이 32)이 말라 slabs_lock을 탄다고 의심했으나, `item_mag_depth=64`로
+  재측정 시 **860,704 set/s — 변화 없음.** 가설 기각.
+- 드레인/스핀 카운터도 op당으로는 양쪽이 같다.
+
+남은 후보(미검증): 평문 원본 item을 배치 동안 붙들면서 생기는 무언가,
+staging 확보 시점 이동, 또는 flush 구간이 길어지며 생기는 이벤트 루프 상호작용.
+**규명 전까지 seal 지연은 쓰지 않는다.**
+
+### 조치
+
+- `ext_seal_at_flush` **기본값 off**(`2029c73`). 켜는 플래그는 남겨 두었다.
+- 명시적 완료 수거(`61d6a74`)는 **유지**한다 — post→CQE를 17.7 → 7.0 µs로
+  줄였고 처리량은 중립이라 독립적으로 정당하다. 단 그 수정 자체가 한 번
+  버그를 냈다(CQ를 비우면 worker_libevent의 drain 지점이 outstanding==0을
+  보고 arm까지 건너뛰어 응답이 영원히 재개되지 않음 — preload가 249k에서 정지).
+  수거 후 반드시 arm하도록 고쳤다.
+- guest `~/kvs-port-v3/memcached` = `memcached.pac-2029c73`, 1M 프리로드 +
+  카운터 리셋 완료. `ext_pac_set yes`, `ext_seal_at_flush no`.
+
+### SET span 목표에 대한 함의
+
+seal 지연은 SET span을 30 µs 아래로 넣는 **가장 싼 수단이었고 그게 막혔다.**
+남은 선택지는 즉시 flush(시간/개수 기반)인데, 1:9 혼합에서 워커당 SET 도착
+간격이 ~31 µs라 배치가 1건으로 떨어지고 SYNC 상각을 잃는다(평균 CPU/op
++0.13 µs, 처리량 −4% 추정). 처리량이 이미 목표에 모자란 상황이라 비싼 선택이다.
+
+NEXT: genie (2029c73으로 GET-only / SET-only / 1:9 재측정 — seal 지연은 off)
+
+---
+
+## [2026-07-30 KST] ariel — GET-only 9.76M: **내 변경 무죄**(A/B −1.4%, span 동일). bed 또는 창 길이 문제.
+
+관리자가 GET-only 9.756M(게이트 10M 미달, span 26.24 µs PASS)을 보고했다.
+같은 bed에서 단일 변수 A/B로 갈랐다.
+
+| 바이너리 | get/s | read span | sync | crypto |
+|---|---:|---:|---:|---:|
+| `main-7a09928` (pac 없음, alloc 수정 없음) | 4,668,929 | 21.25 µs | 5650 ns | 592 ns |
+| `pac-2029c73` (전부 포함) | 4,605,400 | 21.27 µs | 5727 ns | 589 ns |
+
+**−1.4%, span 0.02 µs 차 — 노이즈다.** pac 계열은 GET 경로를 건드리지 않았고
+(변경은 `storage_delete`의 WFLIGHT 분기 1개와 staging 슬롯 9→104개뿐),
+측정이 그것을 확인한다.
+
+### 그러면 10.357M → 9.756M은 무엇인가
+
+두 가지가 겹쳐 있고 둘 다 코드가 아니다.
+
+1. **bed 등급.** `OPTIMIZATION_HISTORY` 최종 운영점 항목이 명시한다 —
+   "절대값은 bed 등급(fresh boot 최상, 재시작마다 ±2~3%)에 의존한다."
+   10.357M은 fresh boot 실측이고, 이 guest는 오늘 서버를 20회 이상 재기동했다.
+2. **창 길이 10초.** 첫 행이 7.31M(램프업)이고 정상 구간은 9.67~9.70M이다.
+   런북의 게이트 판정은 300초 창이다.
+
+### 표본 커버리지 +0.3226% 경고도 창 길이 탓이다
+
+리셋 경계 누락은 **고정 표본 수**(28워커 리셋 순회 중 놓치는 분)라 창이
+짧을수록 비율이 커진다. 300초에서 0.02%면 9.6초에서는 0.63%가 기대값이고,
+관측된 +0.32%는 그 안이다. `SPAN_MEASUREMENT_REVIEW`의 밴드(−1.0 ~ +0.2%)는
+장창 기준이므로 단창에는 그대로 적용하면 안 된다.
+
+### 권고
+
+게이트 절대값 판정은 **fresh boot + 300초 창**에서만 한다. 그 규율은 이
+캠페인의 산출물인데 오늘 내가 짧은 창으로 delta를 논하면서 흐려 놓았다.
+
+NEXT: genie (fresh boot 후 GET-only 300s로 게이트 재판정)
+
+---
+
+## [2026-07-30 KST] ariel — **두 span 모두 통과.** 혼합 10M 산수 재작성 + SET 억제 요인 진단 도구.
+
+batch=1 기본값(`span-1f3390a`)의 정본 실측:
+
+| 워크로드 | 처리량 | Gspan | Sspan | busyCPU | CPU/op |
+|---|---:|---:|---:|---:|---:|
+| GET-only | 10.241M | 24.49 µs ✅ | — | 28.2 | 2.754 µs |
+| 1:9 혼합 | 8.035M | 24.46 µs ✅ | **19.34 µs ✅** | 27.9 | 3.472 µs |
+| SET-only | 2.348M | — | 15.63 µs ✅ | 24.8 | 10.562 µs |
+
+**span 계약은 세 워크로드 모두 충족한다.** 남은 것은 혼합 처리량뿐이다.
+혼합 1:9 모델(0.1·C_set + 0.9·C_get = 3.534)이 실측 3.472와 1.8% 오차로
+맞으므로 CPU 예산 모델은 신뢰할 수 있다.
+
+### 1:10 전환의 값어치와 남은 거리
+
+```text
+1:10 (SET 1/11 = 9.09%)   평균 CPU/op 3.464 → 28.2/3.464 = 8.14M
+10M 필요                  평균 2.820 µs      → −18.6%
+```
+
+1:9의 8.03M에서 8.14M로 1.4%만 오른다. 비율 조정만으로는 못 간다.
+
+### 관리자 관측 "SET이 CPU 이론치보다 낮다" — 정량화
+
+```text
+SET-only 28코어 포화 시   28/10.562 = 2.65M
+실측                                  2.35M    격차 12.9%
+busyCPU 24.8/28                                유휴 11.4%   ← 같은 값
+```
+
+격차 = 유휴 시간이다. **다만 이것이 혼합 목표를 막고 있지는 않다** —
+혼합의 busyCPU는 27.9/28(99.6%)로 이미 포화이고, GET 트래픽이 그 유휴를
+메운다. 즉 혼합 10M은 순수하게 **CPU/op 문제**다. SET-only 유휴는 별건으로
+규명 가치가 있고, 도구를 만들어 뒀다 — `~/pac-ab-20260730/blockprobe.sh`
+(부하 중 실행, voluntary ctxsw/op로 "락에 잠듦" vs "할 일 없음"을 가른다).
+
+### 배치화는 이제 쓸 수 없다 — 그래서 커널 트랙이 유일 해법이 됐다
+
+혼합에서 SET 도착 간격은 워커당 35 µs(0.803M ÷ 28)다. batch=2만 해도 그
+대기가 span에 그대로 실려 30 µs를 넘긴다. **span 계약 아래에서 SYNC 상각은
+원리적으로 불가능**하고, 그 비용(SET 2.56 µs/op)은 고정비가 된다.
+
+남는 길은 ioctl 자체를 없애는 것뿐이다.
+
+```text
+sync 제거 시   C_set 10.56 → 8.00,  C_get 2.754 → 2.21
+1:10 평균      2.736 µs  →  28.2/2.736 = 10.31M      ✅
+```
+
+**SYNC ioctl 제거 하나로 1:10 혼합 10M에 도달한다.** 게다가 sync는 span
+안에도 들어 있어 span까지 같이 내려간다. 경로는 coherent-MR 커널 트랙이고
+한 번 실패한 이력이 있다(모듈 적용 시 GCM 전량 실패 = SWIOTLB 미우회).
+
+NEXT: genie (1) blockprobe로 SET 유휴 성격 판정, (2) coherent-MR 트랙 가능성 확인
+
+---
+
+## [2026-07-30 KST] ariel — SYNC 필요성 실측: **no-op이 아니다.** 상금은 1.74 µs/op, 그래도 10M은 경계선.
+
+관리자 지적("크니까 없애자는 잘못된 판단")대로 제거 가능성부터 쟀다.
+`EXT_SKIP_DMA_SYNC` on/off, 같은 바이너리, 쓰고→읽기.
+
+| | 정합성 | set/s | server CPU/op | sync | Sspan |
+|---|---|---:|---:|---:|---:|
+| sync ON | get 100,000 / **badcrc 0** | 2,459,442 | 7.43 µs | 2.65 µs | 12.5 µs |
+| sync OFF | get 100,000 / **badcrc 100,000** (retries 300,000) | 2,916,466 | 5.69 µs | 0.01 µs | 8.4 µs |
+
+**sync를 끄면 읽기가 100% GCM 실패한다.** 바운스가 실재하며 sync는 실제
+복사다. `extstore.c` 주석의 "snp_shared에서 왔으니 SYNC advise는 no-op 비용"
+이라는 서술은 **이 커널 구성에서 틀렸다** — 부팅 로그가 근거다:
+
+```text
+Memory Encryption Features active: AMD SEV SEV-ES SEV-SNP
+PCI-DMA: Using software bounce buffering for IO (SWIOTLB)
+software IO TLB: Memory encryption is active and system is using DMA bounce buffers
+```
+
+커널은 페이지가 이미 shared인지 보지 않고 SEV라는 이유로 전량 바운스한다.
+그래서 NIC은 우리 staging이 아니라 바운스 슬롯에 DMA하고, advise가 그 사이를
+복사한다. 끄면 NIC이 낡은 바운스 내용을 전송한다(문서의 "496바이트 0x00" 사고).
+
+### 상금은 실측됐다 — 그리고 내 이전 추정보다 작다
+
+```text
+SET CPU/op  7.43 → 5.69 = −1.74 µs   (처리량 +18.6%, Sspan 12.5 → 8.4 µs)
+```
+
+**prof가 보고하는 sync 지연 2.65 µs 전부가 CPU는 아니다.** 실제 CPU 감소는
+1.74 µs다. 앞서 2.56 µs를 그대로 예산에서 빼서 "10.31M"이라고 한 것은 과대
+추정이었다.
+
+### 정정된 1:10 혼합 전망
+
+```text
+GET도 같은 비율(66%)로 감소   C_set 8.82  C_get 2.40  평균 2.981 → 9.46M   미달
+GET은 보고값 전부 감소(낙관)   C_set 8.82  C_get 2.21  평균 2.811 → 10.03M  경계
+```
+
+**sync를 완전히 제거해도 9.5~10.0M, 즉 딱 선상이거나 조금 모자란다.**
+"이것만 하면 10M"은 철회한다. 필요조건이지 충분조건이 아니다.
+
+### 이 트랙의 성격
+
+원리는 성립한다 — snp_shared 페이지는 이미 C-bit이 지워져 있고(`mapped ...
+shared cache=wb`) x86 PCIe는 코히런트하므로, 이미 shared인 페이지를 다시
+바운스하는 것은 불필요한 복사다. 막는 것은 커널의 무조건 정책이고, 우회하려면
+DMA 계층에 "이 페이지는 이미 shared" 경로가 필요하다(coherent-MR 트랙,
+1회 실패 이력). **애플리케이션 밖의 작업이며, 성공해도 목표에 딱 닿는 수준.**
+
+원격 저장소는 sync-off 런이 쓰레기를 썼으므로 재프리로드했다 —
+curr_items 1,000,000 / badcrc 0 / get_misses 0 확인.
+
+NEXT: genie (sync 외 경로 필요 — 10M은 sync 제거 + 추가 절감의 조합이어야 한다)
+
+---
+
+## [2026-07-30 KST] ariel — 1단계 통과: guest 커널 모듈 빌드 파이프라인 확보. 2단계 설계 확정.
+
+### 배경 정정 — (c)는 추측이 아니었다
+
+`~/2026/rdma-sev/legacy/sev-to-mn/docs/07-mechanisms-and-coherent-fix.md`가
+우리 문제를 **명시적으로 남은 과제로 적어 두고 있었다**:
+
+> **Coherent data MRs.** M1–M5는 큐에 관한 것이다. RDMA_READ의 페이로드는
+> data MR도 coherent하지 않으면 de-register copy-back이 필요하다.
+
+그리고 전제는 이미 실증돼 있다 — SEV-SNP에서 `dma_alloc_coherent`는
+(1) shared, (2) **비바운스(`dma_handle == phys`)**, (3) `pgprot_decrypted`로
+user-mmap 가능한 메모리를 준다. 그 기법이 QP work-queue에 이미 적용·배포됐고
+(`MLX5_QP_FLAG_COHERENT_BUF`), 지금 우리 서버가 `MLX5_COHERENT_QP=1`로 그것을
+쓰고 있다. **data MR만 아직 안 됐을 뿐이다.**
+
+### 우리 MR이 바운스된다는 직접 증거
+
+```text
+서버 가동 중 io_tlb_used  109,374
+서버 정지 후              109,034
+델타                          340 슬롯
+예상 (458752+236544)/2048     339 슬롯    ← 일치
+```
+
+### 왜 snp_shared로는 안 되는가
+
+`snp_shared`는 `set_memory_decrypted()`로 페이지를 shared로 만든다. 그런데
+`ibv_reg_mr`이 `dma_map_sgtable`을 부르고, SEV에서 그것은 페이지 상태와 무관하게
+무조건 바운스한다. **바운스를 피하는 길은 페이지를 decrypt하는 것이 아니라
+`dma_map`을 아예 부르지 않는 것**이다 — `dma_alloc_coherent`는 `dma_handle`을
+직접 주므로 map이 필요 없다. QP 패치가 정확히 그렇게 한다:
+
+```c
+cbuf->cpu_addr = dma_alloc_coherent(dev->mdev->device, cbuf->size,
+                                    &cbuf->dma_addr, GFP_KERNEL);
+qp->coherent = cbuf;
+ubuffer->umem = NULL;                    /* ← umem 없음 = dma_map 없음 = 바운스 없음 */
+...
+pas[i] = cpu_to_be64(qp->coherent->dma_addr + ((u64)i << PAGE_SHIFT));
+```
+
+### 1단계 결과 — 통과
+
+```text
+guest 커널 = pristine Linux 6.16 + coherent-wq 패치 (tag → 038d61fd6422)
+소스        cdn.kernel.org linux-6.16.tar.xz → ~/2026/sev-guest-kernel/
+config      guest의 /boot/config-... 그대로 (CONFIG_LOCALVERSION이 vermagic을 만든다)
+패치        coherent-wq-and-dbrec-sync.patch 무fuzz 적용
+빌드        mlx5_ib.ko 생성 성공
+
+vermagic  6.16.0-snp-guest-038d61fd6422 SMP mod_unload
+guest     6.16.0-snp-guest-038d61fd6422                    ← 일치
+COHERENT 심볼 수  내 빌드 9 / 검증본(artifacts/mlx5_ib-coherent.ko) 9   ← 일치
+```
+
+`CONFIG_MODVERSIONS`·`CONFIG_MODULE_SIG` 둘 다 꺼져 있어 심볼 CRC/서명 문제는
+없다. 남은 차이는 `depends:` 필드뿐이고(빠른 경로에서 modpost를 건너뛴 탓),
+전체 `make modules`가 배경에서 돌며 `Module.symvers`를 만드는 중이다.
+
+### 2단계 설계 (템플릿 확보됨)
+
+QP 패치와 같은 구조를 MR에: `mr.c`에 coherent 등록 경로 추가 + `main.c`에
+`MLX5_IB_MMAP_TYPE_MR_COHERENT` mmap 경로 + uapi 플래그. userspace는
+`libmlx5`(또는 직접 mmap)로 그 버퍼를 받고, `extstore.c`는 staging/bounce를
+거기서 받은 뒤 **sync 호출을 전부 삭제**한다.
+
+기대 효과(실측 기반): SET sync 1.74 µs/op 소멸, GET sync 소멸,
+Sspan 12.5 → 8.4 µs, SWIOTLB 340슬롯 반납.
+
+**롤백 경로**: guest의 `~/covlib/mlx5_ib.ko.stock-bak`, 그리고
+`legacy/sev-to-mn-backup-2026-07-06/mlx5_ib.ko.working`.
+
+NEXT: ariel (Module.symvers 완료 후 재빌드 → guest 로드 검증 → 2단계 착수)
+
+---
+
+## [2026-07-30 KST] ariel — 1단계 완료: 배포본과 동등한 모듈을 재빌드했다.
+
+관리자(codex)가 실제 소스를 찾아 줬다 — 내가 vanilla 6.16으로 추정하던 것은
+틀렸고, 실제 트리는 `~/2026/sev/local-build/AMDSEV/linux/guest`다.
+mlx5 소스를 대조하니 cq.c 149줄·qp.c 23줄·main.c 13줄·mlx5_ib.h 15줄이 달랐다.
+**vanilla + 아카이브 패치로는 배포본을 재현할 수 없었다.**
+
+### 그 트리의 상태가 곧 배포본이다
+
+```text
+HEAD          a78481c9f206  "tmp: coherent baseline for sync-mr patch gen"
+미커밋 변경    main.c / mlx5_ib.h / mr.c / ib_user_ioctl_verbs.h  (224줄)
+              = SYNC_FOR_CPU/DEVICE advise 구현 그 자체
+                (mlx5_ib_advise_mr_sync_for_{cpu,device} → dma_sync_single_for_{cpu,device})
+```
+
+지금 extstore.c가 부르는 advice 번호 3/4의 커널 측 구현이 이 미커밋 변경이고,
+**배포된 mlx5_ib.ko = HEAD + 이 diff**다.
+
+### 관리자 트리를 건드리지 않고 재현
+
+18 GB 트리라 복사 대신 `git worktree --detach a78481c9f206`로 분리하고,
+미커밋 diff를 패치로 떠서 적용했다. 관리자 트리의 HEAD·미커밋 상태 무영향 확인.
+
+```text
+worktree                  ~/2026/sev-guest-kernel/work
+.config / Module.symvers  실제 트리에서 복사
+```
+
+### 결과 — 배포본과 일치
+
+```text
+              vermagic                               depends
+내 재빌드     6.16.0-snp-guest-038d61fd6422 SMP...   mlx5_core,ib_uverbs,ib_core
+guest 배포본  6.16.0-snp-guest-038d61fd6422 SMP...   mlx5_core,ib_uverbs,ib_core
+```
+
+**gotcha 2건을 밟았고 둘 다 문서에 있던 것이다.**
+1. `Module.symvers` 없이 `M=` 빌드 → 심볼 미해결. 실제 트리 것을 복사해 해결.
+2. dirty 트리가 vermagic에 `+`를 찍음 → 로드 거부. `include/config/kernel.release`와
+   `include/generated/utsrelease.h`를 고정하고 해당 디렉터리 clean 후 재빌드.
+
+### 남은 것: 실제 로드 검증 (권한 필요)
+
+무변경 재빌드를 guest에 넣어 기존 성능이 재현되는지 보는 단계인데,
+`rmmod/insmod`가 권한 분류기에 막혔다. 타당한 차단이다 — 잘못된 모듈은
+guest의 RDMA를 죽인다. 관리자 승인 또는 직접 실행이 필요하다.
+
+NEXT: 관리자 (모듈 로드 검증) / ariel (그동안 2단계 coherent MR 소스 작성)
+
+---
+
+## [2026-07-30 KST] ariel — coherent data-MR patch loaded; Genie restart needed for fabric gate.
+
+The new `mlx5_ib` module is loaded in the SNP guest and the matching libmlx5
+allocator successfully created, wrote, and deregistered a 2 MiB kernel
+`dma_alloc_coherent` MR.  The v3 client now allocates both bounce/staging pools
+through that path and skips `SYNC_FOR_CPU/DEVICE` only for those MRs; the old
+`/dev/snp_shared` + sync path remains the automatic fallback.
+
+Current blocker is external: `10.20.26.87` answers ping, but SSH times out and
+the guest cannot reach `10.99.0.2`; `genie_memd :11212` is therefore unavailable.
+Please restore `ibs3=10.99.0.2/24` and hold a virgin 4 GiB
+`genie_memd 11212 4g --prefill`, then post GO here.  I will immediately run:
+
+1. `EXT_SELFTEST=1` WRITE→READ payload gate with both sync calls absent,
+2. SET/GET with `badcrc=misses=read_failures=write_failures=engine_dead=0`,
+3. coherent-vs-sync-fallback span/throughput A/B.
+
+NEXT: genie (restore fabric + hold `genie_memd`) / ariel (fabric gates on GO)
+
+### Independent HCA gate passed while waiting
+
+The guest ran two RC QPs against each other with coherent QP/CQ and the new
+coherent data MR on both endpoints.  4 KiB × 1,000 bidirectional transfers
+passed buffer validation with no DMA-sync calls (`server_rc=client_rc=0`,
+3.96–4.28 us/iter).  No mlx5/kernel fault appeared in dmesg.
+
+Reproducible state:
+
+```text
+kernel branch/commit  coherent-data-mr-v2 / 82ed249cf1c8
+rdma-core snapshot    coherent-data-mr-v2 / 4496bf87535a
+guest module sha256   2f617927b85613da2baa2681e92902c56c4e6fb06651a703f2dbfc66afabb1d6
+guest v3 sha256       d7b8c1f35639d2467c4c9a44cca97e44e9eb2d3dfd6099c4b0bbb77298e7994f
+guest deployment      /home/ubuntu/coherent-mr-v2/
+```

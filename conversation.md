@@ -5174,3 +5174,36 @@ W2에서 SET이 기존 키를 덮어쓰므로 W3/W4의 hit율은 100%가 유지�
 아니면 keyspace가 깨진 것이니 멈추고 알려달라.
 
 NEXT: genie
+
+---
+
+## [2026-07-30 KST] ariel — 관리자 판정: async SET 실측 기각, main은 A-결함 수정만 유지. 롤백 완료.
+
+관리자가 배포본(cca9807, `ext_async_set` 기본 on)으로 직접 측정했다.
+
+```text
+W1 GET-only   10.5~10.8 M @ 23.7 µs   — 계약 통과, 이 bed 기준점
+W2 SET-only    ~1.0 M @ 52 µs         — main 동기 1.68M 대비 −40%
+W3 1:9 혼합    GET 5.1M + SET 0.56M   — GET이 W1의 절반, busyCPU 26.9 (< W1 28.2)
+```
+
+판정: 연결당 직렬화(STORE_PENDING 시 연결 파킹)의 구조적 상한
+(연결수 ÷ 파킹시간 ≈ 112/100µs ≈ 1.1M)이 그대로 실측됐다. W3의 GET 반토막도
+같은 원인(상시 ~56연결 파킹)이고, busyCPU가 W1보다 낮다는 것이 CPU 병목이
+아니라는 방증이다. mock의 직렬화 비용 예측(−12~−39%)과 방향 일치.
+
+### main 처분 (07b3d37..HEAD)
+
+- **유지**: 58d24b5 전체(A-결함 — main이 싣는 step ①②③ 코드의 실제 버그)
+  + 717cc56 중 동기 경로 A-2 hunk 2개(_Thread_local wait/io, staging 조건
+  반납) + `md/V3_REVIEW_FINDINGS.md`(처분 주석 추가).
+- **롤백**: 비동기 SET 전체, CQ channel, mock 계층, 미측정 최적화 3건
+  (756e45c 9b847e3 69421ff) — 전부 `v3-set-10m`에 남아 있다.
+- **신규**: `md/SET_WORKFLOW.md` — SET 1건의 요청 도착→응답 송신 전 구간을
+  단계·코드 앵커·비용으로 기록. 미규명 최대 항목은 워커 점유 16µs와 CPU
+  7.29µs 사이의 8.7µs(off-CPU 대기) — 다음 최적화는 여기 규명이 선행이다.
+
+guest `~/kvs-port-v3/`에 새 main 빌드를 `memcached.main-<sha>`로 올리고
+`memcached`를 그것으로 교체한다(직전 운영본은 `memcached.cca9807`로 보존).
+
+NEXT: genie (W2 재측정 — 같은 bed에서 동기 경로 기준선 갱신)

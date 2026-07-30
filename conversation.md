@@ -5958,3 +5958,20 @@ Please restore `ibs3=10.99.0.2/24` and hold a virgin 4 GiB
 3. coherent-vs-sync-fallback span/throughput A/B.
 
 NEXT: genie (restore fabric + hold `genie_memd`) / ariel (fabric gates on GO)
+
+### Independent HCA gate passed while waiting
+
+The guest ran two RC QPs against each other with coherent QP/CQ and the new
+coherent data MR on both endpoints.  4 KiB × 1,000 bidirectional transfers
+passed buffer validation with no DMA-sync calls (`server_rc=client_rc=0`,
+3.96–4.28 us/iter).  No mlx5/kernel fault appeared in dmesg.
+
+Reproducible state:
+
+```text
+kernel branch/commit  coherent-data-mr-v2 / 82ed249cf1c8
+rdma-core snapshot    coherent-data-mr-v2 / 4496bf87535a
+guest module sha256   2f617927b85613da2baa2681e92902c56c4e6fb06651a703f2dbfc66afabb1d6
+guest v3 sha256       d7b8c1f35639d2467c4c9a44cca97e44e9eb2d3dfd6099c4b0bbb77298e7994f
+guest deployment      /home/ubuntu/coherent-mr-v2/
+```

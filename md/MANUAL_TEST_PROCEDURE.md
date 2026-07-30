@@ -13,6 +13,24 @@
 
 기호: 각 단계 제목의 `[...]`가 실행 위치다. `# =>` 는 기대 출력.
 
+> ### 2026-07-31 — coherent MR 커널 패치 반영. 경로가 전부 바뀌었다.
+>
+> 이 절차서는 이제 **coherent data MR 빌드**를 기준으로 한다. `~/covlib`는
+> 패치 이전 자산이고, 새 자산은 전부 `~/coherent-mr-v2/` 아래에 있다.
+> 셋 중 하나라도 옛 경로를 쓰면 **패치 이전을 재게 된다** — 실제로 그 사고가
+> 2026-07-30에 있었다.
+>
+> ```text
+> 커널 모듈   ~/coherent-mr-v2/mlx5_ib.ko           (구: ~/covlib/mlx5_ib.ko)
+> 사용자 lib  ~/coherent-mr-v2/lib                  (구: ~/covlib)
+> 바이너리    ~/coherent-mr-v2/bin/memcached        (구: ~/kvs-port-v3/memcached)
+> 대조군      ~/coherent-mr-v2/bin/memcached.pre-pac + EXT_DISABLE_COHERENT_MR=1
+> ```
+>
+> 세 자산은 **한 벌로만 유효하다.** 새 lib는 `mlx5dv_alloc_coherent_mr`을
+> 갖고, 새 모듈이 그 요청을 받으며, 새 바이너리가 그것을 호출한다. 섞으면
+> 조용히 폴백해 sync 경로로 돌아간다(죽지 않으므로 로그로만 알 수 있다 — §D-1).
+
 ---
 
 ## Phase A — [genie] 메모리 노드 확인/기동
@@ -113,13 +131,16 @@ whoami; hostname; nproc
 
 ```sh
 sudo insmod ~/pb-guest/snp_shared-6.16.0-snp-guest-038d61fd6422-cachemode.ko
-sudo rmmod mlx5_ib && sudo insmod ~/covlib/mlx5_ib.ko
+sudo rmmod mlx5_ib && sudo insmod ~/coherent-mr-v2/mlx5_ib.ko
 sleep 3
 sudo ip addr add 10.99.0.3/24 dev ibp1s0
 sudo ip link set ibp1s0 up
 sleep 2
 sudo ip link set ibp1s0 mtu 4092
 ```
+
+`rmmod`는 RDMA를 쓰는 프로세스가 하나도 없어야 성공한다. `Module ... is in
+use`가 나오면 memcached·genie_memd가 남아 있는 것이다(§G로 먼저 정리).
 
 ### C-2. 확인
 
@@ -131,6 +152,19 @@ ping -c2 -W2 10.99.0.2                 # => 0% packet loss
 ```
 
 `ping` 실패 시 원인은 대개 **genie 쪽**이다 — Phase A-2로 돌아갈 것.
+
+### C-3. **coherent MR 확인** — 새 모듈이 실제로 올라갔는지
+
+`lsmod`는 이름만 보므로 구·신 모듈을 구별하지 못한다. `modinfo`도 디스크의
+파일을 읽을 뿐 적재된 것을 보지 않는다. **판별은 기능으로 한다.**
+
+```sh
+LD_LIBRARY_PATH=$HOME/coherent-mr-v2/lib $HOME/coherent-mr-v2/bin/coherent_mr_smoke
+# => coherent MR OK addr=0x... length=2097152 lkey=0x...
+```
+
+실패하면 옛 모듈이 올라가 있거나 lib가 옛 것이다. **여기서 통과하지 못하면
+이후 측정은 전부 패치 이전 경로다** — Phase C-1부터 다시 한다.
 
 ---
 
@@ -145,42 +179,52 @@ scp -i ~/.ssh/snp_guest -P 2222 memcached-1.6.42-port_v3/tools/obwatch.sh ubuntu
 
 ### D-0. **바이너리 확인** — 최적 구성의 전제
 
-guest의 `~/kvs-port-v3/`에는 A/B용 변종들이 함께 있고, 평범한 `memcached`가
-구버전으로 남아 있을 수 있다. **prefetch 두 개(⑥⑦)가 없는 빌드로 돌리면
-약 6.9% 낮게 나온다** — 실제로 겪은 사고다.
+측정 대상은 `~/coherent-mr-v2/bin/memcached`다. **파일 이름만으로는 무엇이
+들어 있는지 알 수 없다** — 2026-07-30에 이것 때문에 두 번 사고가 났다.
+한 번은 런북이 다른 경로를 띄워 동기 경로를 재고 "개선이 없다"는 결론이 날
+뻔했고, 한 번은 배포본이 pac도 alloc 수정도 없는 구버전인 채로 12시간 돌았다.
+**표지를 직접 확인하는 것 말고 안전한 방법이 없다.**
 
 ```sh
-grep -ac assoc_prefetch ~/kvs-port-v3/memcached
-# => 1 이상이어야 정상. 0이면 구버전이므로 아래로 교체:
-#    (서버가 실행 중이면 "Text file busy" — 먼저 내리고 실행)
-cp ~/kvs-port-v3/memcached.span-1f3390a ~/kvs-port-v3/memcached
-grep -ac assoc_prefetch ~/kvs-port-v3/memcached    # => 재확인
+sha256sum ~/coherent-mr-v2/bin/memcached | cut -c1-24
+# => 20a016056d6d1f1b57571243     (pac ⊕ coherent MR, 병합 커밋 31c161e)
+#    d7b8c1f35639d2467c4c9a44 이면 memcached.pre-pac(대조군)을 덮어쓴 것이다.
 ```
 
-> **`assoc_prefetch`만으로는 어떤 SET 경로인지 알 수 없다.** 그 심볼은 GET
-> prefetch용이라 동기 빌드와 pac 빌드 **양쪽 모두** 갖고 있다. 2026-07-30에
-> 이것 때문에 사고가 났다 — 런북 명령줄이 `$HOME/kvs-port-v3/memcached`를
-> 가리키는데 그 파일이 main(동기)이어서, pac을 잰다고 생각하고 동기 경로를
-> 재고 "개선이 없다"는 결론이 나올 뻔했다. **기동 후 반드시 아래로 확인할 것:**
+sha가 다르면 저장소 **`v3-set-pac`** 브랜치에서 빌드해 배포한다. `main`은
+coherent MR만, 옛 `v3-set-pac`은 pac만 갖는다 — **어느 한쪽만 빌드하면
+절반만 들어간다.**
 
 ```sh
-# 서버 기동 뒤 (§D-1 다음)
-printf 'stats settings\r\nquit\r\n' | nc 127.0.0.1 11411 | grep ext_pac_set
-# => STAT ext_pac_set yes      (없으면 동기 바이너리다)
-printf 'stats\r\nquit\r\n' | nc 127.0.0.1 11411 | grep ext_setq_max
-# => STAT ext_setq_max 1       (기본값. SET span < 30 µs를 위한 설정이다)
+# ariel 호스트에서
+cd ~/2026/memcached-1.6.42-port_v3 && git checkout v3-set-pac && make -j"$(nproc)"
+scp -i ~/.ssh/snp_guest -P 2222 memcached ubuntu@localhost:/tmp/mc.new
+# guest에서 (서버가 실행 중이면 "Text file busy" — 먼저 내릴 것)
+install -m755 /tmp/mc.new ~/coherent-mr-v2/bin/memcached
+```
+
+기동 후 표지 세 개를 확인한다. **셋 다 통과해야 이 절차서가 유효하다.**
+
+```sh
+printf 'stats settings\r\nquit\r\n' | nc 127.0.0.1 11411 | grep -E 'ext_pac_set|ext_seal_at_flush'
+# => STAT ext_pac_set yes           (없으면 pac이 없는 동기 바이너리)
+# => STAT ext_seal_at_flush no      (yes면 처리량이 3.15배 떨어진다 — 기각된 노브)
+printf 'stats\r\nquit\r\n' | nc 127.0.0.1 11411 | grep -E 'ext_setq_max|extstore_alloc_failures'
+# => STAT ext_setq_max 1            (기본값. SET span < 30 µs를 위한 설정)
+# => STAT extstore_alloc_failures 0 (항목 자체가 없으면 678e7a3 이전 빌드다)
 
 # 부하를 조금 준 뒤 pac 경로가 실제로 타는지 (핵심 확인)
 printf 'stats\r\nquit\r\n' | nc 127.0.0.1 11411 | grep -E "cmd_set|ext_pac_posted"
 # => ext_pac_posted 가 cmd_set 과 같아야 한다. 0이면 전부 동기 폴백이다.
 ```
 
-`memcached.main-7a09928`도 없다면 저장소 main에서 빌드해 배포한다(호스트에서
-`make -j"$(nproc)"` 후 `scp memcached ...:~/kvs-port-v3/memcached`).
-현재 운영 빌드(main `7a09928`)의 sha256은 `7f190a55ce232c54…`.
-게이트 지속 실측(10.357M) 당시 빌드는 `ed219244c5621570…`(태그
-`v3-10.35M-sustained`). `memcached.cca9807`은 비동기 SET이 켜진 기각 빌드다
-— 측정에 쓰지 말 것.
+`ext_setq_max`를 1보다 크게 두면 SET들이 한 이벤트루프 통과분으로 묶여
+SYNC를 분할상환하지만 **span 계약이 깨진다**(batch=64에서 SET span 255 µs).
+coherent MR에서는 SYNC 자체가 없으므로 배치할 이유도 없다. **1을 유지한다.**
+
+> 참고: 옛 판별자 `grep -ac assoc_prefetch`는 **더 이상 쓰지 않는다.** 그
+> 심볼은 GET prefetch용이라 동기 빌드와 pac 빌드가 양쪽 다 갖고 있어
+> SET 경로를 전혀 구별하지 못한다.
 
 ### D-1. 서버 기동 (tmux — ssh 세션이 끊겨도 유지)
 
@@ -198,22 +242,59 @@ for i in $(seq 1 30); do ss -ltn | grep -q ':11411 ' || break; sleep 1; done
 ss -ltn | grep -q ':11411 ' && { echo "포트가 아직 잡혀 있다"; ss -ltnp | grep 11411; }
 
 tmux new-session -d -s mc "cd \$HOME/kvs-port && exec taskset -c 0-27 env \
-LD_LIBRARY_PATH=\$HOME/covlib:\$HOME/kvs-port \
-MLX5_COHERENT_QP=1 MLX5_COHERENT_CQ=1 EXT_RDMA_PROF=1 \
+LD_LIBRARY_PATH=\$HOME/coherent-mr-v2/lib:\$HOME/kvs-port \
+MLX5_COHERENT_QP=1 MLX5_COHERENT_CQ=1 EXT_RDMA_PROF=1 EXT_SELFTEST=1 \
 EXT_CRYPTO_KEY=\$HOME/kvs-port/ext.key EXT_SLOT_SIZE=256 EXT_READ_SLOTS=64 \
-\$HOME/kvs-port-v3/memcached -p 11411 -U 0 -t 28 -m 2048 -c 16384 -R 1024 \
+\$HOME/coherent-mr-v2/bin/memcached -p 11411 -U 0 -t 28 -m 2048 -c 16384 -R 1024 \
 -o ext_path=10.99.0.2:11212:4g,ext_worker_window=24,ext_qp_per_worker=2,ext_drain_spin=1024,hashpower=22 \
 > /tmp/mc.log 2>&1"
 
 sleep 8
 pgrep -x "memcached[.a-z]*" >/dev/null && echo "server UP" || tail -5 /tmp/mc.log
 # => "server UP"
-grep -iE "genie_connect OK|Address already in use|reg_mr" /tmp/mc.log
-# => genie_connect OK 한 줄만 나와야 정상.
-#    "Address already in use" → 위 대기 루프를 건너뛴 것. 처음부터 다시.
-#    "reg_mr(...) failed"     → SWIOTLB 파편화. 서버 중복 기동이 없는지 확인하고,
-#                               계속되면 Phase C(모듈 재적재)부터 다시 한다.
+grep -icE "coherent MR [0-9]+B" /tmp/mc.log
+# => 2      ★ 이 줄이 이 절차서의 핵심 게이트다. 0이면 패치 이전 경로다.
+grep -iE "genie_connect OK|coherent MR|selftest|Address already in use|reg_mr" /tmp/mc.log
+
+# 로그는 낡을 수 있다 — 지금 떠 있는 프로세스를 직접 본다 (권위 있는 확인)
+pid=$(pgrep -x "memcached[.a-z]*")
+tr '\0' '\n' < /proc/$pid/environ | grep -E 'EXT_DISABLE_COHERENT_MR|LD_LIBRARY_PATH'
+# => LD_LIBRARY_PATH=/home/ubuntu/coherent-mr-v2/lib:...
+# => EXT_DISABLE_COHERENT_MR 은 나오지 않아야 한다 (나오면 대조군이 떠 있는 것)
 ```
+
+> **로그 파일 이름만 믿지 말 것.** 2026-07-31에 이 함정을 밟았다 — A/B
+> 스크립트가 다른 로그로 출력하는 바람에 `~/mc.log`는 그 전 기동의 것이었고,
+> 그것만 보면 coherent 2줄이 멀쩡히 보이는데 **실제로 떠 있는 서버는 폴백
+> 구성**이었다. `/proc/$pid/environ`은 낡을 수 없다.
+
+기대 출력:
+
+```text
+extstore: genie_connect OK (raddr=0x... rkey=0x... size=4294967296, workers=28 ...)
+extstore: coherent MR 458752B at 0x...          ← READ 바운스 풀
+extstore: coherent MR 236544B at 0x...          ← WRITE staging 풀
+extstore selftest: SYNC_FOR_DEVICE advise failed: No such file or directory
+extstore selftest: SYNC_FOR_CPU advise failed: No such file or directory
+extstore selftest: OK (256 bytes written and read back)
+```
+
+> **selftest의 advise 실패 두 줄은 정상이며, 오히려 통과 신호다.** coherent
+> MR에는 umem이 없어 advise 핸들러가 ENOENT를 낸다. 그런데 바로 다음 줄에서
+> 페이로드가 왕복한다 — **sync 없이 데이터가 옳다**는 것이 이 패치의 요점이다.
+> (데이터 경로는 아예 advise를 호출하지 않는다. 이 메시지는 selftest만의 것이다.)
+
+문제 신호:
+
+```text
+"coherent MR" 줄이 0개      → lib 또는 모듈이 옛 것이다. C-3 smoke부터 다시.
+"Address already in use"    → 위 대기 루프를 건너뛴 것. 처음부터 다시.
+"reg_mr(...) failed"        → SWIOTLB 파편화. 서버 중복 기동이 없는지 확인하고,
+                              계속되면 Phase C(모듈 재적재)부터 다시 한다.
+```
+
+**두 풀이 다 coherent여야 한다.** 458752B(READ)만 잡히고 236544B(WRITE)가
+없으면 GET만 패치 이득을 받고 SET은 여전히 sync를 낸다 — 혼합 판정이 어긋난다.
 
 ### D-2. 프리로드 (1M × 64 B) — **`--key-prefix=m-` 필수**
 
@@ -264,8 +345,12 @@ COMMON="-s 10.99.0.3 -p 11411 -P memcache_text -d 64 \
 |---|---|---|---|
 | **W1** | GET only | `memtier_benchmark $COMMON --ratio=0:1 --test-time=100` | 기준 — optimal 운영점 |
 | **W2** | SET only | `memtier_benchmark $COMMON --ratio=1:0 --test-time=100` | remote WRITE 경로. seal→WRITE→CQE→STORED |
-| **W3** | SET:GET 1:9 | `memtier_benchmark $COMMON --ratio=1:9 --test-time=100` | 혼합. 읽기/쓰기 경로 동시 부하 |
-| **W4** | SET:GET 1:1 | `memtier_benchmark $COMMON --ratio=1:1 --test-time=100` | 쓰기 비중 상한 확인 |
+| **W3** | SET:GET **1:10** | `memtier_benchmark $COMMON --ratio=1:10 --test-time=100` | **게이트 대상 혼합** |
+| **W4** | SET:GET 1:1 | `memtier_benchmark $COMMON --ratio=1:1 --test-time=100` | 쓰기 비중 상한 확인 (게이트 아님) |
+
+> **W3의 비율이 1:9에서 1:10으로 바뀌었다**(2026-07-30). 게이트 대상은 W1과
+> W3이며, 이전 기록의 1:9 수치와 직접 비교하지 말 것 — 비율 변경만으로
+> +1.4%가 붙는다(8.03 M → 8.14 M).
 
 워크로드별 유의사항:
 
@@ -273,8 +358,10 @@ COMMON="-s 10.99.0.3 -p 11411 -P memcache_text -d 64 \
 - **W2/W3/W4**는 SET이 섞이므로 **`--key-pattern=R:R`이 기존 키를 덮어쓴다.**
   keyspace 크기는 유지되고 `curr_items`도 1,000,000에서 크게 변하지 않는다.
   GET이 섞인 W3/W4는 hit율이 100%로 유지되는 것이 정상이다.
-- SET 경로는 GET과 달리 **STORED 응답 전에 WRITE CQE를 기다린다.** 따라서
-  SET 비중이 높을수록 throughput이 낮고 span(write)이 별도로 잡힌다.
+- SET은 **`STORED` 응답 전에 WRITE CQE를 기다린다** — 내구성 의미를 지키기
+  위해서다. 다만 pac 이후 **워커가 블록되지는 않는다**: 스텁은 커맨드 시점에
+  게시되고 연결만 suspend됐다가 완료 콜백에서 재개된다. 그래서 SET 비중이
+  높아도 워커 직렬화로 무너지지 않는다(SET-only 0.311 M → 2.348 M).
 - 워크로드를 바꿔 연속 측정할 때 **프리로드를 다시 할 필요는 없다**(서버를
   재시작하지 않는 한). 서버를 재시작했다면 D-2부터.
 
@@ -341,9 +428,9 @@ E-3 출력이 곧 판정 자료다. 아래 기준으로 읽는다.
 ### F-1. 합격 기준
 
 > **2026-07-30 판정 기준 변경 — 이전 기록을 그대로 읽지 말 것.**
-> 1. 게이트는 **GET-only와 1:9 혼합 둘 다** 충족해야 한다(각 10 M ops/s,
->    span < 30 µs). 예전 문서의 "GET-only 기준이며 W2~W4는 게이트 대상이
->    아니다"는 **폐기**됐다.
+> 1. 게이트는 **GET-only(W1)와 1:10 혼합(W3) 둘 다** 충족해야 한다(각
+>    10 M ops/s, span < 30 µs). 예전 문서의 "GET-only 기준이며 W2~W4는 게이트
+>    대상이 아니다"는 **폐기**됐다. 혼합 비율도 1:9 → **1:10**으로 바뀌었다.
 > 2. **SET span도 30 µs 미만이어야 한다.** obwatch의 `gate` 줄은 GET span만
 >    보므로, SET이 있는 워크로드에서는 `Sspan avg` 열을 직접 확인할 것.
 > 3. **span < 30 µs가 10 M ops/s보다 우선한다.** 둘이 상충하면 span을 지킨다
@@ -351,6 +438,8 @@ E-3 출력이 곧 판정 자료다. 아래 기준으로 읽는다.
 
 | 항목 | 기준 | 비고 |
 |---|---|---|
+| **coherent MR 풀** | 기동 로그에 `coherent MR` **2줄** | 전제 조건. 0이면 패치 이전을 잰 것이라 **수치 무효** (§D-1) |
+| **`*_sync_avg_ns`** | GET·SET 모두 **< 0.1 µs** | 패치가 실제로 먹었다는 사후 증거 (§F-4) |
 | gate (GET span) | `span avg < 30us` **PASS** | obwatch가 자동 판정 |
 | **SET span** | `Sspan avg < 30 µs` | **obwatch가 판정해 주지 않는다.** 표에서 직접 읽을 것. batch=1에서 ~14 µs, batch=64에서 ~255 µs |
 | correctness 필수 5종 | 전부 0 | `get_misses`/`read_fail`/`write_fail`/`engine_dead`/`leak`. 하나라도 0이 아니면 **성능 수치 무효** |
@@ -384,55 +473,46 @@ E-3 출력이 곧 판정 자료다. 아래 기준으로 읽는다.
 
 ### F-2. 워크로드별 기대치 (참고)
 
-실측(2026-07-29, 동일 bed, mc28/W24/nqp2/hp22, `-t28 -c4 -p160`):
+**직전 off-box 정본** — 빌드 `span-1f3390a`(pac 있음, **coherent MR 이전**),
+동일 bed, mc28/W24/nqp2/hp22. 이번 측정이 넘어서야 할 기준선이다.
 
-| 워크로드 | 총 ops/s | GET span | SET span | 비고 |
-|---|---:|---:|---:|---|
-| W1 GET only | **10.12~10.25 M** | 25.4 µs | — | 게이트 PASS |
-| W2 SET only | **0.311 M** | — | 5.38 µs | GET의 **1/33** |
-| W3 1:9 | **2.943 M** (GET 2.649 + SET 0.294) | 23.7 µs | 6.26 µs | busyCPU 23.2/30 — **포화 아님** |
-| W4 1:1 | **0.591 M** (GET 0.296 + SET 0.296) | 26.0 µs | 5.61 µs | badcrc 0.21%, 재시도 복구 |
+| 워크로드 | 총 ops/s | GET span | SET span | CPU/op | 판정 |
+|---|---:|---:|---:|---:|---|
+| GET only | **10.241 M** | 24.49 µs | — | 2.754 µs | 두 게이트 PASS |
+| SET only | **2.348 M** | — | 15.63 µs | 10.562 µs | span PASS, 처리량 미달 |
+| 1:9 혼합 | **8.035 M** (GET 7.23 + SET 0.80) | 24.46 µs | 19.34 µs | 3.472 µs | span PASS, 처리량 미달 |
 
-**SET이 33배 느린 것은 RDMA 때문이 아니다.** SET span은 5.38 µs로 오히려
-GET span(25.4 µs)보다 짧다. 원인은 **SET이 워커를 동기 점유**하는 구조다:
-`storage_store_item()`이 `while (!wait.done) { extstore_worker_drain(...); }`로
-자기 WRITE CQE가 올 때까지 busy-wait하므로(`storage.c:644-647`), 워커당 SET
-동시성은 **1**이다. GET은 비동기라 워커당 W=24개가 동시에 뜬다.
+**세 워크로드 모두 span 게이트는 이미 통과한다.** 남은 것은 혼합·GET-only
+동시 10 M이고, 부족분은 평균 CPU/op **−18.6%**다. 1:9 → 1:10 비율 변경으로는
++1.4%밖에 못 얻으므로(8.03 M → 8.14 M) CPU를 실제로 줄여야 한다.
 
-**혼합에서 GET까지 느려지는 것도 같은 원인이다.** SET이 워커를 잡고 있는
-동안 그 워커의 큐에 있는 GET들이 head-of-line blocking을 당한다. 워커 시간
-모델로 검증된다:
+**coherent MR에 기대하는 것.** 게스트 내 co-located A/B(100 K 키 20초,
+mtT=4/mcT=28, **절대값 무의미·델타만**)에서:
 
-```text
-SET당 워커 점유  90.1 µs   (span 5.38 µs = 6%, 나머지는 동기 대기 + 프로토콜)
-GET당 워커 점유   2.77 µs   (비동기라 W=24 동시 처리)
-1:1 쌍당          92.9 µs → 28 worker 기준 0.603 M ops/s 예측
-실측                              0.591 M ops/s   (오차 −2.0%)
-```
+| | GET span | SET span | GET sync | SET sync |
+|---|---:|---:|---:|---:|
+| coherent | **13.2 µs** | **8.6 µs** | 0.04 µs | 0.01 µs |
+| 폴백(패치 이전) | 19.5 µs | 12.0 µs | 5.62 µs | 1.99 µs |
 
-즉 혼합 처리량은 **SET 비중이 결정**한다. 다만 단순 가산 모델은 정확하지
-않다 — 1:9를 `90.1 + 9×2.77 = 115 µs` 쌍 비용으로 계산하면 2.43 M이 나오는데
-**실측은 2.943 M으로 21% 높다.**
+span −27~32%, sync는 계측 하한까지. 같은 시험에서 **처리량은 ±노이즈로
+움직이지 않았는데, co-located에서는 memtier가 같은 28코어를 놓고 경쟁해
+약 3 M ops/s가 클라이언트 쪽 상한이기 때문이다** — 서버가 아낀 CPU가 갈 곳이
+없다. **아낀 CPU가 처리량으로 환산되는지는 이 off-box 측정만이 답한다.**
+그것이 이번 측정의 목적이다.
 
-그리고 W3의 `busyCPU`가 **23.2 / 30 (memcached 28코어의 83%)** 로,
-**워커가 포화되지 않았다.** 즉 SET의 약 300 K 상한은 순수 CPU 한계가 아니다.
-SET rate가 SET-only 311 K와 혼합 294 K로 비율과 무관하게 거의 같다는 점도
-같은 방향을 가리킨다 — 무언가가 SET을 CPU 이전 단계에서 묶고 있다.
+CPU 모델 예측은 SET에서 −1.74 µs/op이고, 이는 1:10을 9.46~10.03 M에 놓는다
+— **경계선이다.** 다만 co-located에서 span 감소분이 sync 감소분보다 컸다
+(GET −6.25 vs −5.58, SET −3.47 vs −1.98). 바운스가 사라지면 전송 자체도
+짧아지는데 이 몫은 모델에 없다. 실측이 예측을 웃돌 여지가 여기 있다.
 
-**이 지점은 미해결이다.** 확정된 것은 (1) SET이 워커를 동기 점유하는 구조,
-(2) SET span 5~6 µs는 전체 SET 비용의 6% 남짓, (3) 워커가 포화되지 않은 채
-SET이 ~300 K에서 상한을 친다는 사실까지다. 남은 85 µs의 소재는 프로파일
-스택이 libc 미해석으로 끊겨 아직 귀속되지 않았다. SET 개선을 시도한다면
-여기부터 규명해야 한다.
+> **pac 이전 기록은 폐기됐다.** 2026-07-29 표(SET-only 0.311 M, "SET이 워커를
+> 동기 점유해 워커당 동시성 1")는 pac 도입 전 구조를 설명한 것이다. pac이
+> 그 동기 점유를 없앴고 SET-only는 0.311 M → 2.348 M(7.6배)이 됐다. 옛 표를
+> 기준선으로 읽지 말 것.
 
-> SET 경로는 이번 캠페인의 최적화 대상이 **아니었다.** 10M/30 µs 계약은
-> GET-only 기준이며, 위 SET/혼합 수치는 기준선 기록이지 게이트 판정 대상이
-> 아니다. SET을 개선하려면 동기 대기를 GET처럼 비동기 재개 구조로 바꾸는
-> 것이 출발점이고, 그 경우 `STORED`의 내구성 의미(WRITE CQE 확인 후 응답)를
-> 유지할 수 있는지가 설계 쟁점이다.
-
-> SET 계열은 이번 캠페인에서 **최적화 대상이 아니었다.** 10M/30µs 계약은
-> GET-only 기준이며, W2~W4 수치는 기준선 기록용이지 게이트 판정 대상이 아니다.
+> **"SET은 게이트 대상이 아니다"라는 옛 단서도 폐기됐다.** 현재 계약은
+> GET-only와 1:10 혼합 **양쪽** 10 M이고 **SET span도 30 µs 미만**이다.
+> 이 문서 안에 그 취지의 문장이 남아 있으면 §F-1 배너가 우선한다.
 
 ### F-3. [genie] 메모리 노드 CPU가 0인지 확인 (선택, 아키텍처 검증)
 
@@ -449,6 +529,48 @@ diff /tmp/gm_before /tmp/gm_after && echo "genie CPU = 0 (one-sided READ 확인)
 
 > W2~W4처럼 SET이 섞여도 결과는 같아야 한다 — WRITE도 one-sided이므로
 > genie CPU를 쓰지 않는다.
+
+### F-4. span 내역 분해 — 패치가 먹었는지 사후 확인
+
+obwatch는 span 총합만 본다. **sync 성분이 실제로 사라졌는지**는 `stats`의
+`extstore_prof_*`에서 직접 읽는다. 이것이 §F-1의 전제 조건을 사후 검증한다.
+
+```sh
+printf 'stats\r\nquit\r\n' | nc 127.0.0.1 11411 | tr -d '\r' \
+  | grep -E '^STAT extstore_prof_'
+```
+
+```text
+extstore_prof_read_sync_avg_ns    < 100      ← coherent면 계측 하한(수십 ns)
+extstore_prof_write_sync_avg_ns   < 100      ← 수천 ns면 폴백 경로다
+extstore_prof_read_xfer_avg_ns               ← 실제 RDMA 왕복
+extstore_prof_write_xfer_avg_ns              ← SET의 GET-비교가능 구간
+extstore_prof_read_crypto_avg_ns             ← AES-GCM, 사실상 하한(~1 µs)
+```
+
+> **`*_avg_ns`는 기동 이후 누적 평균이다.** 프리로드 구간이 섞여 들어가므로
+> 측정 창만 보려면 `(avg × count)`의 차분을 쓴다. `read_*`는 모두
+> `extstore_prof_read_count`를, `write_*`는 `extstore_prof_write_count`를
+> 짝으로 쓴다(성분별 count는 없다).
+>
+> ```text
+> 구간 평균 = (avg₂×count₂ − avg₁×count₁) / (count₂ − count₁)
+> ```
+
+#### 패치 전후 A/B를 직접 뜨려면
+
+같은 바이너리로 대조군을 만들 수 있다. **환경변수 하나만 추가**하면
+`dma_alloc` + `ibv_reg_mr` + sync advise, 즉 패치 이전 경로로 되돌아간다.
+
+```sh
+# §D-1의 tmux 줄에서 EXT_RDMA_PROF=1 옆에 추가
+EXT_DISABLE_COHERENT_MR=1
+# => 기동 로그에 "coherent MR" 줄이 0개가 되고, *_sync_avg_ns가 수천 ns로 돌아온다
+```
+
+바이너리·커널·lib를 그대로 두고 경로만 바꾸므로 **다른 변수가 섞이지 않는
+유일한 A/B다.** 모듈을 되돌려 비교하지 말 것 — 재적재 사이에 SWIOTLB 상태와
+QP 배치가 바뀌어 델타가 오염된다.
 
 ---
 
@@ -483,7 +605,12 @@ CPU를 쓰지 않고, 다음 시행에서 조율 없이 바로 연결된다.
 | throughput 약 7% 낮음 (≈9.7~9.9M) | **prefetch 없는 구버전 바이너리** → D-0으로 확인·교체 |
 | throughput 2~3% 낮음 | bed 드리프트 — fresh boot 후 재시행 |
 | span > 30 µs | W 값 확인(24여야 함), guest 재시작 누적 여부 확인 |
-| badcrc가 cmd_get과 같음 | DMA sync가 꺼짐 — `EXT_SKIP_DMA_SYNC`를 절대 설정하지 말 것 |
+| badcrc가 cmd_get과 같음 | DMA sync가 꺼짐 — `EXT_SKIP_DMA_SYNC`를 절대 설정하지 말 것. **바운스 MR에서 sync만 빼면 100 % 손상된다**(실측 100,000/100,000) |
+| 기동 로그에 `coherent MR` 줄이 없음 | lib 또는 모듈이 옛 것(`~/covlib`) → C-1·C-3 재실행 |
+| `coherent MR` 줄이 1개뿐 | 한쪽 풀만 코히런트 — GET만 이득을 받고 SET은 sync를 계속 낸다. 혼합 판정 무효 |
+| span은 그대론데 sync만 0 | 정상이 아니다. 폴백이 떠 있는지 `/proc/$pid/environ`로 확인(§D-1) |
+| coherent인데 `*_sync_avg_ns`가 수천 ns | `~/mc.log`가 낡았고 실제로는 대조군이 떠 있는 것 → §D-1의 environ 확인 |
+| `rmmod: Module mlx5_ib is in use` | memcached·genie_memd가 남아 있음 → Phase G로 정리 후 C-1 |
 
 ## 부록: 자동화 경로
 

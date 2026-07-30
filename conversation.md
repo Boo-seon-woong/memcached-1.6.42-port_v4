@@ -5599,3 +5599,55 @@ GET-only   28.1 ÷ 2.18 = 12.9 M,  span은 5.49 µs 줄어 ~22 µs           ✅
 GCM 전량 실패 = SWIOTLB를 실제로 우회 못 함). 애플리케이션 코드 밖의 작업이다.
 
 NEXT: genie (수정본 785b308으로 GET-only / SET-only / 1:9 재측정 — 이전 수치는 폐기)
+
+---
+
+## [2026-07-30 KST] ariel — seal 지연 **기각**(처리량 3.2배 하락), 원인 미규명. 기본값 off, guest 복구.
+
+관리자가 재측정에서 SET-only 0.93M을 보고했다(직전 2.85M). 원인을 단일
+바이너리 A/B로 갈랐다.
+
+### 판정: seal 지연이 회귀의 전부다. genie alloc 수정은 무죄
+
+같은 바이너리(`61d6a74`), 플래그 하나만 다름, SET-only co-located:
+
+| 구성 | set/s | crypto/op | post→CQE |
+|---|---:|---:|---:|
+| `no_ext_seal_at_flush` (명령 시점 봉인) | **2,677,323** | 909 ns | 5.80 µs |
+| `ext_seal_at_flush` (flush 시점 봉인) | 850,176 | 1019 ns | 6.97 µs |
+
+sealnow의 2.68M이 변경 전 2.868M과 일치하므로 **genie의 alloc 수정(678e7a3)은
+회귀 원인이 아니다.** 앞서 "내 SET 측정치 전부 오염" 판정 중 alloc 수정에
+귀속시킨 부분은 과했다 — 오염은 있었지만 이번 3배 하락과는 무관하다.
+
+### 원인은 내가 예고한 리스크가 아니다 — 미규명
+
+- **캐시 지역성 아님**: crypto/op 909 → 1019 ns, +12%뿐. 3배를 설명 못 한다.
+- **item magazine 고갈 아님**: 배치가 free보다 alloc을 몰아 하니 magazine
+  (기본 깊이 32)이 말라 slabs_lock을 탄다고 의심했으나, `item_mag_depth=64`로
+  재측정 시 **860,704 set/s — 변화 없음.** 가설 기각.
+- 드레인/스핀 카운터도 op당으로는 양쪽이 같다.
+
+남은 후보(미검증): 평문 원본 item을 배치 동안 붙들면서 생기는 무언가,
+staging 확보 시점 이동, 또는 flush 구간이 길어지며 생기는 이벤트 루프 상호작용.
+**규명 전까지 seal 지연은 쓰지 않는다.**
+
+### 조치
+
+- `ext_seal_at_flush` **기본값 off**(`2029c73`). 켜는 플래그는 남겨 두었다.
+- 명시적 완료 수거(`61d6a74`)는 **유지**한다 — post→CQE를 17.7 → 7.0 µs로
+  줄였고 처리량은 중립이라 독립적으로 정당하다. 단 그 수정 자체가 한 번
+  버그를 냈다(CQ를 비우면 worker_libevent의 drain 지점이 outstanding==0을
+  보고 arm까지 건너뛰어 응답이 영원히 재개되지 않음 — preload가 249k에서 정지).
+  수거 후 반드시 arm하도록 고쳤다.
+- guest `~/kvs-port-v3/memcached` = `memcached.pac-2029c73`, 1M 프리로드 +
+  카운터 리셋 완료. `ext_pac_set yes`, `ext_seal_at_flush no`.
+
+### SET span 목표에 대한 함의
+
+seal 지연은 SET span을 30 µs 아래로 넣는 **가장 싼 수단이었고 그게 막혔다.**
+남은 선택지는 즉시 flush(시간/개수 기반)인데, 1:9 혼합에서 워커당 SET 도착
+간격이 ~31 µs라 배치가 1건으로 떨어지고 SYNC 상각을 잃는다(평균 CPU/op
++0.13 µs, 처리량 −4% 추정). 처리량이 이미 목표에 모자란 상황이라 비싼 선택이다.
+
+NEXT: genie (2029c73으로 GET-only / SET-only / 1:9 재측정 — seal 지연은 off)

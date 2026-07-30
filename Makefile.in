@@ -688,14 +688,14 @@ memcached_SOURCES = memcached.c memcached.h hash.c hash.h \
 	$(am__append_9)
 memcached_debug_SOURCES = $(memcached_SOURCES)
 memcached_CPPFLAGS = -DNDEBUG
-memcached_debug_LDADD = @PROFILER_LDFLAGS@ -lrdmacm -libverbs -lcrypto \
-	$(am__append_11) $(am__append_16) $(am__append_20) \
+memcached_debug_LDADD = @PROFILER_LDFLAGS@ -lrdmacm -libverbs -lmlx5 \
+	-lcrypto $(am__append_11) $(am__append_16) $(am__append_20) \
 	$(am__append_24)
 memcached_debug_CFLAGS = @PROFILER_FLAGS@ -DMEMCACHED_DEBUG
 
 # extstore RDMA port: RDMA verbs + OpenSSL for remote-memory backend.
 # (generated Makefile also patched directly; this line is the durable source.)
-memcached_LDADD = -lrdmacm -libverbs -lcrypto $(am__append_10) \
+memcached_LDADD = -lrdmacm -libverbs -lmlx5 -lcrypto $(am__append_10) \
 	$(am__append_14) $(am__append_19) $(am__append_23)
 memcached_LDFLAGS = $(am__append_21)
 memcached_debug_LDFLAGS = $(am__append_22)

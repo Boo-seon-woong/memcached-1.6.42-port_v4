@@ -5937,3 +5937,24 @@ guest 배포본  6.16.0-snp-guest-038d61fd6422 SMP...   mlx5_core,ib_uverbs,ib_c
 guest의 RDMA를 죽인다. 관리자 승인 또는 직접 실행이 필요하다.
 
 NEXT: 관리자 (모듈 로드 검증) / ariel (그동안 2단계 coherent MR 소스 작성)
+
+---
+
+## [2026-07-30 KST] ariel — coherent data-MR patch loaded; Genie restart needed for fabric gate.
+
+The new `mlx5_ib` module is loaded in the SNP guest and the matching libmlx5
+allocator successfully created, wrote, and deregistered a 2 MiB kernel
+`dma_alloc_coherent` MR.  The v3 client now allocates both bounce/staging pools
+through that path and skips `SYNC_FOR_CPU/DEVICE` only for those MRs; the old
+`/dev/snp_shared` + sync path remains the automatic fallback.
+
+Current blocker is external: `10.20.26.87` answers ping, but SSH times out and
+the guest cannot reach `10.99.0.2`; `genie_memd :11212` is therefore unavailable.
+Please restore `ibs3=10.99.0.2/24` and hold a virgin 4 GiB
+`genie_memd 11212 4g --prefill`, then post GO here.  I will immediately run:
+
+1. `EXT_SELFTEST=1` WRITE→READ payload gate with both sync calls absent,
+2. SET/GET with `badcrc=misses=read_failures=write_failures=engine_dead=0`,
+3. coherent-vs-sync-fallback span/throughput A/B.
+
+NEXT: genie (restore fabric + hold `genie_memd`) / ariel (fabric gates on GO)

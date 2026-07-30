@@ -22,6 +22,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <infiniband/verbs.h>
+#include <infiniband/mlx5dv.h>
 #include <rdma/rdma_cma.h>
 #include "extstore.h"
 #include <time.h>
@@ -84,6 +85,26 @@ static char *dma_alloc(size_t sz) {
     }
     void *p = mmap(NULL, sz, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     return p == MAP_FAILED ? NULL : p;
+}
+
+static char *dma_mr_alloc(struct ibv_pd *pd, size_t sz, int access,
+                          struct ibv_mr **mr, bool *coherent) {
+    if (!getenv("EXT_DISABLE_COHERENT_MR")) {
+        *mr = mlx5dv_alloc_coherent_mr(pd, sz, access);
+        if (*mr) {
+            *coherent = true;
+            fprintf(stderr, "extstore: coherent MR %zuB at %p\n",
+                    sz, (*mr)->addr);
+            return (*mr)->addr;
+        }
+        fprintf(stderr, "extstore: coherent MR %zuB unavailable: %s; "
+                "using sync fallback\n", sz, strerror(errno));
+    }
+
+    char *p = dma_alloc(sz);
+    if (!p) return NULL;
+    *mr = ibv_reg_mr(pd, p, sz, access);
+    return *mr ? p : NULL;
 }
 
 /* Custom advice added by the SEV SWIOTLB-sync kernel patch (rdma-porting-refs/).
@@ -173,8 +194,10 @@ struct store_engine {
     unsigned int worker_count, w_nqp, w_window;
     char *wbounce_base;
     struct ibv_mr *wbounce_mr;
+    bool wbounce_coherent;
     char *wstaging_base;                 /* P2b */
     struct ibv_mr *wstaging_mr;
+    bool wstaging_coherent;
     unsigned int w_staging_slots, write_slots;
     unsigned int ord_limit, batch;
     struct sockaddr_in peer;
@@ -681,10 +704,8 @@ int extstore_workers_prepare(void *ptr, unsigned int nworkers,
             e->ord_limit ? " pinned" : " negotiated", e->batch);
 
     size_t bsz = (size_t)nworkers * e->read_slots * e->slot_size;
-    e->wbounce_base = dma_alloc(bsz);
-    if (!e->wbounce_base) return -1;
-    e->wbounce_mr = ibv_reg_mr(e->pd, e->wbounce_base, bsz,
-                               IBV_ACCESS_LOCAL_WRITE);
+    e->wbounce_base = dma_mr_alloc(e->pd, bsz, IBV_ACCESS_LOCAL_WRITE,
+                                   &e->wbounce_mr, &e->wbounce_coherent);
     if (!e->wbounce_mr) {
         fprintf(stderr, "extstore: reg_mr(worker bounce %zuB) failed: %s\n",
                 bsz, strerror(errno));
@@ -694,10 +715,9 @@ int extstore_workers_prepare(void *ptr, unsigned int nworkers,
     e->w_staging_slots = e->write_slots / nworkers;
     if (e->w_staging_slots < 1) e->w_staging_slots = 1;
     size_t ssz = (size_t)nworkers * e->w_staging_slots * e->slot_size;
-    e->wstaging_base = dma_alloc(ssz);
-    if (!e->wstaging_base) return -1;
-    e->wstaging_mr = ibv_reg_mr(e->pd, e->wstaging_base, ssz,
-                                IBV_ACCESS_LOCAL_WRITE);
+    e->wstaging_base = dma_mr_alloc(e->pd, ssz, IBV_ACCESS_LOCAL_WRITE,
+                                    &e->wstaging_mr,
+                                    &e->wstaging_coherent);
     if (!e->wstaging_mr) {
         fprintf(stderr, "extstore: reg_mr(worker staging %zuB) failed: %s\n",
                 ssz, strerror(errno));
@@ -847,7 +867,7 @@ int extstore_worker_post_write(void *worker, obj_io *io) {
     uint64_t t_sync_start = g_prof_on ? prof_rdtsc() : 0;
     if (g_prof_on && io->t_start && io->t_end >= io->t_start)
         w->prof_w_crypto_ns += (uint64_t)((io->t_end - io->t_start) * g_ns_per_cycle);
-    int adv = g_skip_dma_sync ? 0
+    int adv = (g_skip_dma_sync || e->wstaging_coherent) ? 0
             : ibv_advise_mr(e->pd, IBV_ADVISE_MR_ADVICE_SYNC_FOR_DEVICE,
                             IBV_ADVISE_MR_FLAG_FLUSH, &sg, 1);
     static _Atomic int w_dev_warned;
@@ -928,7 +948,7 @@ int extstore_worker_drain(void *worker, int budget) {
             sync_sg[nsync++] = (struct ibv_sge){ .addr = (uintptr_t)io->buf,
                 .length = io->len, .lkey = e->wbounce_mr->lkey };
     }
-    if (nsync && !g_skip_dma_sync) {
+    if (nsync && !g_skip_dma_sync && !e->wbounce_coherent) {
         int adv = ibv_advise_mr(e->pd, IBV_ADVISE_MR_ADVICE_SYNC_FOR_CPU,
                                 IBV_ADVISE_MR_FLAG_FLUSH, sync_sg, nsync);
         static _Atomic int w_advise_warned;

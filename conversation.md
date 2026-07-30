@@ -5749,3 +5749,62 @@ sync 제거 시   C_set 10.56 → 8.00,  C_get 2.754 → 2.21
 한 번 실패한 이력이 있다(모듈 적용 시 GCM 전량 실패 = SWIOTLB 미우회).
 
 NEXT: genie (1) blockprobe로 SET 유휴 성격 판정, (2) coherent-MR 트랙 가능성 확인
+
+---
+
+## [2026-07-30 KST] ariel — SYNC 필요성 실측: **no-op이 아니다.** 상금은 1.74 µs/op, 그래도 10M은 경계선.
+
+관리자 지적("크니까 없애자는 잘못된 판단")대로 제거 가능성부터 쟀다.
+`EXT_SKIP_DMA_SYNC` on/off, 같은 바이너리, 쓰고→읽기.
+
+| | 정합성 | set/s | server CPU/op | sync | Sspan |
+|---|---|---:|---:|---:|---:|
+| sync ON | get 100,000 / **badcrc 0** | 2,459,442 | 7.43 µs | 2.65 µs | 12.5 µs |
+| sync OFF | get 100,000 / **badcrc 100,000** (retries 300,000) | 2,916,466 | 5.69 µs | 0.01 µs | 8.4 µs |
+
+**sync를 끄면 읽기가 100% GCM 실패한다.** 바운스가 실재하며 sync는 실제
+복사다. `extstore.c` 주석의 "snp_shared에서 왔으니 SYNC advise는 no-op 비용"
+이라는 서술은 **이 커널 구성에서 틀렸다** — 부팅 로그가 근거다:
+
+```text
+Memory Encryption Features active: AMD SEV SEV-ES SEV-SNP
+PCI-DMA: Using software bounce buffering for IO (SWIOTLB)
+software IO TLB: Memory encryption is active and system is using DMA bounce buffers
+```
+
+커널은 페이지가 이미 shared인지 보지 않고 SEV라는 이유로 전량 바운스한다.
+그래서 NIC은 우리 staging이 아니라 바운스 슬롯에 DMA하고, advise가 그 사이를
+복사한다. 끄면 NIC이 낡은 바운스 내용을 전송한다(문서의 "496바이트 0x00" 사고).
+
+### 상금은 실측됐다 — 그리고 내 이전 추정보다 작다
+
+```text
+SET CPU/op  7.43 → 5.69 = −1.74 µs   (처리량 +18.6%, Sspan 12.5 → 8.4 µs)
+```
+
+**prof가 보고하는 sync 지연 2.65 µs 전부가 CPU는 아니다.** 실제 CPU 감소는
+1.74 µs다. 앞서 2.56 µs를 그대로 예산에서 빼서 "10.31M"이라고 한 것은 과대
+추정이었다.
+
+### 정정된 1:10 혼합 전망
+
+```text
+GET도 같은 비율(66%)로 감소   C_set 8.82  C_get 2.40  평균 2.981 → 9.46M   미달
+GET은 보고값 전부 감소(낙관)   C_set 8.82  C_get 2.21  평균 2.811 → 10.03M  경계
+```
+
+**sync를 완전히 제거해도 9.5~10.0M, 즉 딱 선상이거나 조금 모자란다.**
+"이것만 하면 10M"은 철회한다. 필요조건이지 충분조건이 아니다.
+
+### 이 트랙의 성격
+
+원리는 성립한다 — snp_shared 페이지는 이미 C-bit이 지워져 있고(`mapped ...
+shared cache=wb`) x86 PCIe는 코히런트하므로, 이미 shared인 페이지를 다시
+바운스하는 것은 불필요한 복사다. 막는 것은 커널의 무조건 정책이고, 우회하려면
+DMA 계층에 "이 페이지는 이미 shared" 경로가 필요하다(coherent-MR 트랙,
+1회 실패 이력). **애플리케이션 밖의 작업이며, 성공해도 목표에 딱 닿는 수준.**
+
+원격 저장소는 sync-off 런이 쓰레기를 썼으므로 재프리로드했다 —
+curr_items 1,000,000 / badcrc 0 / get_misses 0 확인.
+
+NEXT: genie (sync 외 경로 필요 — 10M은 sync 제거 + 추가 절감의 조합이어야 한다)

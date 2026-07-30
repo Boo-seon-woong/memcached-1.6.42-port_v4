@@ -836,7 +836,8 @@ void storage_flush_pending_writes(void) {
     unsigned int n = g_setq.n;
     if (n == 0) return;
     g_setq.n = 0;
-    void *w = g_setq.v[0]->thread->ext_worker;
+    LIBEVENT_THREAD *t = g_setq.v[0]->thread;
+    void *w = t->ext_worker;
 
     /* 1단계 — 봉인. ext_seal_at_flush면 여기서 처음 암호화가 일어난다.
      * 배치 앞쪽 항목은 뒤쪽 항목들의 seal을 자기 span 안에서 기다리게 되므로
@@ -888,6 +889,15 @@ void storage_flush_pending_writes(void) {
      * cb는 staging 반납과 ready 목록 적재까지만 하므로 안전하다. */
     for (int k = 0; k < 8 && extstore_worker_drain(w, 32) > 0; k++)
         ;
+
+    /* 우리가 거둔 완료는 ready 목록에만 올라가 있다. 재개(storage_flush_returns)
+     * 는 item_lock을 잡으므로 여기서 부를 수 없고 — 큐 상한 경로가 이미 그
+     * 락 아래다 — drain 이벤트에 맡겨야 한다. 그런데 우리가 CQ를 비워버리면
+     * worker_libevent의 drain 지점은 outstanding==0을 보고 블록 전체를
+     * 건너뛴다. 그러면 arm도 안 걸리고, 클라이언트가 그 응답을 기다리느라
+     * 다음 명령을 안 보내면 영원히 재개되지 않는다(실측: preload가 249k에서
+     * 정지, 서버 CPU 0). 수거했으면 반드시 재개도 예약한다. */
+    worker_storage_arm_drain(t);
 
     atomic_fetch_add(&g_setq_flushes, 1);
     atomic_fetch_add(&g_setq_writes, m);

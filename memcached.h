@@ -464,6 +464,7 @@ struct settings {
     int hashpower_init;
     unsigned int item_mag_depth; /* 워커 전용 item magazine 깊이. 0 = 비활성 */
     bool ext_pac_set;       /* v3 pac: SET을 publish-at-command 비동기로 처리 */
+    bool ext_seal_at_flush; /* v3 pac: 암호화를 큐 적재가 아니라 flush 시점에 */
     int item_lock_power;    /* item lock table size = 2^N; 0 = derive from -t */     /* Starting hash power level */
     bool shutdown_command; /* allow shutdown command */
     int tail_repair_time;   /* LRU tail refcount leak repair time */

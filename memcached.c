@@ -248,6 +248,7 @@ static void settings_init(void) {
     settings.hashpower_init = 0;
     settings.item_mag_depth = 32;
     settings.ext_pac_set = true;   /* v3 pac 브랜치 기본 on — A/B는 no_ext_pac_set */
+    settings.ext_seal_at_flush = true;  /* A/B는 no_ext_seal_at_flush */
     settings.item_lock_power = 0;   /* 0 = derive from threadcount */
     settings.shutdown_command = false;
     settings.tail_repair_time = TAIL_REPAIR_TIME_DEFAULT;
@@ -1962,6 +1963,7 @@ void process_stat_settings(ADD_STAT add_stats, void *c) {
     APPEND_STAT("item_lock_power", "%d", item_lock_power_used());
     APPEND_STAT("item_mag_depth", "%u", settings.item_mag_depth);
     APPEND_STAT("ext_pac_set", "%s", settings.ext_pac_set ? "yes" : "no");
+    APPEND_STAT("ext_seal_at_flush", "%s", settings.ext_seal_at_flush ? "yes" : "no");
     APPEND_STAT("slab_chunk_max", "%d", settings.slab_chunk_size_max);
     APPEND_STAT("tail_repair_time", "%d", settings.tail_repair_time);
     APPEND_STAT("flush_enabled", "%s", settings.flush_enabled ? "yes" : "no");
@@ -4124,7 +4126,8 @@ static void usage(void) {
            "   - ext_drain_spin:      CQ drain spin budget, 0..4096 (default: 1024)\n"
            "   - ext_drain_empty_max: stop spinning after N consecutive empty CQ polls, 0=never (default: 0)\n"
            "   - ext_loc_mag_depth:   worker-private remote-loc magazine depth, 0=off (default: 64)\n"
-           "   - ext_pac_set / no_ext_pac_set: publish-at-command async SET (default: on)\n");
+           "   - ext_pac_set / no_ext_pac_set: publish-at-command async SET (default: on)\n"
+           "   - ext_seal_at_flush / no_ext_seal_at_flush: encrypt at flush, not at enqueue (default: on)\n");
 #endif
 #ifdef PROXY
     printf("   - proxy_config:        path to lua library file. separate with ':' for multiple files\n"
@@ -4695,6 +4698,8 @@ int main (int argc, char **argv) {
         ITEM_MAG_DEPTH,
         EXT_PAC_SET,
         NO_EXT_PAC_SET,
+        EXT_SEAL_AT_FLUSH,
+        NO_EXT_SEAL_AT_FLUSH,
         NO_HASHEXPAND,
         TAIL_REPAIR_TIME,
         HASH_ALGORITHM,
@@ -4746,6 +4751,8 @@ int main (int argc, char **argv) {
         [ITEM_MAG_DEPTH] = "item_mag_depth",
         [EXT_PAC_SET] = "ext_pac_set",
         [NO_EXT_PAC_SET] = "no_ext_pac_set",
+        [EXT_SEAL_AT_FLUSH] = "ext_seal_at_flush",
+        [NO_EXT_SEAL_AT_FLUSH] = "no_ext_seal_at_flush",
         [NO_HASHEXPAND] = "no_hashexpand",
         [TAIL_REPAIR_TIME] = "tail_repair_time",
         [HASH_ALGORITHM] = "hash_algorithm",
@@ -5181,6 +5188,12 @@ int main (int argc, char **argv) {
                 break;
             case NO_EXT_PAC_SET:
                 settings.ext_pac_set = false;
+                break;
+            case EXT_SEAL_AT_FLUSH:
+                settings.ext_seal_at_flush = true;
+                break;
+            case NO_EXT_SEAL_AT_FLUSH:
+                settings.ext_seal_at_flush = false;
                 break;
             case NO_HASHEXPAND:
                 start_assoc_maint = false;

@@ -695,7 +695,7 @@ int extstore_workers_prepare(void *ptr, unsigned int nworkers,
      * sync 배치화 이후에는 큐에 쌓인(아직 post 전) 쓰기도 쥔다 —
      * storage.c의 큐 상한(SETQ_HARD_MAX 64)만큼 더 얹는다. */
     e->w_staging_slots = e->write_slots / nworkers;
-    if (e->w_staging_slots < window + 64) e->w_staging_slots = window + 64;
+    if (e->w_staging_slots < window + 64 + 16) e->w_staging_slots = window + 64 + 16;
     size_t ssz = (size_t)nworkers * e->w_staging_slots * e->slot_size;
     e->wstaging_base = dma_alloc(ssz);
     if (!e->wstaging_base) return -1;

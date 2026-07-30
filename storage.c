@@ -221,6 +221,8 @@ void storage_stats(ADD_STAT add_stats, void *c) {
         APPEND_STAT("ext_pac_fallback", "%llu",
                 (unsigned long long)atomic_load(&g_pac_fallback));
         APPEND_STAT("ext_setq_max", "%u", g_setq_max);
+        APPEND_STAT("ext_seal_at_flush", "%s",
+                settings.ext_seal_at_flush ? "yes" : "no");
         APPEND_STAT("ext_setq_flushes", "%llu",
                 (unsigned long long)atomic_load(&g_setq_flushes));
         APPEND_STAT("ext_setq_writes", "%llu",
@@ -603,6 +605,7 @@ typedef struct _io_pending_storage_write_t {
     STAILQ_ENTRY(io_pending_t) iop_next;
                               /* original struct ends here */
     item *hdr_it;             /* 게시된 stub — pending이 참조 1개를 쥔다 */
+    item *src_it;             /* seal 지연 시 평문 원본. seal 직후 놓는다 */
     uint32_t hv;
     struct ext_loc loc;       /* WRITE 실패/unlink 시 회수용 사본 */
     bool write_ok;
@@ -623,6 +626,68 @@ static void setp_out_string(mc_resp *resp, const char *str) {
     memcpy(resp->wbuf, str, len);
     memcpy(resp->wbuf + len, "\r\n", 2);
     resp_add_iov(resp, resp->wbuf, len + 2);
+}
+
+/* staging 슬롯을 잡고 원본을 봉인한다. 명령 시점(즉시)과 flush 시점(지연)
+ * 양쪽에서 같은 코드가 돈다 — 차이는 "언제 부르는가"뿐이다.
+ *
+ * span 스탬프가 이 함수 안에 있으므로, 호출을 flush로 미루면 큐 누적 대기가
+ * 스탬프 앞으로 빠진다. 그것이 ext_seal_at_flush의 목적이고, 동시에 이
+ * 조치가 클라이언트 지연을 줄이지 않는 이유이기도 하다 — 같은 일을 나중에
+ * 할 뿐이다.
+ *
+ * 반환 0 = 봉인 완료(io_ctx.buf 유효), -1 = 실패(슬롯/원본 정리 끝난 상태). */
+static int pac_seal(io_pending_storage_write_t *p) {
+    void *w = p->thread->ext_worker;
+    item *src = p->src_it;
+    size_t ntotal = ITEM_ntotal(src);
+    unsigned int rlen = p->io_ctx.len;
+
+    char *slot;
+    uint64_t stg_spins = 0;
+    while ((slot = extstore_worker_staging_get(w)) == NULL) {
+        stg_spins++;
+        /* 큐에 쌓인 쓰기도 슬롯을 쥔다. 아직 post 전이면 drain해도 완료가
+         * 올 리 없으므로 먼저 내보내야 한다. flush 안에서 불릴 때는 g_setq.n이
+         * 이미 0이라 no-op이고, 그때의 진전은 post된 쓰기의 CQE가 만든다.
+         * staging >= window + SETQ_HARD_MAX 이므로 한 배치가 슬롯을 다 쥐는
+         * 경우는 없다. */
+        storage_flush_pending_writes();
+        if (extstore_worker_drain(w, 32) < 0) break;   /* 엔진 사망 */
+    }
+    if (stg_spins) atomic_fetch_add(&g_worker_write_spins, stg_spins);
+    if (slot == NULL) {
+        do_item_remove(src); p->src_it = NULL;
+        return -1;
+    }
+
+    uint64_t prof_start = extstore_prof_stamp();
+    int sealed;
+    if (g_crypto_on) {
+        struct ext_aad aad = { .hv = p->hv, .page_id = p->loc.page_id, .pad = 0,
+            .offset = p->loc.offset, .page_version = p->loc.page_version };
+        sealed = ext_crypto_seal((uint8_t *)slot, src, ntotal, &aad);
+    } else {
+        memcpy(slot, src, ntotal);
+        sealed = (int)ntotal;
+    }
+    uint64_t prof_crypto_done = extstore_prof_stamp();
+
+    /* 원본은 봉인 직후 놓는다. 이 item은 해시테이블에 링크된 적이 없으므로
+     * (pac은 stub을 게시한다) 락 없이 놓아도 다른 스레드가 볼 수 없다 —
+     * item_remove()를 쓰면 큐 상한 flush가 item_lock 아래에서 실행될 때 같은
+     * 버킷을 재귀로 잡아 데드락이다. */
+    do_item_remove(src);
+    p->src_it = NULL;
+
+    if (sealed != (int)rlen) {
+        extstore_worker_staging_put(w, slot);
+        return -1;
+    }
+    p->io_ctx.buf = slot;
+    p->io_ctx.t_start = prof_start;
+    p->io_ctx.t_end = prof_crypto_done;
+    return 0;
 }
 
 /* drain 문맥(소유 워커 스레드). staging만 반납하고 결과를 적어 GET과 같은
@@ -665,6 +730,7 @@ static void storage_set_return_cb(io_pending_t *pending) {
  * do_cache_free로 돌려놓는다. */
 static void storage_set_finalize_cb(io_pending_t *pending) {
     io_pending_storage_write_t *p = (io_pending_storage_write_t *)pending;
+    if (p->src_it) { do_item_remove(p->src_it); p->src_it = NULL; }  /* 방어 */
     item_remove(p->hdr_it);   /* pending의 참조 반납 (내부에서 잠근다) */
     p->io_ctx.next = NULL;
 }
@@ -693,50 +759,8 @@ int storage_store_item_pac(void *e, item *it, item **hdr_out, uint32_t hv,
         atomic_fetch_add(&g_pac_fallback, 1);
         return 0;
     }
-    /* staging이 말랐다면 이 워커의 pending들이 슬롯을 쥐고 있는 것이고, 그
-     * CQE들은 µs 안에 도착한다. 거부(NOT_STORED)하지 말고 자기 CQ를 걷어
-     * 회수될 때까지 기다린다 — 파이프라인 버스트에서 워커당 슬롯 수(9)를
-     * 넘는 SET이 한 pass에 들어오는 것은 정상 상황이다. cb는 staging 반납과
-     * g_ret_head 적재까지만 하므로 item_lock 아래인 여기서도 안전하다. */
-    char *slot;
-    uint64_t stg_spins = 0;
-    while ((slot = extstore_worker_staging_get(w)) == NULL) {
-        stg_spins++;
-        /* 큐에 쌓인 쓰기도 슬롯을 쥐고 있다. 그것들이 아직 post되지 않았다면
-         * drain해도 완료가 올 리 없으므로 먼저 내보내야 한다 — 이 한 줄이
-         * 없으면 큐가 슬롯을 전부 쥔 순간 이 루프가 영원히 돈다. */
-        storage_flush_pending_writes();
-        if (extstore_worker_drain(w, 32) < 0) break;   /* 엔진 사망 */
-    }
-    if (stg_spins) atomic_fetch_add(&g_worker_write_spins, stg_spins);
-    if (slot == NULL) {
-        extstore_free_loc(e, &loc);
-        do_item_remove(hdr_it);
-        atomic_fetch_add(&g_pac_fallback, 1);
-        return 0;   /* 엔진이 죽었다 — 동기 경로도 -1로 끝난다 */
-    }
-
-    uint64_t prof_start = extstore_prof_stamp();
-    int sealed;
-    if (g_crypto_on) {
-        struct ext_aad aad = { .hv = hv, .page_id = loc.page_id, .pad = 0,
-            .offset = loc.offset, .page_version = loc.page_version };
-        sealed = ext_crypto_seal((uint8_t *)slot, it, ntotal, &aad);
-    } else {
-        memcpy(slot, it, ntotal);
-        sealed = (int)ntotal;
-    }
-    uint64_t prof_crypto_done = extstore_prof_stamp();
-    if (sealed != (int)rlen) {
-        extstore_worker_staging_put(w, slot);
-        extstore_free_loc(e, &loc);
-        do_item_remove(hdr_it);
-        return -1;
-    }
-
     io_pending_storage_write_t *p = do_cache_alloc(t->io_cache);
     if (p == NULL) {
-        extstore_worker_staging_put(w, slot);
         extstore_free_loc(e, &loc);
         do_item_remove(hdr_it);
         atomic_fetch_add(&g_pac_fallback, 1);
@@ -754,11 +778,25 @@ int storage_store_item_pac(void *e, item *it, item **hdr_out, uint32_t hv,
     p->hdr_it = hdr_it;
     p->hv = hv;
     p->loc = loc;
-    p->io_ctx = (obj_io){ .data = p, .next = NULL, .buf = slot,
+    p->io_ctx = (obj_io){ .data = p, .next = NULL, .buf = NULL,
         .page_version = loc.page_version, .len = rlen, .offset = loc.offset,
         .page_id = loc.page_id, .mode = OBJ_IO_WRITE,
-        .cb = _storage_set_item_cb,
-        .t_start = prof_start, .t_end = prof_crypto_done };
+        .cb = _storage_set_item_cb };
+
+    /* 봉인 전까지 평문 원본을 살려둔다. 호출자(complete_nread_ascii)는
+     * store_item이 돌아오면 c->item을 놓아버리므로 여기서 참조를 하나 든다.
+     * 즉시 봉인 모드에서는 pac_seal이 그 자리에서 다시 놓는다. */
+    refcount_incr(it);
+    p->src_it = it;
+
+    if (!settings.ext_seal_at_flush) {
+        if (pac_seal(p) != 0) {
+            do_cache_free(t->io_cache, p);
+            extstore_free_loc(e, &loc);
+            do_item_remove(hdr_it);
+            return -1;   /* 아직 게시 전이라 되돌릴 수 있다 */
+        }
+    }
 
     item_hdr *hdr = (item_hdr *)ITEM_data(hdr_it);
     hdr->page_version = loc.page_version;
@@ -800,15 +838,30 @@ void storage_flush_pending_writes(void) {
     g_setq.n = 0;
     void *w = g_setq.v[0]->thread->ext_worker;
 
+    /* 1단계 — 봉인. ext_seal_at_flush면 여기서 처음 암호화가 일어난다.
+     * 배치 앞쪽 항목은 뒤쪽 항목들의 seal을 자기 span 안에서 기다리게 되므로
+     * (sync는 모든 seal 뒤 1회여야 하니까) 배치가 클수록 앞쪽 span이 나빠진다.
+     * 즉시 봉인 모드에서는 이미 buf가 채워져 있어 이 단계가 통째로 건너뛴다. */
     obj_io *ios[SETQ_HARD_MAX];
-    for (unsigned int i = 0; i < n; i++)
-        ios[i] = &g_setq.v[i]->io_ctx;
-
-    /* seal → sync → post 순서는 쓰기마다 유지된다. 배치는 sync를 공유할 뿐이다. */
-    extstore_worker_sync_for_device(w, ios, n);
-
-    uint64_t spins = 0;
+    unsigned int m = 0;
     for (unsigned int i = 0; i < n; i++) {
+        io_pending_storage_write_t *p = g_setq.v[i];
+        if (p->io_ctx.buf == NULL && pac_seal(p) != 0) {
+            /* 이미 게시된 SET이라 되돌릴 수 없다 — WRITE 실패와 같은 경로로 */
+            _storage_set_item_cb(NULL, &p->io_ctx, -1);
+            continue;
+        }
+        ios[m++] = &p->io_ctx;
+    }
+    if (m == 0) { atomic_fetch_add(&g_setq_flushes, 1); return; }
+
+    /* 2단계 — 각 쓰기에 대해 seal → sync → post 순서는 유지된다.
+     * 배치는 sync 호출만 공유한다. */
+    extstore_worker_sync_for_device(w, ios, m);
+
+    /* 3단계 — post */
+    uint64_t spins = 0;
+    for (unsigned int i = 0; i < m; i++) {
         int rc;
         while ((rc = extstore_worker_post_write_presynced(w, ios[i])) == EAGAIN) {
             spins++;
@@ -822,7 +875,7 @@ void storage_flush_pending_writes(void) {
     }
     if (spins) atomic_fetch_add(&g_worker_write_spins, spins);
     atomic_fetch_add(&g_setq_flushes, 1);
-    atomic_fetch_add(&g_setq_writes, n);
+    atomic_fetch_add(&g_setq_writes, m);
 }
 /* ==== v3 pac 끝 ========================================================== */
 

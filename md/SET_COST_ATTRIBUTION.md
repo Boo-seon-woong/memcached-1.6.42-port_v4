@@ -213,6 +213,9 @@ adbdda8이고, 대기 중 CPU 1.097 → 0.104 core-s/s를 확인했다.
 | `v3-async-set` | watermark gating (연결 파킹 없음, 응답 전송만 게이트) | 정확하나 동기 대비 2배 손실(0.90M vs 1.74M), op당 ~7µs 유휴 미규명. 브랜치 보존 |
 | `v3-set-10m` | 연결 파킹 (STORE_PENDING 시 conn_mwrite 파킹, B-1 순서 수정의 대가) | **실 호스트 기각**: SET-only 1.0M(동기 대비 −40%), 1:9 혼합 GET 10.7M→5.1M. 상한 = 연결수÷파킹시간 |
 
-동기 경로(step ①②③③′ + A-결함 수정)가 main이고, 실측 기준선은 1.71~1.74M
-@ CPU 7.29 µs/op이다. 다음 순서는 **off-CPU 8.7 µs 규명 → publish-at-command**
-(`SET_WORKFLOW.md` §3·§4, `V3_REVIEW_FINDINGS.md` §6.5).
+동기 경로(step ①②③③′ + A-결함 수정)가 main이고, A/B 계열 기준선은
+1.71~1.74M @ CPU 7.29 µs/op이다. 2026-07-30 main(`7a09928`) 배포 재측정은
+**2.27M @ span 6.21 µs**(memtier@genie — bed·클라이언트 상이, 절대값 비교
+불가, `SET_WORKFLOW.md` §0-1). 다음 순서는 **off-CPU 간극 규명(공급 조건
+민감성 확인됨) → publish-at-command**(`SET_WORKFLOW.md` §3·§4,
+`V3_REVIEW_FINDINGS.md` §6.5).

@@ -133,3 +133,9 @@ crypto + sync = 1.37 µs,  나머지 예산 1.20 µs
 최대 항목은 **워커 점유 16µs와 CPU 7.29µs 사이의 off-CPU 8.7µs**
 (`SET_WORKFLOW.md` §3)이고, 구조 후속은 publish-at-command
 (`V3_REVIEW_FINDINGS.md` §6.5)다.
+
+**2026-07-30 배포 재측정** (main `7a09928`, memtier@genie): SET-only
+**2.27M @ span 6.21µs**, 워커 점유 12.3µs/op. 이 span 기준 동기 상한은
+28÷6.21µs = **4.51M** — 즉 5M은 동기 구조로는 span보다 점유를 더 줄여야
+하는 모순이라 불가하고, 비동기 전환 후 CPU ≤ 5.6µs/op(28÷5M)이 5M의
+조건이다. 상세는 `SET_WORKFLOW.md` §0-1.

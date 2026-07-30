@@ -5301,3 +5301,90 @@ distinct-seed, 90s; obwatch 60s 창)라 우열 판정은 유효하다.
    수치 자체는 동기 경로 대표값으로 유효 — main 문서 4곳 귀속 정정.
 
 NEXT: genie (off-box W2/W3 pac A/B — 정본 bed에서 절대값·(c) 재판정)
+
+---
+
+## [2026-07-30 KST] ariel — 1차 목표 착수: SYNC 배치화 적용 완료. **guest 반영됨**, off-box 판정 요청.
+
+관리자가 1차 목표를 **SET-only 5 M ops/s, span < 30 µs**로 설정했다.
+착수 항목 하나(§5 최대 레버)를 적용해 실측까지 마쳤다.
+
+### guest 반영 상태 — 예, 이미 떠 있다
+
+```text
+실행 중   ~/kvs-port-v3/memcached.pacb-2d0290a
+          -t 28 -m 2048 -c 16384 -R 1024
+          -o ext_path=10.99.0.2:11212:4g,ext_worker_window=24,
+             ext_qp_per_worker=2,ext_drain_spin=1024,hashpower=22,ext_setq_max=64
+keyspace  curr_items 1,000,000 (프리로드 완료), get_misses=0
+건강      engine_dead=0 write_failures=0 slot_acct_leak=0
+카운터    stats reset 완료 — 창을 새로 열어도 된다
+정리      guest 내부 memtier 전부 종료함 (측정 오염 방지)
+```
+
+**주의: 기본 `memcached`(main-7a09928)가 아니라 pac+배치 실험 바이너리다.**
+같은 바이너리로 대조군을 만들 수 있다:
+
+| 목적 | 추가 `-o` |
+|---|---|
+| pac + 배치 (현재 기동 상태) | `ext_setq_max=64` |
+| pac, 배치 없음 | `ext_setq_max=1` |
+| 동기 경로 (pac 자체를 끔) | `no_ext_pac_set` |
+
+### 이번에 적용한 것 (`v3-set-pac` `2d0290a`)
+
+**SYNC_FOR_DEVICE 배치화.** 수락된 SET을 큐에 모아 이벤트 루프 pass 끝에서
+advise 1회로 함께 동기화한다. pac이 비동기 구조를 열어준 덕에 처음 가능해진
+항목이고, `SET_10M_REQUIREMENTS.md` §4가 "가장 큰 단일 레버"로 지목했던 것이다.
+
+```text
+예측   sync 1.90 µs → 6배 상각 시 0.32 µs
+실측   sync 1.90 µs → 0.32 µs   (상각 계수 63.7)   ← 일치
+```
+
+co-located 스윕(`ext_setq_max` 1/4/16/64): 처리량 2.375 → **2.868 M/s
+(+20.8 %)**, 클라이언트 지연은 오히려 **p99.9 −32.5 %**, 결함 0.
+상세 `SET_WORKFLOW.md` §0-3.
+
+### 현재 위치와 5M까지의 거리
+
+```text
+SET  server CPU/op 5.77 µs → 28코어 환산 4.85 M/s
+GET  server CPU/op 2.52 µs → 28코어 환산 11.11 M/s   (같은 바이너리·같은 bed)
+필요                5.60 µs (= 28 ÷ 5M)
+```
+
+GET의 정본 실측이 10.35 M인데 위 환산이 11.11 M이므로 **co-located 환산은
+약 7 % 낙관적**이다. 보정하면 SET ≈ **4.5 M**, 5M까지 CPU/op 약 10 % 절감이
+남았다. 다음 대상은 **SET − GET = 2.29 µs**(stub/loc 할당 · 게시 · 반납)이고,
+프로파일이 다음 단계다.
+
+### span에 대해 — 정의를 맞추면 이미 충족이다
+
+```text
+post → CQE (GET 게이트와 같은 구간)    6.36 µs   ← 30 µs 아래
+seal → CQE (현재 SET 정의)           240.6 µs   ← 수락 큐잉 포함, 다른 양
+```
+
+포화 상태에서 뒤 숫자가 커지는 것은 Little의 법칙이지 결함이 아니다. GET은
+그 구간을 애초에 재지 않는다. **판정은 `extstore_prof_write_xfer_avg_ns`로
+할 것.**
+
+### 요청: off-box W2 (그리고 가능하면 W1/W3)
+
+```text
+볼 것
+  set/s                                처리량 (5M 판정)
+  extstore_prof_write_xfer_avg_ns      post→CQE span (30 µs 게이트 판정)
+  ext_setq_writes / ext_setq_flushes   상각 계수 — 실부하에서 몇이 나오는가
+  ext_pac_fail (0이어야) / ext_pac_fallback (작아야)
+  correctness 푸터 필수 0
+  W3 혼합에서는 badcrc — pac은 게시가 CQE보다 앞서므로 그 창의 재시도율이
+    처음으로 실측된다. get_misses=0이면 재시도로 복구된 것이다.
+```
+
+`srvcpu.sh`(guest `~/pac-ab-20260730/`)를 부하 중에 돌리면 클라이언트 CPU를
+뺀 서버만의 CPU/op가 나온다 — off-box에서는 클라이언트가 밖에 있으니 이 값과
+guest busyCPU가 거의 같아야 하고, 그 일치 자체가 위 7 % 보정 계수의 검증이다.
+
+NEXT: genie (off-box W2 — pac+배치 5M 판정)

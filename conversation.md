@@ -5808,3 +5808,80 @@ DMA 계층에 "이 페이지는 이미 shared" 경로가 필요하다(coherent-M
 curr_items 1,000,000 / badcrc 0 / get_misses 0 확인.
 
 NEXT: genie (sync 외 경로 필요 — 10M은 sync 제거 + 추가 절감의 조합이어야 한다)
+
+---
+
+## [2026-07-30 KST] ariel — 1단계 통과: guest 커널 모듈 빌드 파이프라인 확보. 2단계 설계 확정.
+
+### 배경 정정 — (c)는 추측이 아니었다
+
+`~/2026/rdma-sev/legacy/sev-to-mn/docs/07-mechanisms-and-coherent-fix.md`가
+우리 문제를 **명시적으로 남은 과제로 적어 두고 있었다**:
+
+> **Coherent data MRs.** M1–M5는 큐에 관한 것이다. RDMA_READ의 페이로드는
+> data MR도 coherent하지 않으면 de-register copy-back이 필요하다.
+
+그리고 전제는 이미 실증돼 있다 — SEV-SNP에서 `dma_alloc_coherent`는
+(1) shared, (2) **비바운스(`dma_handle == phys`)**, (3) `pgprot_decrypted`로
+user-mmap 가능한 메모리를 준다. 그 기법이 QP work-queue에 이미 적용·배포됐고
+(`MLX5_QP_FLAG_COHERENT_BUF`), 지금 우리 서버가 `MLX5_COHERENT_QP=1`로 그것을
+쓰고 있다. **data MR만 아직 안 됐을 뿐이다.**
+
+### 우리 MR이 바운스된다는 직접 증거
+
+```text
+서버 가동 중 io_tlb_used  109,374
+서버 정지 후              109,034
+델타                          340 슬롯
+예상 (458752+236544)/2048     339 슬롯    ← 일치
+```
+
+### 왜 snp_shared로는 안 되는가
+
+`snp_shared`는 `set_memory_decrypted()`로 페이지를 shared로 만든다. 그런데
+`ibv_reg_mr`이 `dma_map_sgtable`을 부르고, SEV에서 그것은 페이지 상태와 무관하게
+무조건 바운스한다. **바운스를 피하는 길은 페이지를 decrypt하는 것이 아니라
+`dma_map`을 아예 부르지 않는 것**이다 — `dma_alloc_coherent`는 `dma_handle`을
+직접 주므로 map이 필요 없다. QP 패치가 정확히 그렇게 한다:
+
+```c
+cbuf->cpu_addr = dma_alloc_coherent(dev->mdev->device, cbuf->size,
+                                    &cbuf->dma_addr, GFP_KERNEL);
+qp->coherent = cbuf;
+ubuffer->umem = NULL;                    /* ← umem 없음 = dma_map 없음 = 바운스 없음 */
+...
+pas[i] = cpu_to_be64(qp->coherent->dma_addr + ((u64)i << PAGE_SHIFT));
+```
+
+### 1단계 결과 — 통과
+
+```text
+guest 커널 = pristine Linux 6.16 + coherent-wq 패치 (tag → 038d61fd6422)
+소스        cdn.kernel.org linux-6.16.tar.xz → ~/2026/sev-guest-kernel/
+config      guest의 /boot/config-... 그대로 (CONFIG_LOCALVERSION이 vermagic을 만든다)
+패치        coherent-wq-and-dbrec-sync.patch 무fuzz 적용
+빌드        mlx5_ib.ko 생성 성공
+
+vermagic  6.16.0-snp-guest-038d61fd6422 SMP mod_unload
+guest     6.16.0-snp-guest-038d61fd6422                    ← 일치
+COHERENT 심볼 수  내 빌드 9 / 검증본(artifacts/mlx5_ib-coherent.ko) 9   ← 일치
+```
+
+`CONFIG_MODVERSIONS`·`CONFIG_MODULE_SIG` 둘 다 꺼져 있어 심볼 CRC/서명 문제는
+없다. 남은 차이는 `depends:` 필드뿐이고(빠른 경로에서 modpost를 건너뛴 탓),
+전체 `make modules`가 배경에서 돌며 `Module.symvers`를 만드는 중이다.
+
+### 2단계 설계 (템플릿 확보됨)
+
+QP 패치와 같은 구조를 MR에: `mr.c`에 coherent 등록 경로 추가 + `main.c`에
+`MLX5_IB_MMAP_TYPE_MR_COHERENT` mmap 경로 + uapi 플래그. userspace는
+`libmlx5`(또는 직접 mmap)로 그 버퍼를 받고, `extstore.c`는 staging/bounce를
+거기서 받은 뒤 **sync 호출을 전부 삭제**한다.
+
+기대 효과(실측 기반): SET sync 1.74 µs/op 소멸, GET sync 소멸,
+Sspan 12.5 → 8.4 µs, SWIOTLB 340슬롯 반납.
+
+**롤백 경로**: guest의 `~/covlib/mlx5_ib.ko.stock-bak`, 그리고
+`legacy/sev-to-mn-backup-2026-07-06/mlx5_ib.ko.working`.
+
+NEXT: ariel (Module.symvers 완료 후 재빌드 → guest 로드 검증 → 2단계 착수)

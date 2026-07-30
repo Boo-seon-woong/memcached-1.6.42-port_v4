@@ -46,7 +46,7 @@ sudo ip link set ibs3 up
 sudo ip link set ibs3 mtu 4092
 cat /sys/class/net/ibs3/mtu                    # => 4092  (2044면 opensm 확인)
 
-cd <repo>/genie-server
+cd memcached-1.6.42_port_v3/genie-server
 cc -O2 -o genie_memd genie_memd.c -lrdmacm -libverbs    # 바이너리 없을 때만
 
 # nohup 필수: genie_memd는 SIGHUP을 무시하지 않는다(SigIgn=0). 그냥 `&`로
@@ -153,13 +153,16 @@ guest의 `~/kvs-port-v3/`에는 A/B용 변종들이 함께 있고, 평범한 `me
 grep -ac assoc_prefetch ~/kvs-port-v3/memcached
 # => 1 이상이어야 정상. 0이면 구버전이므로 아래로 교체:
 #    (서버가 실행 중이면 "Text file busy" — 먼저 내리고 실행)
-cp ~/kvs-port-v3/memcached.xpf ~/kvs-port-v3/memcached
+cp ~/kvs-port-v3/memcached.main-7a09928 ~/kvs-port-v3/memcached
 grep -ac assoc_prefetch ~/kvs-port-v3/memcached    # => 재확인
 ```
 
-`memcached.xpf`도 없다면 저장소에서 빌드해 배포한다(호스트에서
+`memcached.main-7a09928`도 없다면 저장소 main에서 빌드해 배포한다(호스트에서
 `make -j"$(nproc)"` 후 `scp memcached ...:~/kvs-port-v3/memcached`).
-기준 빌드의 sha256은 `ed219244c5621570…`.
+현재 운영 빌드(main `7a09928`)의 sha256은 `7f190a55ce232c54…`.
+게이트 지속 실측(10.357M) 당시 빌드는 `ed219244c5621570…`(태그
+`v3-10.35M-sustained`). `memcached.cca9807`은 비동기 SET이 켜진 기각 빌드다
+— 측정에 쓰지 말 것.
 
 ### D-1. 서버 기동 (tmux — ssh 세션이 끊겨도 유지)
 
@@ -229,10 +232,10 @@ COMMON="-s 10.99.0.3 -p 11411 -P memcache_text -d 64 \
 
 | # | 워크로드 | 명령 | 목적 |
 |---|---|---|---|
-| **W1** | GET only | `memtier_benchmark $COMMON --ratio=0:1 --test-time=360` | 기준 — optimal 운영점 |
-| **W2** | SET only | `memtier_benchmark $COMMON --ratio=1:0 --test-time=360` | remote WRITE 경로. seal→WRITE→CQE→STORED |
-| **W3** | SET:GET 1:9 | `memtier_benchmark $COMMON --ratio=1:9 --test-time=360` | 혼합. 읽기/쓰기 경로 동시 부하 |
-| **W4** | SET:GET 1:1 | `memtier_benchmark $COMMON --ratio=1:1 --test-time=360` | 쓰기 비중 상한 확인 |
+| **W1** | GET only | `memtier_benchmark $COMMON --ratio=0:1 --test-time=100` | 기준 — optimal 운영점 |
+| **W2** | SET only | `memtier_benchmark $COMMON --ratio=1:0 --test-time=100` | remote WRITE 경로. seal→WRITE→CQE→STORED |
+| **W3** | SET:GET 1:9 | `memtier_benchmark $COMMON --ratio=1:9 --test-time=100` | 혼합. 읽기/쓰기 경로 동시 부하 |
+| **W4** | SET:GET 1:1 | `memtier_benchmark $COMMON --ratio=1:1 --test-time=100` | 쓰기 비중 상한 확인 |
 
 워크로드별 유의사항:
 
@@ -258,11 +261,12 @@ echo "현재 부하: $(( (b-a)/3 )) ops/s"
 ### E-3. [ariel-guest] 창 열고 실시간 관측 — **이 한 줄이 측정 전체다**
 
 ```sh
-DUR=300 bash /tmp/obwatch.sh
+DUR=60 bash /tmp/obwatch.sh
 ```
 
-`stats reset`으로 창을 열고, 1초마다 실시간 지표를 찍고, 300초 뒤 최종
-요약까지 출력한다. 별도 계산 단계(구 F-1) 없이 이것으로 끝난다.
+`stats reset`으로 창을 열고, 1초마다 실시간 지표를 찍고, `DUR`초 뒤 최종
+요약까지 출력한다(빠른 확인 60, 정식 판정 300). 별도 계산 단계(구 F-1)
+없이 이것으로 끝난다.
 
 ```text
 extstore watch — window 300s, opened 02:10:14Z

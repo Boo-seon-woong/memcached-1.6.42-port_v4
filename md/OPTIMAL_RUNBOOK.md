@@ -3,6 +3,13 @@
 기준일: 2026-07-29, 태그 `v3-10.35M-sustained` 시점. 이 문서 하나로 최적
 시행을 재현할 수 있도록 조건·세팅·환경·기대치·주의사항을 모두 담는다.
 
+> **2026-07-30 갱신.** guest 운영 바이너리는 `~/kvs-port-v3/memcached` =
+> `memcached.main-7a09928`(sha256 `7f190a55ce232c54…`)로 교체됐다 — GET
+> 경로는 태그와 동일 계열(prefetch ⑥⑦ 포함, `grep -ac assoc_prefetch` = 2)
+> 이고, SET step ①②③③′ + A-결함 수정이 추가된 main 빌드다. 비동기 SET이
+> 켜져 있던 `memcached.cca9807`(실측 기각, `V3_REVIEW_FINDINGS.md` 처분
+> 주석)은 백업으로 보존. 게이트 절대값 재판정은 fresh bed W1로 할 것.
+
 > 사람이 직접 순차 실행할 목적이라면 **`md/MANUAL_TEST_PROCEDURE.md`**(양측
 > 명령을 실행 위치와 함께 단계별로 나열하고 결과 검증까지 포함)를 쓰고, 이
 > 문서는 배경·근거 참조용으로 본다.
@@ -124,7 +131,7 @@ cd $HOME/kvs-port && taskset -c 0-27 env \
 
 | 항목 | 값 | 이유(한 줄) |
 |---|---|---|
-| binary | v3 tree (태그 `v3-10.35M-sustained`, sha256 `ed219244c5621570…`) | in-request + cross-request prefetch 포함. **guest의 `~/kvs-port-v3/memcached`가 구버전일 수 있으므로 `grep -ac assoc_prefetch`로 확인할 것** — 없으면 −6.9% |
+| binary | main `7a09928` = `memcached.main-7a09928` (sha256 `7f190a55ce232c54…`; 게이트 지속 실측 자체는 태그 `v3-10.35M-sustained`, `ed219244c5621570…`에서 수행) | prefetch ⑥⑦ 포함 + SET step ①②③③′ + A-결함 수정. **`grep -ac assoc_prefetch`로 2 확인할 것** — 없으면 −6.9% |
 | `taskset 0-27` / `-t 28` | worker 28 | 29부터 softirq 경합(p99.9 +30%), 30은 게이트 붕괴 |
 | `ext_worker_window=24` | W=24 | W28과 동등 throughput, span −2.4 µs (교대 A/B 확정) |
 | `ext_qp_per_worker=2` | QP 56개 | 4와 동등, 절반으로 단순화; 1은 ORD<W 파킹으로 −4% |

@@ -627,8 +627,16 @@ int storage_store_item(void *e, item *it, item **hdr_out, uint32_t hv) {
             n[0],n[1],n[2],n[3],n[4],n[5],n[6],n[7],n[8],n[9],n[10],n[11]);
     }
 
-    store_wait wait = {0};
-    obj_io io = {
+    /* wait/io를 스택에 두면 안 된다: 엔진이 죽어 완료를 못 본 채 이 함수를
+     * 빠져나가는 경로(아래 wait.done 검사)에서, 우리가 post한 WRITE는 여전히
+     * wr_id로 이 객체를 가리키고 있다. 스택에 두면 프레임이 죽은 뒤 다음
+     * drain이 그 CQE를 폴링해 dangling 포인터로 io->cb를 호출한다. 동기
+     * 경로는 자기 완료를 기다리므로 워커당 동시 진행이 1건이고, 따라서
+     * _Thread_local 한 벌로 충분하다 — 그리고 이건 프레임과 함께 죽지 않는다. */
+    static _Thread_local store_wait wait;
+    static _Thread_local obj_io io;
+    wait = (store_wait){0};
+    io = (obj_io){
         .data = &wait, .next = NULL, .buf = slot,
         .page_version = loc.page_version, .len = rlen, .offset = loc.offset,
         .page_id = loc.page_id, .mode = OBJ_IO_WRITE,
@@ -653,7 +661,12 @@ int storage_store_item(void *e, item *it, item **hdr_out, uint32_t hv) {
         if (extstore_worker_drain(w, 32) < 0) break;
     }
     if (spins) atomic_fetch_add(&g_worker_write_spins, spins);
-    extstore_worker_staging_put(w, slot);
+    if (wait.done) {
+        extstore_worker_staging_put(w, slot);
+    }
+    /* !wait.done이면 엔진이 죽어 완료를 보지 못한 것이다. 슬롯을 반납하면
+     * NIC이 아직 DMA-read 중일 수 있는 메모리를 다음 SET이 덮어쓰므로
+     * 의도적으로 누수시킨다 — 엔진이 죽은 뒤이므로 회수할 이유가 없다. */
 
     if (wait.ret != (int)rlen) {
         extstore_free_loc(e, &loc);

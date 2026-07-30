@@ -215,10 +215,9 @@ static int _logger_parse_ise(logentry *e, char *scratch) {
     char keybuf[KEY_MAX_URI_ENCODED_LENGTH];
     struct logentry_item_store *le = (struct logentry_item_store *) e->data;
     const char *status = "unknown";
-    /* keep in step with enum store_item_type; STORE_PENDING is last */
+    /* keep in step with enum store_item_type */
     const char * const status_map[] = {
-        "not_stored", "stored", "exists", "not_found", "too_large", "no_memory",
-        "pending" };
+        "not_stored", "stored", "exists", "not_found", "too_large", "no_memory" };
     const char * const cmd_map[] = {
         "null", "add", "set", "replace", "append", "prepend", "cas", "append", "prepend" };
 

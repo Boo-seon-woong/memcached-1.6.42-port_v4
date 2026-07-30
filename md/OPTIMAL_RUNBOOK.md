@@ -3,12 +3,18 @@
 기준일: 2026-07-29, 태그 `v3-10.35M-sustained` 시점. 이 문서 하나로 최적
 시행을 재현할 수 있도록 조건·세팅·환경·기대치·주의사항을 모두 담는다.
 
-> **2026-07-30 갱신.** guest 운영 바이너리는 `~/kvs-port-v3/memcached` =
-> `memcached.main-7a09928`(sha256 `7f190a55ce232c54…`)로 교체됐다 — GET
-> 경로는 태그와 동일 계열(prefetch ⑥⑦ 포함, `grep -ac assoc_prefetch` = 2)
-> 이고, SET step ①②③③′ + A-결함 수정이 추가된 main 빌드다. 비동기 SET이
-> 켜져 있던 `memcached.cca9807`(실측 기각, `V3_REVIEW_FINDINGS.md` 처분
-> 주석)은 백업으로 보존. 게이트 절대값 재판정은 fresh bed W1로 할 것.
+> **2026-07-30 갱신 (2차).** 5M 캠페인 측정 중이라 guest의
+> `~/kvs-port-v3/memcached`는 **`memcached.pacb-2d0290a`**(pac +
+> SYNC 배치화, sha256 `39bf32e68dff1af3…`)를 가리킨다. 런북 명령줄을 그대로
+> 쓰면 pac이 기동된다(`ext_pac_set=yes`, `ext_setq_max=64`가 기본).
+> 동기 기준선은 `memcached.main-7a09928`(sha256 `7f190a55ce232c54…`)로
+> 보존돼 있고, 같은 pac 바이너리에서 `-o no_ext_pac_set`으로도 동기 경로를
+> 낼 수 있다.
+>
+> **기동 후 `stats settings | grep ext_pac_set`으로 어느 경로인지 반드시
+> 확인할 것** — `grep -ac assoc_prefetch`는 GET prefetch만 보므로 두 빌드를
+> 구분하지 못한다(`MANUAL_TEST_PROCEDURE.md` D-0의 사고 기록 참조).
+> 게이트 절대값 재판정은 fresh bed W1로 할 것.
 
 > 사람이 직접 순차 실행할 목적이라면 **`md/MANUAL_TEST_PROCEDURE.md`**(양측
 > 명령을 실행 위치와 함께 단계별로 나열하고 결과 검증까지 포함)를 쓰고, 이

@@ -5388,3 +5388,51 @@ seal → CQE (현재 SET 정의)           240.6 µs   ← 수락 큐잉 포함,
 guest busyCPU가 거의 같아야 하고, 그 일치 자체가 위 7 % 보정 계수의 검증이다.
 
 NEXT: genie (off-box W2 — pac+배치 5M 판정)
+
+---
+
+## [2026-07-30 KST] ariel — **인수인계 사고 정정**: off-box 측정이 pac이 아니라 main(동기)을 재고 있었다.
+
+관리자가 off-box 측정에서 "throughput 개선이 전혀 없다"고 보고했다. 원인은
+측정 대상 오지정이고, **내 인수인계 잘못이다.**
+
+```text
+관리자가 기동한 것   ~/kvs-port-v3/memcached  = main-7a09928 (동기, pac 없음)
+내가 떠 있다고 적은 것 ~/kvs-port-v3/memcached.pacb-2d0290a
+```
+
+런북(§4)과 수동 절차서(D-1)의 서버 명령줄이 **`$HOME/kvs-port-v3/memcached`**
+로 고정돼 있는데, 그 파일이 main이었다. 나는 conversation.md에 pac 바이너리
+이름을 적어 두고 "guest에 반영돼 있다"고 보고했지만, 절차서를 그대로 따르면
+main이 뜬다. 절차서와 어긋나는 배치를 해 놓고 별도 안내로 때운 것이 잘못이다.
+
+### 조치
+
+1. `~/kvs-port-v3/memcached`를 **pacb-2d0290a로 교체**했다(sha256
+   `39bf32e68dff1af3…`). 이제 런북 명령줄을 그대로 써도 pac이 뜬다.
+   동기 기준선은 `memcached.main-7a09928`로 보존, 같은 pac 바이너리에서
+   `-o no_ext_pac_set`으로도 동기 경로를 낼 수 있다.
+2. 재기동 + 1M 프리로드 + 카운터 리셋 완료. 검증:
+
+```text
+ext_pac_set        yes
+ext_setq_max       64
+ext_pac_posted     1,000,000  = cmd_set        ← 전량 pac 경로 (폴백 0)
+ext_setq_writes/flushes = 1,000,000 / 31,171   ← 상각 계수 32.1
+ext_pac_fail 0   ext_pac_fallback 0
+curr_items 1,000,000   get_misses 0   engine_dead 0   write_failures 0
+파이프라인 100건 정합성  stored=100 not_stored=0
+```
+
+3. **절차서에 판별 절차를 넣었다.** `grep -ac assoc_prefetch`는 GET
+   prefetch만 보므로 동기/pac 빌드를 **구분하지 못한다**(양쪽 다 2). 앞으로
+   기동 후 `stats settings | grep ext_pac_set`과, 부하 후
+   `ext_pac_posted == cmd_set`을 확인한다. 런북 바이너리 행도 갱신했다.
+
+### 교훈
+
+"바이너리를 배포했다"와 "절차서가 그 바이너리를 집는다"는 다른 명제다.
+변종 바이너리로 측정을 요청할 때는 **절차서가 가리키는 경로 자체를 바꾸거나,
+요청문에 명령줄 전체를 적어야** 한다. 이름만 알려주면 절차서가 이긴다.
+
+NEXT: genie (off-box W2 재시도 — 이번엔 pac 확인 후)

@@ -153,8 +153,26 @@ guest의 `~/kvs-port-v3/`에는 A/B용 변종들이 함께 있고, 평범한 `me
 grep -ac assoc_prefetch ~/kvs-port-v3/memcached
 # => 1 이상이어야 정상. 0이면 구버전이므로 아래로 교체:
 #    (서버가 실행 중이면 "Text file busy" — 먼저 내리고 실행)
-cp ~/kvs-port-v3/memcached.main-7a09928 ~/kvs-port-v3/memcached
+cp ~/kvs-port-v3/memcached.pacb-2d0290a ~/kvs-port-v3/memcached
 grep -ac assoc_prefetch ~/kvs-port-v3/memcached    # => 재확인
+```
+
+> **`assoc_prefetch`만으로는 어떤 SET 경로인지 알 수 없다.** 그 심볼은 GET
+> prefetch용이라 동기 빌드와 pac 빌드 **양쪽 모두** 갖고 있다. 2026-07-30에
+> 이것 때문에 사고가 났다 — 런북 명령줄이 `$HOME/kvs-port-v3/memcached`를
+> 가리키는데 그 파일이 main(동기)이어서, pac을 잰다고 생각하고 동기 경로를
+> 재고 "개선이 없다"는 결론이 나올 뻔했다. **기동 후 반드시 아래로 확인할 것:**
+
+```sh
+# 서버 기동 뒤 (§D-1 다음)
+printf 'stats settings\r\nquit\r\n' | nc 127.0.0.1 11411 | grep ext_pac_set
+# => STAT ext_pac_set yes      (없으면 동기 바이너리다)
+printf 'stats\r\nquit\r\n' | nc 127.0.0.1 11411 | grep ext_setq_max
+# => STAT ext_setq_max 64      (1이면 배치화 꺼진 대조군)
+
+# 부하를 조금 준 뒤 pac 경로가 실제로 타는지 (핵심 확인)
+printf 'stats\r\nquit\r\n' | nc 127.0.0.1 11411 | grep -E "cmd_set|ext_pac_posted"
+# => ext_pac_posted 가 cmd_set 과 같아야 한다. 0이면 전부 동기 폴백이다.
 ```
 
 `memcached.main-7a09928`도 없다면 저장소 main에서 빌드해 배포한다(호스트에서

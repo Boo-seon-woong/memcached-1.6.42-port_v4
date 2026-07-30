@@ -36,6 +36,7 @@ struct extstore_stats {
     uint64_t prof_write_sync_avg_ns, prof_write_xfer_avg_ns;
     uint64_t worker_drain_calls, worker_drain_empty, worker_wait_enq;
     uint64_t slot_acct_leak;
+    uint64_t alloc_failures;   /* store full: SET answered NOT_STORED */
     uint64_t worker_window;
     struct extstore_page_data *page_data;
 };

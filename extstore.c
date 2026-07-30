@@ -386,17 +386,19 @@ int extstore_alloc(void *ptr, unsigned int len, unsigned int bucket, struct ext_
     }
     pthread_mutex_lock(&e->mutex);
     struct loc_stack *fs = &e->freeloc[bucket];
-    /* A freed loc carries the *previous* object's len. Reuse its physical slot
-     * only if that slot is at least as large as this request (else a bigger
-     * object would overrun the neighbour), and stamp the caller's real len so
-     * the stub and the sealed object agree — otherwise a 500-byte slot reused
-     * for a 499-byte object leaves the stub claiming 500 while the seal wrote
-     * 499, and every GET RDMA-READs one byte too many and fails GCM forever.
-     * ponytail: LIFO top-only check + conservative shrink (recorded len can
-     * only decrease); for the fixed-size workload every len matches so this is
-     * exact recycling. A size-class free-list would reclaim more under mixed
-     * sizes — add if fragmentation shows up. */
-    if (fs->top > 0 && fs->arr[fs->top-1].len >= len) {
+    /* Physical slots are uniform slot_size, so any freed slot holds any request
+     * (len > slot_size was rejected above) and the free list is fully fungible.
+     * Only the *recorded* len is the caller's, so the stub and the sealed object
+     * agree and GET RDMA-READs exactly what was written — a 500-byte slot reused
+     * for a 499-byte object must claim 499, not 500, or GCM fails forever.
+     *
+     * This used to pack objects tightly and reuse a slot only when the LIFO top
+     * was >= the request. memtier keys m-1 .. m-1000000 differ in nkey, so ~12%
+     * of SETs missed that check and fell through to the page-append path below;
+     * pages are never reclaimed, so 64 pages (4 GiB) burned out after ~7 min of
+     * write load and every later SET answered NOT_STORED. Uniform spacing costs
+     * (slot_size - len) bytes per live object and removes the leak entirely. */
+    if (fs->top > 0) {
         *out = fs->arr[--fs->top];
         out->len = len;
         store_page *p = &e->pages[out->page_id];
@@ -411,11 +413,15 @@ int extstore_alloc(void *ptr, unsigned int len, unsigned int bucket, struct ext_
         pthread_mutex_unlock(&e->mutex);
         return 0;
     }
-    store_page *p = grab_active(e, bucket, len);
-    if (!p) { pthread_mutex_unlock(&e->mutex); return -1; }
+    store_page *p = grab_active(e, bucket, e->slot_size);
+    if (!p) {
+        STAT_L(e); e->stats.alloc_failures++; STAT_UL(e);
+        pthread_mutex_unlock(&e->mutex);
+        return -1;
+    }
     out->page_id = p->id; out->page_version = p->version;
     out->offset = p->allocated; out->len = len;
-    p->allocated += len; p->obj_count++; p->bytes_used += len;
+    p->allocated += e->slot_size; p->obj_count++; p->bytes_used += len;
     STAT_L(e);
     e->stats.bytes_used += len; e->stats.objects_used++;
     STAT_UL(e);

@@ -5436,3 +5436,93 @@ curr_items 1,000,000   get_misses 0   engine_dead 0   write_failures 0
 요청문에 명령줄 전체를 적어야** 한다. 이름만 알려주면 절차서가 이긴다.
 
 NEXT: genie (off-box W2 재시도 — 이번엔 pac 확인 후)
+## [2026-07-30 KST] genie — **W2 aborted: SET-only wedges the remote store. Root cause found, patch attached.**
+
+W1 (`--ratio=0:1`) is clean. **W2 (`--ratio=1:0`) fails**: after a few minutes of
+write load the server answers `NOT_STORED` to essentially every SET and does not
+recover until memcached is restarted. Mixed runs (W3/W4) hit the same wall, just
+later. Client side:
+
+```text
+server 10.99.0.3:11411 handle error response: NOT_STORED
+error: response parsing failed.
+```
+
+Those two lines are **one** event, not two — memtier's text parser logs the
+unexpected status and then returns -1, which the client logs as a parse failure.
+There is no protocol corruption. The only real error is `NOT_STORED`.
+
+### Path
+
+`NOT_STORED` on a plain `set` is not reachable in stock memcached. It is
+reachable here: `do_store_item()` leaves `stored` at its `NOT_STORED` default
+when `storage_store_item()` returns −1 (memcached.c:1618 / :1707). Of that
+function's failure branches the one that fires is `extstore_alloc()`.
+
+### Why `extstore_alloc` runs out on a 1 M-key bed with 4 GiB of store
+
+The live set is ~159 MB (`extstore_objects_used` 1 001 314 × ~159 B). It should
+never exhaust 4 GiB. It does, because reuse is conditional and pages are not:
+
+1. `extstore_alloc` recycles a freed slot only when the **LIFO top** entry has
+   `len >= len` (extstore.c:358). Miss → fall through to the page-append path.
+2. Our keys are `m-1` … `m-1000000`, so `nkey` is 3…9 and `ITEM_ntotal` — hence
+   `rlen` — takes 7 distinct values. Under `--key-pattern=R:R` the top of the
+   LIFO is the wrong size a large fraction of the time.
+3. A hit also **shrinks** the recorded len (`out->len = len`), and recorded len
+   can only decrease. So the free list ratchets down toward the shortest key
+   ever freed, and the miss rate climbs monotonically.
+4. `free_pages` is filled once at init and never refilled — no compaction, no
+   page reclaim anywhere in extstore.c. Every miss is permanently lost page
+   space.
+
+Measured on the live bed during your sweep: `extstore_pages_used` 21 in 134 s of
+write load while `extstore_objects_used` held at 1.0 M. That is 1.34 GiB
+appended for a 159 MB working set — a **~12 % reuse-miss rate**, and 64 pages
+gone in roughly 7 minutes of sustained SET. My earlier sample caught the wedged
+state directly: `extstore_pages_free 0`, `extstore_pages_used 64`,
+`extstore_bytes_used 159 MB`.
+
+This is exactly the failure `tools/mixed-size-stress.sh` was written to detect
+("continuous growth across rounds with a constant key count means freed slots
+are not being reclaimed"). The tool was right; it just was never pointed at the
+real key distribution, where the size spread comes from `nkey`, not from `-d`.
+
+### Fix (in this commit, needs your rebuild)
+
+Make physical slots uniform `slot_size` and the free list fully fungible:
+
+```text
+extstore.c  extstore_alloc: drop the len>=len reuse condition; the page-append
+            path advances p->allocated by e->slot_size instead of len.
+            (len > slot_size is already rejected at the top, so any freed slot
+            holds any request; out->len still records the caller's real len, so
+            the stub and the seal agree and GET reads exactly what was written.)
+extstore.h  stats: alloc_failures
+storage.c   stats: extstore_alloc_failures
+```
+
+Cost: `slot_size - len` bytes per live object. At `EXT_SLOT_SIZE=256` the 1 M-key
+bed goes 159 MB → 256 MB of 4 GiB, and store capacity becomes a flat
+4 GiB / 256 B = 16.7 M objects with **zero** fragmentation growth. GET path,
+crypto, AAD and the wire format are untouched — this only changes slot spacing.
+
+The new counter matters independently of the fix: `extstore_alloc()` failure was
+incrementing **nothing**, so a wedged store was invisible in `stats`
+(`extstore_write_failures` stayed 0 throughout — it only covers RDMA WRITE
+completion errors). Add `extstore_alloc_failures == 0` to the gate list.
+
+### What I need from you
+
+1. Rebuild `~/kvs-port-v3/memcached` from this commit and restart with the §4
+   line, then re-preload — the restart drops the keyspace.
+2. Confirm `extstore_pages_used` **plateaus** under W2 instead of climbing.
+   That is the acceptance test, not throughput.
+3. Then I re-run W1→W2→W3→W4 as specified. W2's earlier partial numbers are
+   void — most of those 202 M "ops" were error responses, not stores.
+
+Not requested but worth deciding later: with no compaction, any workload whose
+object size exceeds `slot_size` still has no path to reclaim a page. Out of
+scope here.
+
+NEXT: ariel

@@ -200,6 +200,8 @@ void storage_stats(ADD_STAT add_stats, void *c) {
                 (unsigned long long)atomic_load(&g_worker_write_spins));
         APPEND_STAT("ext_slot_acct_leak", "%llu",
                 (unsigned long long)st.slot_acct_leak);
+        APPEND_STAT("extstore_alloc_failures", "%llu",
+                (unsigned long long)st.alloc_failures);
         APPEND_STAT("extstore_prof_span_ver", "%u", 2);
         // Span v2 distribution (ns); populated only under EXT_RDMA_PROF=1.
         APPEND_STAT("extstore_prof_read_count", "%llu", (unsigned long long)st.prof_read_count);

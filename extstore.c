@@ -415,13 +415,20 @@ int extstore_alloc(void *ptr, unsigned int len, unsigned int bucket, struct ext_
      * free 시 이미 감산했다가 alloc에서 새 len으로 재가산하므로 균형이 맞지만,
      * magazine 경로에는 그 감산/재가산이 없다. 고정 크기 워크로드에서는 모든
      * len이 일치하므로 이 제한으로 잃는 적중은 없다. */
-    if (g_loc_mag_depth && g_loc_mag.n > 0) {
-        struct ext_loc *t = &g_loc_mag.v[g_loc_mag.n - 1];
-        if (t->len == len) {
-            *out = *t;
-            g_loc_mag.n--;
-            return 0;
-        }
+    /* LIFO 최상단만 보면 키 길이가 섞인 워크로드에서 적중률이 1/(길이 종수)로
+     * 무너진다. memtier의 m-1 .. m-1000000은 nkey가 3~9바이트라 len이 7종이고,
+     * 실측에서 나머지 6/7이 전역 e->mutex로 몰려 SET CPU의 10.3%가 그 뮤텍스의
+     * futex wake(try_to_wake_up → rq lock)로 나갔다. 키 길이만 균일하게 만들면
+     * 같은 조건에서 SET이 +46.6% 빨라진다.
+     *
+     * 스캔은 회계를 건드리지 않는다 — 여전히 **정확히 같은 len만** 재사용하므로
+     * 위 문단의 표류 위험이 그대로 없다. 길이 종수가 적어 실제 스캔 깊이는
+     * 몇 칸이고, 배열은 연속이라 캐시에 붙어 있다. */
+    for (unsigned int i = g_loc_mag_depth ? g_loc_mag.n : 0; i-- > 0; ) {
+        if (g_loc_mag.v[i].len != len) continue;
+        *out = g_loc_mag.v[i];
+        g_loc_mag.v[i] = g_loc_mag.v[--g_loc_mag.n];   /* swap-remove, 순서 무관 */
+        return 0;
     }
     pthread_mutex_lock(&e->mutex);
     struct loc_stack *fs = &e->freeloc[bucket];

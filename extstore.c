@@ -183,6 +183,10 @@ typedef struct store_worker {
     /* 완료 경로 회계는 worker가 소유한다. 전역 stats_mutex를 핫패스에서
      * 잡으면 worker 수에 따라 경합이 커진다. 읽기는 get_stats에서 합산. */
     atomic_uint_fast64_t objects_read, bytes_read, objects_written, bytes_written;
+    uint64_t prof_r_e2e_count, prof_r_e2e_sum_ns;   /* span v3 */
+    uint32_t prof_r_e2e_hist[PROF_BUCKETS];
+    uint64_t prof_w_e2e_count, prof_w_e2e_sum_ns;
+    uint32_t prof_w_e2e_hist[PROF_BUCKETS];
     uint64_t prof_r_count, prof_r_sum_ns;
     uint64_t prof_r_crypto_ns, prof_r_sync_ns, prof_r_xfer_ns;
     uint32_t prof_r_hist[PROF_BUCKETS];
@@ -1112,9 +1116,17 @@ static void prof_summarize(store_engine *e, int read,
         for (unsigned int i = 0; i < e->worker_count; i++) {
             store_worker *w = e->workers[i];
             if (!w) continue;
-            total += read ? w->prof_r_count : w->prof_w_count;
-            sum   += read ? w->prof_r_sum_ns : w->prof_w_sum_ns;
-            uint32_t *h = read ? w->prof_r_hist : w->prof_w_hist;
+            uint32_t *h;
+            switch (read) {
+            case 2:  total += w->prof_r_e2e_count; sum += w->prof_r_e2e_sum_ns;
+                     h = w->prof_r_e2e_hist; break;
+            case 3:  total += w->prof_w_e2e_count; sum += w->prof_w_e2e_sum_ns;
+                     h = w->prof_w_e2e_hist; break;
+            case 1:  total += w->prof_r_count; sum += w->prof_r_sum_ns;
+                     h = w->prof_r_hist; break;
+            default: total += w->prof_w_count; sum += w->prof_w_sum_ns;
+                     h = w->prof_w_hist; break;
+            }
             for (int b = 0; b < PROF_BUCKETS; b++) merged[b] += h[b];
         }
     }
@@ -1157,6 +1169,10 @@ void extstore_get_stats(void *ptr, struct extstore_stats *st) {
                        &st->prof_read_p50_ns, &st->prof_read_p99_ns);
         prof_summarize(e, 0, &st->prof_write_count, &st->prof_write_avg_ns,
                        &st->prof_write_p50_ns, &st->prof_write_p99_ns);
+        prof_summarize(e, 2, &st->prof_read_e2e_count, &st->prof_read_e2e_avg_ns,
+                       &st->prof_read_e2e_p50_ns, &st->prof_read_e2e_p99_ns);
+        prof_summarize(e, 3, &st->prof_write_e2e_count, &st->prof_write_e2e_avg_ns,
+                       &st->prof_write_e2e_p50_ns, &st->prof_write_e2e_p99_ns);
         uint64_t rc = 0, wc = 0, rs = 0, rx = 0, ws = 0, wx = 0;
         if (e->workers) {
             for (unsigned int i = 0; i < e->worker_count; i++) {
@@ -1188,6 +1204,10 @@ void extstore_prof_reset(void *ptr) {
             w->prof_w_crypto_ns = w->prof_w_sync_ns = w->prof_w_xfer_ns = 0;
             memset(w->prof_r_hist, 0, sizeof(w->prof_r_hist));
             memset(w->prof_w_hist, 0, sizeof(w->prof_w_hist));
+            w->prof_r_e2e_count = w->prof_r_e2e_sum_ns = 0;
+            w->prof_w_e2e_count = w->prof_w_e2e_sum_ns = 0;
+            memset(w->prof_r_e2e_hist, 0, sizeof(w->prof_r_e2e_hist));
+            memset(w->prof_w_e2e_hist, 0, sizeof(w->prof_w_e2e_hist));
         }
     }
 }
@@ -1206,9 +1226,27 @@ void extstore_prof_read_done(void *ptr, obj_io *io,
     if (!w) return;
     prof_record(w->prof_r_hist, &w->prof_r_count, &w->prof_r_sum_ns,
                 crypto_done - io->t_start);
+    /* span v3: backend 진입부터 — admission/queue 대기를 포함한다 */
+    if (io->t_enter && crypto_done > io->t_enter)
+        prof_record(w->prof_r_e2e_hist, &w->prof_r_e2e_count,
+                    &w->prof_r_e2e_sum_ns, crypto_done - io->t_enter);
     w->prof_r_crypto_ns += (uint64_t)
             ((crypto_done - crypto_start) * g_ns_per_cycle);
-    io->t_start = io->t_end = 0;
+    io->t_start = io->t_end = io->t_enter = 0;
+}
+
+/* span v3 WRITE 종료. CQE 관측이 아니라 **응용에서 완료로 보이는 시점**
+ * (WFLIGHT 해제 직후)에 호출한다. 그래서 v2 가 빠뜨리는 completion 관측
+ * 지연과 loop 재개 지연이 여기 들어온다. */
+void extstore_prof_write_e2e(void *worker, obj_io *io, uint64_t done) {
+    /* 호출처(storage_set_return_cb)는 drain 문맥이 아니라 루프 레벨이다 —
+     * g_drain_worker 가 NULL 이므로 워커를 명시적으로 받는다. */
+    if (!g_prof_on || !io || !io->t_enter || done <= io->t_enter) return;
+    store_worker *w = worker;
+    if (!w) return;
+    prof_record(w->prof_w_e2e_hist, &w->prof_w_e2e_count,
+                &w->prof_w_e2e_sum_ns, done - io->t_enter);
+    io->t_enter = 0;
 }
 
 void extstore_get_page_data(void *ptr, struct extstore_stats *st) {

@@ -254,6 +254,17 @@ void storage_stats(ADD_STAT add_stats, void *c) {
         APPEND_STAT("extstore_prof_read_xfer_avg_ns", "%llu", (unsigned long long)st.prof_read_xfer_avg_ns);
         APPEND_STAT("extstore_prof_write_sync_avg_ns", "%llu", (unsigned long long)st.prof_write_sync_avg_ns);
         APPEND_STAT("extstore_prof_write_xfer_avg_ns", "%llu", (unsigned long long)st.prof_write_xfer_avg_ns);
+        /* span v3 — backend 진입부터. READ: storage_get_item 진입 → 복호·태그
+         * 검증 완료. WRITE: storage_store_item_pac 진입 → WFLIGHT 해제.
+         * v2 가 빼는 admission/queue 대기와 완료 관측 지연이 여기 들어온다. */
+        APPEND_STAT("extstore_prof_read_e2e_count", "%llu", (unsigned long long)st.prof_read_e2e_count);
+        APPEND_STAT("extstore_prof_read_e2e_avg_ns", "%llu", (unsigned long long)st.prof_read_e2e_avg_ns);
+        APPEND_STAT("extstore_prof_read_e2e_p50_ns", "%llu", (unsigned long long)st.prof_read_e2e_p50_ns);
+        APPEND_STAT("extstore_prof_read_e2e_p99_ns", "%llu", (unsigned long long)st.prof_read_e2e_p99_ns);
+        APPEND_STAT("extstore_prof_write_e2e_count", "%llu", (unsigned long long)st.prof_write_e2e_count);
+        APPEND_STAT("extstore_prof_write_e2e_avg_ns", "%llu", (unsigned long long)st.prof_write_e2e_avg_ns);
+        APPEND_STAT("extstore_prof_write_e2e_p50_ns", "%llu", (unsigned long long)st.prof_write_e2e_p50_ns);
+        APPEND_STAT("extstore_prof_write_e2e_p99_ns", "%llu", (unsigned long long)st.prof_write_e2e_p99_ns);
     }
 
 }
@@ -405,6 +416,9 @@ static void _storage_get_item_cb(void *e, obj_io *io, int ret) {
 }
 
 int storage_get_item(LIBEVENT_THREAD *t, item *it, mc_resp *resp) {
+    /* span v3 시작 — backend 진입. v2 는 실제 post 시점(worker_post)에서
+     * 시작해 admission·bounce slot 대기를 통째로 빠뜨린다. */
+    uint64_t t_enter_v3 = extstore_prof_stamp();
 #ifdef NEED_ALIGN
     item_hdr hdr;
     memcpy(&hdr, ITEM_data(it), sizeof(hdr));
@@ -499,6 +513,7 @@ int storage_get_item(LIBEVENT_THREAD *t, item *it, mc_resp *resp) {
 #endif
     eio->retries = 0;
     eio->mode = OBJ_IO_READ;
+    eio->t_enter = t_enter_v3;
     eio->cb = _storage_get_item_cb;
 
     // FIXME: This stat needs to move to reflect # of flash hits vs misses
@@ -713,6 +728,9 @@ static void storage_set_return_cb(io_pending_t *pending) {
     item *it = p->hdr_it;
     item_lock(p->hv);
     it->it_flags &= ~ITEM_WFLIGHT;
+    /* span v3 종료 — 응용에서 완료로 보이는 시점. CQE 관측(v2)보다 뒤이고
+     * completion 관측 지연과 loop 재개 지연을 포함한다. */
+    extstore_prof_write_e2e(p->thread->ext_worker, &p->io_ctx, extstore_prof_stamp());
     bool linked = (it->it_flags & ITEM_LINKED) != 0;
     if (!p->write_ok) {
         /* 쓰이지 않은 원격을 가리키는 stub을 남길 수 없다 — 게시를 되물린다 */
@@ -743,6 +761,8 @@ static void storage_set_finalize_cb(io_pending_t *pending) {
  *       0 = 이 SET은 못 받음(호출자가 동기 경로로),  -1 = 하드 실패. */
 int storage_store_item_pac(void *e, item *it, item **hdr_out, uint32_t hv,
                            LIBEVENT_THREAD *t) {
+    /* span v3 시작 — backend 진입 (v2 는 seal 직전에서 시작한다) */
+    uint64_t t_enter_v3 = extstore_prof_stamp();
     size_t ntotal = ITEM_ntotal(it);
     unsigned int rlen = ntotal + (g_crypto_on ? EXT_CRYPTO_OVERHEAD : 0);
     if (it->it_flags & (ITEM_CHUNKED|ITEM_HDR)) return 0;
@@ -818,6 +838,7 @@ int storage_store_item_pac(void *e, item *it, item **hdr_out, uint32_t hv,
      * 여기서 실패할 수 있는 것은 이미 다 지났으므로 enqueue는 실패하지 않는다.
      * 이 지점 이후로 SET은 "수락됨"이고, post 실패조차 -1로 되돌릴 수 없다 —
      * done_cb(-1) 경로로 합류해 게시가 롤백된다. */
+    p->io_ctx.t_enter = t_enter_v3;      /* span v3 시작 (t_start 는 seal 시각) */
     g_setq.v[g_setq.n++] = p;
     if (g_setq.n >= g_setq_max)
         storage_flush_pending_writes();

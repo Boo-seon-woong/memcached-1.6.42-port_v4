@@ -29,6 +29,9 @@ struct extstore_stats {
     /* EXT_RDMA_PROF (D6): per-direction in-server span distribution, ns.
      * Populated only when EXT_RDMA_PROF=1; reset by extstore_prof_reset. */
     uint64_t prof_read_count,  prof_read_avg_ns,  prof_read_p50_ns,  prof_read_p99_ns;
+    /* span v3 — backend 진입부터. v2 가 빼는 admission/queue·완료 관측 지연 포함 */
+    uint64_t prof_read_e2e_count,  prof_read_e2e_avg_ns,  prof_read_e2e_p50_ns,  prof_read_e2e_p99_ns;
+    uint64_t prof_write_e2e_count, prof_write_e2e_avg_ns, prof_write_e2e_p50_ns, prof_write_e2e_p99_ns;
     uint64_t prof_write_count, prof_write_avg_ns, prof_write_p50_ns, prof_write_p99_ns;
     /* Span v2 breakout: crypto + sync (SWIOTLB advise) + transfer, avg ns. */
     uint64_t prof_read_crypto_avg_ns, prof_write_crypto_avg_ns;
@@ -103,6 +106,10 @@ struct _obj_io {
     /* EXT_RDMA_PROF span v2: READ pre-post through post-decrypt;
      * WRITE pre-encrypt through CQE. t_end is an intermediate boundary. */
     uint64_t t_start, t_end;
+    /* span v3 (secure remote access): backend 진입 시각. v2 가 놓치는
+     * admission/queue 대기를 포함한다 — READ 는 storage_get_item() 진입,
+     * WRITE 는 storage_store_item_pac() 진입에서 찍는다. 0 이면 미계측. */
+    uint64_t t_enter;
 };
 
 /* A remote object location. Returned by extstore_alloc, stored in item_hdr. */
@@ -152,6 +159,8 @@ void extstore_get_stats(void *ptr, struct extstore_stats *st);
 uint64_t extstore_prof_stamp(void);
 void extstore_prof_read_done(void *ptr, obj_io *io,
         uint64_t crypto_start, uint64_t crypto_done);
+/* span v3 WRITE 종료: WFLIGHT 해제 직후(= 응용에서 보이는 완료) 호출한다. */
+void extstore_prof_write_e2e(void *worker, obj_io *io, uint64_t done);
 /* EXT_RDMA_PROF: clear the per-op span histograms (call at phase start). */
 void extstore_prof_reset(void *ptr);
 void extstore_get_page_data(void *ptr, struct extstore_stats *st);

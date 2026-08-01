@@ -1683,8 +1683,9 @@ enum store_item_type do_store_item(item *it, int comm, LIBEVENT_THREAD *t, const
             if (do_store) {
                 item_replace(old_it, publish_it, hv, cas_in);
 #ifdef EXTSTORE
-                if (t->storage && (old_it->it_flags & ITEM_HDR))
-                    storage_delete(t->storage, old_it);
+                /* 옛 loc 은 여기서 회수하지 않는다 — 그 슬롯을 읽고 있는
+                 * GET 이 있을 수 있고, refcount 는 그것을 이미 알고 있다.
+                 * item_free 가 마지막 참조가 사라질 때 회수한다. */
                 stored = (pac == 1) ? STORE_PENDING : STORED;
 #else
                 stored = STORED;

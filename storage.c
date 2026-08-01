@@ -135,6 +135,15 @@ bool storage_validate_item(void *e, item *it) {
     }
 }
 
+/* item_free 훅. unlink 가 아니라 실제 소멸에서 회수해야 in-flight READ 가
+ * 보호된다 — GET 은 hdr_it 에 refcount 를 쥐므로 그동안 여기 오지 않는다.
+ * 상류는 unlink 에서 회수해도 됐다. 페이지 버전이 낡은 읽기를 잡아줬기
+ * 때문인데, 이 포트는 슬롯 단위로 재활용하고 버전을 올리지 않아 그 안전망이
+ * 없다(extstore.c:534). */
+void storage_free_hdr(item *it) {
+    if (ext_storage) storage_delete(ext_storage, it);
+}
+
 void storage_delete(void *e, item *it) {
     if (it->it_flags & ITEM_HDR) {
         /* v3 pac: WRITE가 아직 wire에 있는 stub. 지금 loc을 회수하면 그 슬롯을
@@ -144,8 +153,10 @@ void storage_delete(void *e, item *it) {
          * GET-miss 경로는 badcrc면 stub을 남기므로 WFLIGHT stub을 지우지 않는다). */
         if (it->it_flags & ITEM_WFLIGHT) return;
         item_hdr *hdr = (item_hdr *)ITEM_data(it);
+        if (hdr->len == 0) return;          /* 이미 회수됐거나 게시 전이다 */
         struct ext_loc loc = { hdr->page_version, hdr->offset, hdr->len, hdr->page_id };
         extstore_free_loc(e, &loc);
+        hdr->len = 0;                       /* 두 번 회수하지 않는다 */
     }
 }
 
@@ -757,11 +768,13 @@ static void storage_set_return_cb(io_pending_t *pending) {
         /* 쓰이지 않은 원격을 가리키는 stub을 남길 수 없다 — 게시를 되물린다 */
         if (linked) do_item_unlink(it, p->hv);
         extstore_free_loc(ext_storage, &p->loc);
+        ((item_hdr *)ITEM_data(it))->len = 0;   /* item_free 훅과 겹치지 않게 */
         atomic_fetch_add(&g_pac_fail, 1);
     } else if (!linked) {
         /* in-flight 동안 delete/replace됨. storage_delete가 WFLIGHT를 보고
          * 건너뛰었으므로 회수는 우리 몫이다 */
         extstore_free_loc(ext_storage, &p->loc);
+        ((item_hdr *)ITEM_data(it))->len = 0;
     }
     item_unlock(p->hv);
     p->thread->ext_resident--;
@@ -799,6 +812,10 @@ int storage_store_item_pac(void *e, item *it, item **hdr_out, uint32_t hv,
     item *hdr_it = do_item_alloc(ITEM_key(it), it->nkey, flags, it->exptime,
                                  sizeof(item_hdr));
     if (hdr_it == NULL) { atomic_fetch_add(&g_pac_fallback, 1); return 0; }
+    /* len==0 이 "이 헤더는 loc 을 안 쥐고 있다"의 표시다. 게시 전에 버려지는
+     * 경로가 여럿이라(alloc 실패, seal 실패, post 실패) 초기화가 없으면
+     * item_free 훅이 쓰레기 loc 을 회수한다. */
+    memset(ITEM_data(hdr_it), 0, sizeof(item_hdr));
     struct ext_loc loc;
     if (extstore_alloc(e, rlen, PAGE_BUCKET_DEFAULT, &loc) != 0) {
         do_item_remove(hdr_it);
@@ -984,6 +1001,10 @@ int storage_store_item(void *e, item *it, item **hdr_out, uint32_t hv) {
                                  sizeof(item_hdr));
     if (hdr_it == NULL)
         return -1;
+    /* len==0 이 "이 헤더는 loc 을 안 쥐고 있다"의 표시다. 게시 전에 버려지는
+     * 경로가 여럿이라(alloc 실패, seal 실패, post 실패) 초기화가 없으면
+     * item_free 훅이 쓰레기 loc 을 회수한다. */
+    memset(ITEM_data(hdr_it), 0, sizeof(item_hdr));
 
     struct ext_loc loc;
     if (extstore_alloc(e, rlen, PAGE_BUCKET_DEFAULT, &loc) != 0) {

@@ -292,6 +292,12 @@ void item_free(item *it) {
     unsigned int clsid;
     assert((it->it_flags & ITEM_LINKED) == 0);
     assert(it->refcount == 0);
+#ifdef EXTSTORE
+    /* 원격 슬롯 회수는 여기다 — unlink 가 아니라. 여기는 refcount 0 이
+     * 단언되는 유일한 소멸 지점이고, in-flight READ 를 든 GET 은 hdr_it 에
+     * 참조를 쥐고 있으므로 그동안 도달하지 않는다. 이유는 storage.h 참조. */
+    if (it->it_flags & ITEM_HDR) storage_free_hdr(it);
+#endif
 
     /* so slab size changer can tell later if item is already free or not */
     clsid = ITEM_clsid(it);

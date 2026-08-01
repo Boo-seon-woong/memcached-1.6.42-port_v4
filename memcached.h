@@ -468,6 +468,7 @@ struct settings {
     int item_lock_power;    /* item lock table size = 2^N; 0 = derive from -t */     /* Starting hash power level */
     bool shutdown_command; /* allow shutdown command */
     int tail_repair_time;   /* LRU tail refcount leak repair time */
+    unsigned int ext_submit_batch; /* conns to accumulate before submitting */
     unsigned int ext_drain_spin; /* v2 P2a: post-batch CQ drain spins */
     unsigned int ext_drain_empty_max; /* 연속 빈 poll 이 값에 도달하면 spin 중단. 0=무제한 */
     bool flush_enabled;     /* flush_all enabled */

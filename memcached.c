@@ -258,6 +258,7 @@ static void settings_init(void) {
     settings.shutdown_command = false;
     settings.tail_repair_time = TAIL_REPAIR_TIME_DEFAULT;
     settings.flush_enabled = true;
+    settings.ext_submit_batch = 20;  /* 상류 하드코딩 값 그대로 */
     settings.ext_drain_spin = 1024; /* v2 P2a: measured knee (see V2_CODE_SPEC) */
     settings.ext_drain_empty_max = 0; /* 0 = 기존 동작(중단 없음); 측정으로 정한다 */
     settings.dump_enabled = true;
@@ -3289,7 +3290,15 @@ static void drive_machine(conn *c) {
                 // FIXME: carefully check or document somewhere that submit
                 // cannot resume a connection in-line with submission.
                 conn_set_state(c, conn_io_queue);
-                if (t->conns_tosubmit++ > 20) {
+                if (t->conns_tosubmit++ >= settings.ext_submit_batch) {
+                    /* 상류는 20으로 고정한다. GET 하나가 여기 들어오면 다른
+                     * 20개 연결이 같은 상태에 닿거나 pass가 끝날 때까지 post
+                     * 되지 않는다 — span v3의 admit 구간이 통째로 이것이다
+                     * (pipe 8/16/32에서 16.6 / 28.0 / 53.9 µs). pipeline이
+                     * 깊을수록 연결당 파싱이 길어져 같은 20개를 모으는 데
+                     * 더 걸리므로 부하와 함께 자란다.
+                     * 낮추면 post가 빨라지는 대신 extstore_submit의 체인
+                     * 배칭이 짧아진다. 그 균형점은 측정으로 정한다. */
                     // Run occasional batches, else submit outside event loop.
                     thread_io_queue_submit(c->thread);
                 }
@@ -4128,6 +4137,7 @@ static void usage(void) {
            "   - ext_page_size:       remote allocation page size in MiB (default: 64)\n"
            "   - ext_worker_window:   outstanding operations per worker (default: 16)\n"
            "   - ext_qp_per_worker:   RC QPs per worker, 1..4 (default: 1)\n"
+           "   - ext_submit_batch:    conns to batch before IO submit (default: 20)\n"
            "   - ext_drain_spin:      CQ drain spin budget, 0..4096 (default: 1024)\n"
            "   - ext_drain_empty_max: stop spinning after N consecutive empty CQ polls, 0=never (default: 0)\n"
            "   - ext_loc_mag_depth:   worker-private remote-loc magazine depth, 0=off (default: 64)\n"

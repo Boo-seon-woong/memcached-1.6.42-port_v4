@@ -1164,6 +1164,7 @@ int storage_read_config(void *conf, char **subopt) {
         EXT_DRAIN_EMPTY_MAX,
         EXT_LOC_MAG_DEPTH,
         EXT_SETQ_MAX,
+        EXT_SUBMIT_BATCH,
     };
 
     char *const subopts_tokens[] = {
@@ -1177,6 +1178,7 @@ int storage_read_config(void *conf, char **subopt) {
         [EXT_DRAIN_EMPTY_MAX] = "ext_drain_empty_max",
         [EXT_LOC_MAG_DEPTH] = "ext_loc_mag_depth",
         [EXT_SETQ_MAX] = "ext_setq_max",
+        [EXT_SUBMIT_BATCH] = "ext_submit_batch",
         NULL
     };
 
@@ -1197,6 +1199,13 @@ int storage_read_config(void *conf, char **subopt) {
                 !safe_strtoul(subopts_value, &ext_cf->worker_window) ||
                 ext_cf->worker_window < 1) {
                 fprintf(stderr, "ext_worker_window must be >= 1\n");
+                return 1;
+            }
+            break;
+        case EXT_SUBMIT_BATCH:
+            if (subopts_value == NULL ||
+                !safe_strtoul(subopts_value, &settings.ext_submit_batch)) {
+                fprintf(stderr, "ext_submit_batch must be a number\n");
                 return 1;
             }
             break;

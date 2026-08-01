@@ -9,7 +9,7 @@ e2e 도 기록하므로 e2e count 를 나눗수로 쓴다.
 """
 import sys, csv
 
-COLS = "ts cmd_get cmd_set get_hits get_misses rcount ravg rp99 wcount wavg wp99 badcrc err5 cpu_total cpu_idle re2ec re2ea re2ep99 we2ec we2ea we2ep99 radmit wadmit wret".split()
+COLS = "ts cmd_get cmd_set get_hits get_misses rcount ravg rp99 wcount wavg wp99 badcrc err5 cpu_total cpu_idle re2ec re2ea re2ep99 we2ec we2ea we2ep99 radmit wadmit wret waitenq yields".split()
 
 rows = []
 with open(sys.argv[1]) as f:
@@ -43,7 +43,7 @@ def local(a, b, sum_key, cnt_key):
 
 print(f"{'#':>2} {'초':>4} {'ops/s':>9} {'GET%':>5} "
       f"{'Gv3':>8} {'=adm':>7} {'+v2':>7}   "
-      f"{'Sv3':>9} {'=adm':>6} {'+v2':>6} {'+ret':>9}  {'busy':>5}")
+      f"{'Sv3':>9} {'=adm':>6} {'+v2':>6} {'+ret':>9}  {'park/op':>8} {'busy':>5}")
 
 for i, seg in enumerate(segs, 1):
     if len(seg) < 5:
@@ -63,6 +63,8 @@ for i, seg in enumerate(segs, 1):
     sv2 = local(a, b, "wavg", "wcount")
     sret = local(a, b, "wret", "we2ec")
 
+    ops_n = dg + ds
+    park = (b['waitenq'] - a['waitenq']) / ops_n if ops_n else 0
     dct, di = b["cpu_total"] - a["cpu_total"], b["cpu_idle"] - a["cpu_idle"]
     busy = (dct - di) / dct * 30 if dct else 0
 
@@ -71,4 +73,4 @@ for i, seg in enumerate(segs, 1):
 
     print(f"{i:>2} {dt:>4.0f} {ops/1e6:>8.3f}M {getpct:>4.0f}% "
           f"{f(gv3)} {f(gadm,7)} {f(gv2,7)}   "
-          f"{f(sv3,9)} {f(sadm,6)} {f(sv2,6)} {f(sret,9)}  {busy:>5.1f}")
+          f"{f(sv3,9)} {f(sadm,6)} {f(sv2,6)} {f(sret,9)}  {park:>8.2f} {busy:>5.1f}")

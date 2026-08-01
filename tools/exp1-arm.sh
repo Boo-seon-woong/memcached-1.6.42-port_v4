@@ -10,17 +10,19 @@
 set -eu
 G="ssh -n -i $HOME/.ssh/snp_guest -p 2222 -o BatchMode=yes -o ConnectTimeout=8 ubuntu@localhost"
 
+R=${R:-1024}   # reqs_per_event: pass 당 명령 수 상한 (= backend 유입 조리개)
 case "${1:-}" in
   S3) SB=20; W=40; NQP=4; SLOTS=64 ;;
   S2) SB=4;  W=40; NQP=4; SLOTS=64 ;;
   S1) SB=1;  W=40; NQP=4; SLOTS=64 ;;
   W1) SB=${2:?best submit_batch}; W=64; NQP=4; SLOTS=64 ;;
   W2) SB=${2:?best submit_batch}; W=96; NQP=8; SLOTS=128 ;;
+  R*) SB=20; W=40; NQP=4; SLOTS=64; R=${1#R} ;;   # R<n>: -R 축. 그 외는 기준선
   [0-9]*) SB=$1; W=${2:?}; NQP=${3:?}; SLOTS=${4:?} ;;
   *) echo "usage: $0 {S3|S2|S1|W1 <sb>|W2 <sb>| <sb> <W> <nqp> <slots>}" >&2; exit 1 ;;
 esac
 
-echo "── 무장: submit_batch=$SB W=$W nqp=$NQP READ_SLOTS=$SLOTS (총 QP = 30 × $NQP)"
+echo "── 무장: submit_batch=$SB W=$W nqp=$NQP READ_SLOTS=$SLOTS -R $R (총 QP = 30 × $NQP)"
 
 $G "tmux kill-session -t mc 2>/dev/null || true; pkill -x memcached 2>/dev/null || true"
 sleep 3
@@ -29,12 +31,12 @@ $G "tmux new-session -d -s mc \"cd \\\$HOME/kvs-port && exec taskset -c 0-29 env
 LD_LIBRARY_PATH=\\\$HOME/coherent-mr-v2/lib:\\\$HOME/kvs-port \
 MLX5_COHERENT_QP=1 MLX5_COHERENT_CQ=1 EXT_RDMA_PROF=1 EXT_SELFTEST=1 \
 EXT_CRYPTO_KEY=\\\$HOME/kvs-port/ext.key EXT_SLOT_SIZE=256 EXT_READ_SLOTS=$SLOTS \
-\\\$HOME/coherent-mr-v2/bin/memcached -p 11411 -U 0 -t 30 -m 2048 -c 16384 -R 1024 \
+\\\$HOME/coherent-mr-v2/bin/memcached -p 11411 -U 0 -t 30 -m 2048 -c 16384 -R $R \
 -o ext_path=10.99.0.2:11212:4g,ext_worker_window=$W,ext_qp_per_worker=$NQP,ext_drain_spin=1024,hashpower=22,ext_submit_batch=$SB \
 > /tmp/mc.log 2>&1\""
 sleep 10
 
 echo "── coherent MR 게이트 (2 여야 한다): $($G 'grep -icE "coherent MR [0-9]+B" /tmp/mc.log')"
 $G 'grep -iE "genie_connect OK|Address already|error|failed" /tmp/mc.log | head -3'
-$G 'printf "stats settings\r\nquit\r\n" | timeout 5 nc -q1 127.0.0.1 11411 | grep -E "ext_submit_batch|ext_drain_spin|ext_pac_set"'
+$G 'printf "stats settings\r\nquit\r\n" | timeout 5 nc -q1 127.0.0.1 11411 | grep -E "ext_submit_batch|ext_drain_spin|ext_pac_set|reqs_per_event"'
 echo "── 프리로드 필요 (재기동했다)"

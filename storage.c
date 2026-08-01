@@ -24,6 +24,16 @@ static bool g_crypto_on = false;
 static unsigned int g_read_retries = 3;   // integrity-read retry cap (EXT_READ_RETRIES)
 /* v2 (P2a): completions parked during a drain, flushed by the drain caller. */
 static _Thread_local iop_head_t g_ret_head;
+/* 큐 상한 경로가 item_lock(hv) 아래에서 flush를 부르므로, 그때 재개하면
+ * storage_set_return_cb가 같은 버킷의 item_lock을 다시 잡아 데드락이다.
+ * 충돌하는 것만 여기로 빼고 나머지는 그 자리에서 재개한다 — 버킷이 겹칠
+ * 확률은 1/2^item_lock_power 이라 사실상 전부 즉시 재개된다. */
+static _Thread_local iop_head_t g_ret_defer;
+static _Thread_local bool g_ret_defer_init;
+static _Thread_local uint32_t g_held_bucket;
+static _Thread_local bool g_held;
+
+#define ITEM_LOCK_BUCKET(hv) ((hv) & ((1u << item_lock_power_used()) - 1))
 static _Thread_local bool g_ret_init = false;
 static unsigned int g_worker_window = 16; // v2 P2a (ext_worker_window)
 static unsigned int g_qp_per_worker = 1;  // v2 P2a (ext_qp_per_worker)
@@ -730,6 +740,11 @@ static void _storage_set_item_cb(void *e, obj_io *io, int ret) {
 static void storage_set_return_cb(io_pending_t *pending) {
     io_pending_storage_write_t *p = (io_pending_storage_write_t *)pending;
     item *it = p->hdr_it;
+    if (g_held && ITEM_LOCK_BUCKET(p->hv) == g_held_bucket) {
+        /* 호출자가 이 버킷을 이미 잡고 있다. 루프 레벨에서 다시 시도한다. */
+        STAILQ_INSERT_TAIL(&g_ret_defer, pending, iop_next);
+        return;
+    }
     item_lock(p->hv);
     it->it_flags &= ~ITEM_WFLIGHT;
     /* span v3 종료 — 응용에서 완료로 보이는 시점. CQE 관측(v2)보다 뒤이고
@@ -844,8 +859,13 @@ int storage_store_item_pac(void *e, item *it, item **hdr_out, uint32_t hv,
      * done_cb(-1) 경로로 합류해 게시가 롤백된다. */
     p->io_ctx.t_enter = t_enter_v3;      /* span v3 시작 (t_start 는 seal 시각) */
     g_setq.v[g_setq.n++] = p;
-    if (g_setq.n >= g_setq_max)
+    if (g_setq.n >= g_setq_max) {
+        /* do_store_item의 item_lock(hv) 아래다 — flush 안에서 재개할 때
+         * 이 버킷만 피하도록 알려준다. */
+        g_held = true; g_held_bucket = ITEM_LOCK_BUCKET(hv);
         storage_flush_pending_writes();
+        g_held = false;
+    }
     /* GET이 없는 워크로드에서도 CQE를 걷을 주체를 보장한다 */
     worker_storage_arm_drain(t);
     atomic_fetch_add(&g_pac_posted, 1);
@@ -918,6 +938,13 @@ void storage_flush_pending_writes(void) {
      * cb는 staging 반납과 ready 목록 적재까지만 하므로 안전하다. */
     for (int k = 0; k < 8 && extstore_worker_drain(w, 32) > 0; k++)
         ;
+
+    /* 방금 거둔 완료를 여기서 재개한다. 큐 상한 경로로 들어왔다면 g_held가
+     * 켜져 있어 충돌 버킷만 보류된다. 이 호출이 없으면 재개가 이벤트 루프
+     * pass 하나만큼 밀리는데, ext_setq_max=1 이라 모든 SET이 이 경로로 오므로
+     * 완료 하나가 그 pass의 남은 SET 수백 개를 통째로 기다린다 — 실측
+     * SET-only pipe=256 에서 span v3 2398 µs 중 2390 µs 가 이 대기였다. */
+    storage_flush_returns();
 
     /* 우리가 거둔 완료는 ready 목록에만 올라가 있다. 재개(storage_flush_returns)
      * 는 item_lock을 잡으므로 여기서 부를 수 없고 — 큐 상한 경로가 이미 그
@@ -1376,12 +1403,16 @@ void *storage_init(void *conf) {
 
 /* v2 (P2a): resume conns whose READs completed in the drain that just ended. */
 void storage_flush_returns(void) {
+    if (!g_ret_defer_init) { STAILQ_INIT(&g_ret_defer); g_ret_defer_init = true; }
     if (!g_ret_init) { STAILQ_INIT(&g_ret_head); g_ret_init = true; return; }
     while (!STAILQ_EMPTY(&g_ret_head)) {
         io_pending_t *io = STAILQ_FIRST(&g_ret_head);
         STAILQ_REMOVE_HEAD(&g_ret_head, iop_next);
         conn_io_queue_return(io);
     }
+    /* 락 충돌로 미룬 것들. 다음 호출(늦어도 루프 레벨)이 다시 시도한다 —
+     * 그때는 g_held가 꺼져 있으므로 반드시 처리된다. */
+    STAILQ_CONCAT(&g_ret_head, &g_ret_defer);
 }
 
 /* v2 (P2a): called from main after thread init, before conns are dispatched. */

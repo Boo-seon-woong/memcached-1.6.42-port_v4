@@ -469,6 +469,7 @@ struct settings {
     bool shutdown_command; /* allow shutdown command */
     int tail_repair_time;   /* LRU tail refcount leak repair time */
     unsigned int ext_submit_batch; /* conns to accumulate before submitting */
+    unsigned int ext_admit_max;   /* backend 체류 상한(워커당). 0 = 무제한 */
     unsigned int ext_drain_spin; /* v2 P2a: post-batch CQ drain spins */
     unsigned int ext_drain_empty_max; /* 연속 빈 poll 이 값에 도달하면 spin 중단. 0=무제한 */
     bool flush_enabled;     /* flush_all enabled */
@@ -679,6 +680,7 @@ typedef struct {
 #ifdef EXTSTORE
     void *storage;              /* data object for storage system */
     void *ext_worker;           /* v2: this worker's store_worker (inline READ) */
+    unsigned int ext_resident;  /* 이 워커가 물고 있는 비동기 요청 수 (= span v3 모집단) */
     struct event ext_drain_ev;  /* v2: 0-timeout self event driving CQ drain */
     bool ext_drain_armed;
 #endif

@@ -505,6 +505,7 @@ int storage_get_item(LIBEVENT_THREAD *t, item *it, mc_resp *resp) {
 
     // We can't bail out anymore, so mc_resp owns the IO from here.
     resp->io_pending = (io_pending_t *)p;
+    t->ext_resident++;          /* 여기부터 span v3 안이다 */
 
     eio->buf = NULL;   // engine assigns a bounce slot at post time
 
@@ -602,6 +603,7 @@ static void storage_release_pending(io_pending_t *pending) {
 
 // Called after an IO has been returned to the worker thread.
 static void storage_return_cb(io_pending_t *pending) {
+    pending->thread->ext_resident--;
     conn_resp_unsuspend(pending->c, pending->resp);
 }
 
@@ -762,6 +764,7 @@ static void storage_set_return_cb(io_pending_t *pending) {
         extstore_free_loc(ext_storage, &p->loc);
     }
     item_unlock(p->hv);
+    p->thread->ext_resident--;
     setp_out_string(p->resp,
         p->write_ok ? "STORED" : "SERVER_ERROR remote write failed");
     conn_resp_unsuspend(p->c, p->resp);
@@ -858,6 +861,7 @@ int storage_store_item_pac(void *e, item *it, item **hdr_out, uint32_t hv,
      * 이 지점 이후로 SET은 "수락됨"이고, post 실패조차 -1로 되돌릴 수 없다 —
      * done_cb(-1) 경로로 합류해 게시가 롤백된다. */
     p->io_ctx.t_enter = t_enter_v3;      /* span v3 시작 (t_start 는 seal 시각) */
+    t->ext_resident++;
     g_setq.v[g_setq.n++] = p;
     if (g_setq.n >= g_setq_max) {
         /* do_store_item의 item_lock(hv) 아래다 — flush 안에서 재개할 때
@@ -1192,6 +1196,7 @@ int storage_read_config(void *conf, char **subopt) {
         EXT_LOC_MAG_DEPTH,
         EXT_SETQ_MAX,
         EXT_SUBMIT_BATCH,
+        EXT_ADMIT_MAX,
     };
 
     char *const subopts_tokens[] = {
@@ -1206,6 +1211,7 @@ int storage_read_config(void *conf, char **subopt) {
         [EXT_LOC_MAG_DEPTH] = "ext_loc_mag_depth",
         [EXT_SETQ_MAX] = "ext_setq_max",
         [EXT_SUBMIT_BATCH] = "ext_submit_batch",
+        [EXT_ADMIT_MAX] = "ext_admit_max",
         NULL
     };
 
@@ -1226,6 +1232,13 @@ int storage_read_config(void *conf, char **subopt) {
                 !safe_strtoul(subopts_value, &ext_cf->worker_window) ||
                 ext_cf->worker_window < 1) {
                 fprintf(stderr, "ext_worker_window must be >= 1\n");
+                return 1;
+            }
+            break;
+        case EXT_ADMIT_MAX:
+            if (subopts_value == NULL ||
+                !safe_strtoul(subopts_value, &settings.ext_admit_max)) {
+                fprintf(stderr, "ext_admit_max must be a number\n");
                 return 1;
             }
             break;

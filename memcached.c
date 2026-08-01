@@ -1970,6 +1970,10 @@ void process_stat_settings(ADD_STAT add_stats, void *c) {
     APPEND_STAT("item_mag_depth", "%u", settings.item_mag_depth);
     APPEND_STAT("ext_pac_set", "%s", settings.ext_pac_set ? "yes" : "no");
     APPEND_STAT("ext_seal_at_flush", "%s", settings.ext_seal_at_flush ? "yes" : "no");
+    /* 실험 상대가 배포본을 이름이 아니라 값으로 판별할 수 있어야 한다 —
+     * ext_pac_set 때 절차서가 빌드를 구분 못 해 옛 바이너리로 잰 적이 있다. */
+    APPEND_STAT("ext_submit_batch", "%u", settings.ext_submit_batch);
+    APPEND_STAT("ext_drain_spin", "%u", settings.ext_drain_spin);
     APPEND_STAT("slab_chunk_max", "%d", settings.slab_chunk_size_max);
     APPEND_STAT("tail_repair_time", "%d", settings.tail_repair_time);
     APPEND_STAT("flush_enabled", "%s", settings.flush_enabled ? "yes" : "no");

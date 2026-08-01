@@ -2,14 +2,16 @@
 #define STORAGE_H
 
 void storage_delete(void *e, item *it);
-#ifdef EXTSTORE
-#define STORAGE_delete(e, it) \
-    do { \
-        storage_delete(e, it); \
-    } while (0)
-#else
-#define STORAGE_delete(...)
-#endif
+void storage_free_hdr(item *it);   /* item_free 훅 */
+/* unlink 시점 회수는 하지 않는다. 호출처가 9군데(items/proto_parser/
+ * proto_bin/proto_proxy/memcached)라 하나씩 지우면 하나를 빠뜨린다 — 한 곳에서
+ * 막고, 실제 회수는 item_free 훅(storage_free_hdr)이 한다.
+ *
+ * 상류는 unlink 에서 회수해도 안전했다. 페이지 단위로 재활용하고 page_version
+ * 으로 낡은 읽기를 걸러냈기 때문이다. 이 포트는 슬롯 단위로 재활용하면서
+ * 버전을 올리지 않아(extstore.c:534) 그 안전망이 없다. unlink 에서 회수하면
+ * 그 슬롯이 다음 SET 에 재할당돼, 읽는 중인 원격 메모리를 덮어쓴다. */
+#define STORAGE_delete(e, it)   do { (void)(e); (void)(it); } while (0)
 
 // API.
 void storage_stats(ADD_STAT add_stats, void *c);

@@ -37,6 +37,8 @@ struct extstore_stats {
     uint64_t prof_read_crypto_avg_ns, prof_write_crypto_avg_ns;
     uint64_t prof_read_sync_avg_ns,  prof_read_xfer_avg_ns;
     uint64_t prof_write_sync_avg_ns, prof_write_xfer_avg_ns;
+    /* v3 성분: admit = 진입→v2 시작(admission/queue), ret = CQE→응용 가시 */
+    uint64_t prof_read_admit_avg_ns, prof_write_admit_avg_ns, prof_write_ret_avg_ns;
     uint64_t worker_drain_calls, worker_drain_empty, worker_wait_enq;
     uint64_t slot_acct_leak;
     uint64_t alloc_failures;   /* store full: SET answered NOT_STORED */

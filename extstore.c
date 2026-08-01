@@ -183,6 +183,8 @@ typedef struct store_worker {
     /* 완료 경로 회계는 worker가 소유한다. 전역 stats_mutex를 핫패스에서
      * 잡으면 worker 수에 따라 경합이 커진다. 읽기는 get_stats에서 합산. */
     atomic_uint_fast64_t objects_read, bytes_read, objects_written, bytes_written;
+    uint64_t prof_r_admit_ns, prof_w_admit_ns;      /* v3 진입→v2 시작 */
+    uint64_t prof_w_ret_ns;                         /* CQE→WFLIGHT 해제 */
     uint64_t prof_r_e2e_count, prof_r_e2e_sum_ns;   /* span v3 */
     uint32_t prof_r_e2e_hist[PROF_BUCKETS];
     uint64_t prof_w_e2e_count, prof_w_e2e_sum_ns;
@@ -1050,6 +1052,10 @@ int extstore_worker_drain(void *worker, int budget) {
                 prof_record(w->prof_w_hist, &w->prof_w_count, &w->prof_w_sum_ns,
                             t_poll - io->t_start);
                 w->prof_w_xfer_ns += (uint64_t)((t_poll - io->t_end) * g_ns_per_cycle);
+                /* 진입→seal = admission. seal 시각이 t_start 다 */
+                if (io->t_enter && io->t_start > io->t_enter)
+                    w->prof_w_admit_ns += (uint64_t)((io->t_start - io->t_enter) * g_ns_per_cycle);
+                io->t_end = t_poll;   /* CQE 시각 — return_cb 가 뺄셈에 쓴다 */
             }
         }
         if (!ok) {
@@ -1174,11 +1180,14 @@ void extstore_get_stats(void *ptr, struct extstore_stats *st) {
         prof_summarize(e, 3, &st->prof_write_e2e_count, &st->prof_write_e2e_avg_ns,
                        &st->prof_write_e2e_p50_ns, &st->prof_write_e2e_p99_ns);
         uint64_t rc = 0, wc = 0, rs = 0, rx = 0, ws = 0, wx = 0;
+        uint64_t ra_ = 0, wa_ = 0, wr_ = 0;
         if (e->workers) {
             for (unsigned int i = 0; i < e->worker_count; i++) {
                 store_worker *w = e->workers[i];
                 if (!w) continue;
                 rc += w->prof_r_crypto_ns; wc += w->prof_w_crypto_ns;
+                ra_ += w->prof_r_admit_ns; wa_ += w->prof_w_admit_ns;
+                wr_ += w->prof_w_ret_ns;
                 rs += w->prof_r_sync_ns; rx += w->prof_r_xfer_ns;
                 ws += w->prof_w_sync_ns; wx += w->prof_w_xfer_ns;
             }
@@ -1189,6 +1198,9 @@ void extstore_get_stats(void *ptr, struct extstore_stats *st) {
         st->prof_read_xfer_avg_ns  = st->prof_read_count  ? rx / st->prof_read_count  : 0;
         st->prof_write_sync_avg_ns = st->prof_write_count ? ws / st->prof_write_count : 0;
         st->prof_write_xfer_avg_ns = st->prof_write_count ? wx / st->prof_write_count : 0;
+        st->prof_read_admit_avg_ns  = st->prof_read_e2e_count  ? ra_ / st->prof_read_e2e_count  : 0;
+        st->prof_write_admit_avg_ns = st->prof_write_e2e_count ? wa_ / st->prof_write_e2e_count : 0;
+        st->prof_write_ret_avg_ns   = st->prof_write_e2e_count ? wr_ / st->prof_write_e2e_count : 0;
     }
 }
 
@@ -1204,6 +1216,7 @@ void extstore_prof_reset(void *ptr) {
             w->prof_w_crypto_ns = w->prof_w_sync_ns = w->prof_w_xfer_ns = 0;
             memset(w->prof_r_hist, 0, sizeof(w->prof_r_hist));
             memset(w->prof_w_hist, 0, sizeof(w->prof_w_hist));
+            w->prof_r_admit_ns = w->prof_w_admit_ns = w->prof_w_ret_ns = 0;
             w->prof_r_e2e_count = w->prof_r_e2e_sum_ns = 0;
             w->prof_w_e2e_count = w->prof_w_e2e_sum_ns = 0;
             memset(w->prof_r_e2e_hist, 0, sizeof(w->prof_r_e2e_hist));
@@ -1227,9 +1240,13 @@ void extstore_prof_read_done(void *ptr, obj_io *io,
     prof_record(w->prof_r_hist, &w->prof_r_count, &w->prof_r_sum_ns,
                 crypto_done - io->t_start);
     /* span v3: backend 진입부터 — admission/queue 대기를 포함한다 */
-    if (io->t_enter && crypto_done > io->t_enter)
+    if (io->t_enter && crypto_done > io->t_enter) {
         prof_record(w->prof_r_e2e_hist, &w->prof_r_e2e_count,
                     &w->prof_r_e2e_sum_ns, crypto_done - io->t_enter);
+        /* 진입→실제 post = admission/queue 대기. v2 가 빼던 구간 */
+        if (io->t_start > io->t_enter)
+            w->prof_r_admit_ns += (uint64_t)((io->t_start - io->t_enter) * g_ns_per_cycle);
+    }
     w->prof_r_crypto_ns += (uint64_t)
             ((crypto_done - crypto_start) * g_ns_per_cycle);
     io->t_start = io->t_end = io->t_enter = 0;
@@ -1246,6 +1263,9 @@ void extstore_prof_write_e2e(void *worker, obj_io *io, uint64_t done) {
     if (!w) return;
     prof_record(w->prof_w_e2e_hist, &w->prof_w_e2e_count,
                 &w->prof_w_e2e_sum_ns, done - io->t_enter);
+    /* CQE 관측 → 응용 가시. v2 가 빼던 반환 경로 */
+    if (io->t_end && done > io->t_end)
+        w->prof_w_ret_ns += (uint64_t)((done - io->t_end) * g_ns_per_cycle);
     io->t_enter = 0;
 }
 

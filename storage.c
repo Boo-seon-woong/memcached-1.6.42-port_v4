@@ -265,6 +265,10 @@ void storage_stats(ADD_STAT add_stats, void *c) {
         APPEND_STAT("extstore_prof_write_e2e_avg_ns", "%llu", (unsigned long long)st.prof_write_e2e_avg_ns);
         APPEND_STAT("extstore_prof_write_e2e_p50_ns", "%llu", (unsigned long long)st.prof_write_e2e_p50_ns);
         APPEND_STAT("extstore_prof_write_e2e_p99_ns", "%llu", (unsigned long long)st.prof_write_e2e_p99_ns);
+        /* v3 성분 분해: v3 = admit + (v2 구간) + ret */
+        APPEND_STAT("extstore_prof_read_admit_avg_ns", "%llu", (unsigned long long)st.prof_read_admit_avg_ns);
+        APPEND_STAT("extstore_prof_write_admit_avg_ns", "%llu", (unsigned long long)st.prof_write_admit_avg_ns);
+        APPEND_STAT("extstore_prof_write_ret_avg_ns", "%llu", (unsigned long long)st.prof_write_ret_avg_ns);
     }
 
 }

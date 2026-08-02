@@ -36,7 +36,10 @@ esac
 
 echo "── 무장: submit_batch=$SB W=$W nqp=$NQP READ_SLOTS=$SLOTS -R $R admit=$AD reap=$RE chain=$PC setq=$SQ mcT=$MCT ilp=$ILP hp=$HP ord=$ORD cpu=$CPUSET (총 QP = $MCT × $NQP)"
 
-$G "tmux kill-session -t mc 2>/dev/null || true; pkill -x memcached 2>/dev/null || true"
+# /tmp 에 스테이징한 바이너리(mc_stock 등)는 이름이 memcached 가 아니라
+# -x 로 안 죽는다. 그래서 포트가 안 뜬 채 stock 이 계속 서비스했고, 나는
+# 낡은 /tmp/mc.log 를 읽고 "게이트 2 통과"로 오독했다. 로그도 함께 비운다.
+$G 'tmux kill-session -t mc 2>/dev/null || true; pkill -x memcached 2>/dev/null; pkill -f "^/tmp/mc_" 2>/dev/null; : > /tmp/mc.log'
 sleep 3
 
 $G "tmux new-session -d -s mc \"cd \\\$HOME/kvs-port && exec taskset -c $CPUSET env \
@@ -52,3 +55,12 @@ echo "── coherent MR 게이트 (2 여야 한다): $($G 'grep -icE "coherent 
 $G 'grep -iE "genie_connect OK|Address already|error|failed" /tmp/mc.log | head -3'
 $G 'printf "stats settings\r\nquit\r\n" | timeout 5 nc -q1 127.0.0.1 11411 | grep -E "ext_submit_batch|ext_drain_spin|ext_pac_set|reqs_per_event|ext_admit_max|ext_submit_inline|ext_reap_every|ext_post_chain|ext_setq_max"'
 echo "── 프리로드 필요 (재기동했다)"
+
+# 무엇이 11411 을 쥐고 있는지 확인한다. 로그만 보면 낡은 것을 읽는다 —
+# stock 이 계속 서비스하는데 낡은 로그를 보고 "게이트 2"라 한 적이 있다.
+# ps 는 tmux 명령줄을 잡으니 못 쓴다. stock 에 없는 설정으로 판별한다.
+if [ "$($G 'printf "stats settings\r\nquit\r\n" | timeout 5 nc -q1 127.0.0.1 11411 | grep -c ext_submit_inline')" -ge 1 ]; then
+  echo "── 서비스 중: 포트 빌드 (ext_submit_inline 응답)"
+else
+  echo "── 서비스 중: ★포트가 아니다★ — stock 이 남아 있거나 기동 실패다"
+fi

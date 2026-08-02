@@ -12,13 +12,13 @@
 
 ## 최종 게이트
 
-재검 두 라운드(§7·§10)와 sweep 재측정(§8·§9·§12)이 끝난 뒤 값이다.
+재검 두 라운드(§7·§10)와 sweep 전수 캠페인(§8·§9·§12·§14)이 끝난 뒤 값이다.
 **각 120 초**, 추적기 1 개, 아무것도 동승하지 않음.
 
 ```text
-GET-only  13.214 M   span 26.32 = adm 3.67 + v2 22.65                  ✓ ✓
-1:9 혼합  10.899 M   GET 19.62 = 7.00 + 12.61                          ✓ ✓
-                     SET  8.77 = 0.51 + 7.40 + 0.86                    ✓ ✓
+GET-only  13.397 M   span 21.90 = adm 4.39 + v2 17.51                  ✓ ✓
+1:9 혼합  11.099 M   GET 22.31 = 9.17 + 13.14                          ✓ ✓
+                     SET  9.11 = 0.52 + 7.97 + 0.62                    ✓ ✓
 ```
 
 **두 워크로드 모두 처리량과 span 을 만족한다.**
@@ -26,25 +26,33 @@ GET-only  13.214 M   span 26.32 = adm 3.67 + v2 22.65                  ✓ ✓
 운영값:
 
 ```text
-ext_admit_max=64  ext_reap_every=12  ext_post_chain=8  ext_setq_max=1
+ext_admit_max=64  ext_reap_every=8   ext_post_chain=8  ext_setq_max=1
 ext_submit_inline  ext_submit_batch=20  W=24  nqp=4  mcT=30  -R 1024
-                                        └─ §12 에서 40 → 24
+                   └─ reap 12 → 8 (§14)      └─ W 40 → 24 (§12)
 ```
 
 여유(계약선 대비):
 
 ```text
-혼합 처리량  +9.0%    ← 구속 지표
-GET-only     +32%
-GET span     26.32 대 30 → 12.3%
-혼합 span    GET 34%,  SET 71%
+혼합 처리량  +11.0%   ← 구속 지표.  σ 로 10.6
+GET-only     +34%
+GET span     21.90 대 30 → 37%
+혼합 span    GET 34%,  SET 229%
 ```
 
-**게이트가 예측과 맞다.** §12 의 cap 24 셀들로 `13.258 / 10.880` 을 미리
-적어두고 쟀는데 `13.213 / 10.899` 가 나왔다 — 둘 다 0.4% 안이다.
+**게이트가 예측과 맞다.** 채택 전 확인 셀로 `13.13~13.67 / 10.86~11.33`
+(±2σ)을 적어두고 쟀는데 `13.397 / 11.099` 가 나왔다.
 
-개별 창이 아니라 분포로 보면(§11) 혼합은 게이트선보다 **6.5σ** 위다.
-`13.405 / 10.777` 같은 최고값은 분포의 위쪽 끝이지 기대값이 아니다.
+캠페인 동안 손잡이 둘이 움직였고 **둘 다 런타임 값이다**:
+
+```text
+              혼합 처리량   GET-only span
+시작 W=40 r12  10.732        26.15
+§12  W=24      10.880        26.24     +1.38%
+§14  reap=8    11.099        21.90     +2.09%,  span −17%
+```
+
+**둘 다 내가 "빈 축"이라 건너뛰려던 곳에서 나왔다**(§14-6).
 
 재검 전 120 초 게이트(참고, 창 두 번):
 
@@ -58,10 +66,10 @@ GET-only  12.393 M / 25.05    SET-only 5.434 M / 7.67
 ```text
               혼합       GET span   SET span
 v3 정의 직후   9.83 M     316.24     188.75     둘 다 위반
-v4 최종       10.90 M      19.62       8.77     둘 다 통과
+v4 최종       11.10 M      22.31       9.11     둘 다 통과
 ```
 
-**GET span 16 배, SET span 22 배 감소. 처리량 +10.9%.**
+**GET span 14 배, SET span 21 배 감소. 처리량 +12.9%.**
 
 ---
 
@@ -194,7 +202,7 @@ guest   -smp 30 (관리자 확정, 변경 없음)
 서버   mcT = 30   -m 2048 -c 16384 -R 1024   taskset -c 0-29
        ext_worker_window=24  ext_qp_per_worker=4  ext_drain_spin=1024
        hashpower=22  ORD=0(협상→16)  총 QP = 120
-       ext_admit_max=64  ext_reap_every=12  ext_post_chain=8
+       ext_admit_max=64  ext_reap_every=8   ext_post_chain=8
        ext_setq_max=1  ext_submit_inline  ext_submit_batch=20
        ext_loc_mag_depth=64  ext_pac_set=on  ext_seal_at_flush=off
 환경   MLX5_COHERENT_QP=1 MLX5_COHERENT_CQ=1 EXT_RDMA_PROF=1 EXT_SELFTEST=1
@@ -204,7 +212,7 @@ guest   -smp 30 (관리자 확정, 변경 없음)
        --key-pattern=R:R --distinct-client-seed
 키공간 1,000,000 × 64 B
 
-무장   AD=64 RE=12 PC=8 SQ=1 INLINE=1 tools/exp1-arm.sh 20 24 4 64
+무장   AD=64 RE=8 PC=8 SQ=1 INLINE=1 tools/exp1-arm.sh 20 24 4 64
 슬라이스 python3 tools/exp0-slice.py <trace.csv>
 ```
 

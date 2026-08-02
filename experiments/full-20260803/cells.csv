@@ -116,3 +116,9 @@ block,cell,workload,ops_M,span,adm,v2,set_span,set_adm,set_v2,set_ret,note
 7,B7-S6,get,3.076,,,,,,,,stock 로컬메모리 pipeline=6
 7,B7-S8,get,3.882,,,,,,,,stock 로컬메모리 pipeline=8
 7,B7-S256,get,16.417,,,,,,,,stock 로컬메모리 pipeline=256 (운영 조건)
+8,B8-r8c8,get,13.403,,,,,,,,reap=8 chain=8 확인셀
+8,B8-r8c8,get,13.389,,,,,,,,reap=8 chain=8 확인셀
+8,B8-r8c8,mix,11.107,,,,,,,,reap=8 chain=8 확인셀
+8,B8-r8c8,mix,11.083,,,,,,,,reap=8 chain=8 확인셀
+8,GATE2,get,13.397,21.90,4.39,17.51,,,,,최종 게이트 120초 r8c8
+8,GATE2,mix,11.099,22.31,9.17,13.14,9.11,0.52,7.97,,최종 게이트 120초

@@ -12,19 +12,13 @@
 
 ## 최종 게이트
 
-재검(§7) 뒤 값이다. 추적기 1 개, 아무것도 동승하지 않음.
+재검 두 라운드(§7·§10)와 sweep 재측정(§8·§9·§12)이 끝난 뒤 값이다.
+**각 120 초**, 추적기 1 개, 아무것도 동승하지 않음.
 
 ```text
-GET-only  13.405 M   span 25.99 = adm 3.61 + v2 22.38                  ✓ ✓
-1:9 혼합  10.777 M   GET 19.87 = 7.11 + 12.77                          ✓ ✓
-                     SET  8.97 = 0.54 + 7.50 + 0.93                    ✓ ✓
-```
-
-재검 전 120 초 게이트(참고, 창 두 번):
-
-```text
-GET-only  12.393 M / 25.05    SET-only 5.434 M / 7.67
-1:9 혼합  10.122 M / G 20.41  S 21.68        10.094 M / G 20.45  S 21.70
+GET-only  13.214 M   span 26.32 = adm 3.67 + v2 22.65                  ✓ ✓
+1:9 혼합  10.899 M   GET 19.62 = 7.00 + 12.61                          ✓ ✓
+                     SET  8.77 = 0.51 + 7.40 + 0.86                    ✓ ✓
 ```
 
 **두 워크로드 모두 처리량과 span 을 만족한다.**
@@ -33,21 +27,41 @@ GET-only  12.393 M / 25.05    SET-only 5.434 M / 7.67
 
 ```text
 ext_admit_max=64  ext_reap_every=12  ext_post_chain=8  ext_setq_max=1
-ext_submit_inline  ext_submit_batch=20  W=40  nqp=4  mcT=30  -R 1024
+ext_submit_inline  ext_submit_batch=20  W=24  nqp=4  mcT=30  -R 1024
+                                        └─ §12 에서 40 → 24
 ```
 
-여유는 혼합 처리량이 **+7.8%** 다. 재검 전에는 +1.0~1.2% 로 bed drift 1.4% 와
-같은 자릿수였는데, §7 의 두 수정이 그것을 두껍게 만들었다.
+여유(계약선 대비):
+
+```text
+혼합 처리량  +9.0%    ← 구속 지표
+GET-only     +32%
+GET span     26.32 대 30 → 12.3%
+혼합 span    GET 34%,  SET 71%
+```
+
+**게이트가 예측과 맞다.** §12 의 cap 24 셀들로 `13.258 / 10.880` 을 미리
+적어두고 쟀는데 `13.213 / 10.899` 가 나왔다 — 둘 다 0.4% 안이다.
+
+개별 창이 아니라 분포로 보면(§11) 혼합은 게이트선보다 **6.5σ** 위다.
+`13.405 / 10.777` 같은 최고값은 분포의 위쪽 끝이지 기대값이 아니다.
+
+재검 전 120 초 게이트(참고, 창 두 번):
+
+```text
+GET-only  12.393 M / 25.05    SET-only 5.434 M / 7.67
+1:9 혼합  10.122 M / G 20.41  S 21.68        10.094 M / G 20.45  S 21.70
+```
 
 출발점 대비:
 
 ```text
               혼합       GET span   SET span
 v3 정의 직후   9.83 M     316.24     188.75     둘 다 위반
-v4 최종       10.78 M      19.87       8.97     둘 다 통과
+v4 최종       10.90 M      19.62       8.77     둘 다 통과
 ```
 
-**span 15 배 감소, 처리량 +9.6%.**
+**GET span 16 배, SET span 22 배 감소. 처리량 +10.9%.**
 
 ---
 
@@ -178,7 +192,7 @@ guest   -smp 30 (관리자 확정, 변경 없음)
 
 ```text
 서버   mcT = 30   -m 2048 -c 16384 -R 1024   taskset -c 0-29
-       ext_worker_window=40  ext_qp_per_worker=4  ext_drain_spin=1024
+       ext_worker_window=24  ext_qp_per_worker=4  ext_drain_spin=1024
        hashpower=22  ORD=0(협상→16)  총 QP = 120
        ext_admit_max=64  ext_reap_every=12  ext_post_chain=8
        ext_setq_max=1  ext_submit_inline  ext_submit_batch=20
@@ -190,7 +204,7 @@ guest   -smp 30 (관리자 확정, 변경 없음)
        --key-pattern=R:R --distinct-client-seed
 키공간 1,000,000 × 64 B
 
-무장   RE=12 PC=8 SQ=1 INLINE=1 tools/exp1-arm.sh A64
+무장   AD=64 RE=12 PC=8 SQ=1 INLINE=1 tools/exp1-arm.sh 20 24 4 64
 슬라이스 python3 tools/exp0-slice.py <trace.csv>
 ```
 

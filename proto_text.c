@@ -491,7 +491,13 @@ static void process_get_command(conn *c, LIBEVENT_THREAD *t, mcp_parser_t *pr, p
 
     while (klen != 0) {
         mc_resp *resp = c->resp;
-        if (process_get_cmd(t, curkey, klen, c->resp, storage_get_item, exptime, return_cas, should_touch) != 0) {
+        /* 인라인 post 가 완료를 재개할 때 "지금 파싱 중인 연결"을 알아야 한다.
+         * 남겨두면 다음 GET 이 엉뚱한 연결을 건너뛰고 현재 연결을 재개하므로
+         * 반드시 이 반복 안에서 지운다(오류 반환 경로 포함). */
+        t->cur_conn = c;
+        int _pg_rc = process_get_cmd(t, curkey, klen, c->resp, storage_get_item, exptime, return_cas, should_touch);
+        t->cur_conn = NULL;
+        if (_pg_rc != 0) {
             process_get_command_err(c, NULL);
             return;
         }
@@ -1203,7 +1209,9 @@ void process_command_ascii(conn *c, char *command, size_t cmdlen) {
                 conn_set_state(c, conn_new_cmd);
                 break;
              case CMD_MG:
+                t->cur_conn = c;
                 process_mget_cmd(t, &pr, resp, storage_get_item);
+                t->cur_conn = NULL;
                 if (resp->io_pending) {
                     resp->io_pending->c = c;
                     conn_resp_suspend(c, resp);
@@ -1223,16 +1231,36 @@ void process_command_ascii(conn *c, char *command, size_t cmdlen) {
                 process_meta_command(c, &pr);
                 break;
             case CMD_GET:
+                /* 인라인 post 가 완료를 그 자리에서 재개할 때 "지금 파싱 중인
+                 * 연결"을 알아야 한다 — 그 연결을 재개하면 drive_machine 이
+                 * 아직 돌고 있는 채로 conn_worker_readd 가 걸린다. */
+                t->cur_conn = c;
                 process_get_command(c, t, &pr, storage_get_item, _NO_CAS, _NO_TOUCH);
+                t->cur_conn = NULL;
                 break;
             case CMD_GETS:
+                /* 인라인 post 가 완료를 그 자리에서 재개할 때 "지금 파싱 중인
+                 * 연결"을 알아야 한다 — 그 연결을 재개하면 drive_machine 이
+                 * 아직 돌고 있는 채로 conn_worker_readd 가 걸린다. */
+                t->cur_conn = c;
                 process_get_command(c, t, &pr, storage_get_item, _DO_CAS, _NO_TOUCH);
+                t->cur_conn = NULL;
                 break;
             case CMD_GAT:
+                /* 인라인 post 가 완료를 그 자리에서 재개할 때 "지금 파싱 중인
+                 * 연결"을 알아야 한다 — 그 연결을 재개하면 drive_machine 이
+                 * 아직 돌고 있는 채로 conn_worker_readd 가 걸린다. */
+                t->cur_conn = c;
                 process_get_command(c, t, &pr, storage_get_item, _NO_CAS, _DO_TOUCH);
+                t->cur_conn = NULL;
                 break;
             case CMD_GATS:
+                /* 인라인 post 가 완료를 그 자리에서 재개할 때 "지금 파싱 중인
+                 * 연결"을 알아야 한다 — 그 연결을 재개하면 drive_machine 이
+                 * 아직 돌고 있는 채로 conn_worker_readd 가 걸린다. */
+                t->cur_conn = c;
                 process_get_command(c, t, &pr, storage_get_item, _DO_CAS, _DO_TOUCH);
+                t->cur_conn = NULL;
                 break;
              case CMD_DELETE:
                 process_delete_cmd(t, &pr, resp);

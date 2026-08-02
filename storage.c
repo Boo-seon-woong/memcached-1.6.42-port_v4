@@ -32,6 +32,7 @@ static _Thread_local iop_head_t g_ret_defer;
 static _Thread_local bool g_ret_defer_init;
 static _Thread_local uint32_t g_held_bucket;
 static _Thread_local bool g_held;
+static _Thread_local conn *g_skip_conn;  /* 지금 파싱 중이라 재개하면 안 되는 연결 */
 
 #define ITEM_LOCK_BUCKET(hv) ((hv) & ((1u << item_lock_power_used()) - 1))
 static _Thread_local bool g_ret_init = false;
@@ -496,6 +497,13 @@ int storage_get_item(LIBEVENT_THREAD *t, item *it, mc_resp *resp) {
     p->miss = false;
     p->badcrc = false;
     p->noreply = resp->noreply;
+    /* 호출자는 storage_get_item 이 돌아온 뒤에야 c 를 채우고 suspend 한다
+     * (proto_text.c: resp->io_pending->c = c; conn_resp_suspend). 인라인 post
+     * 뒤 그 자리에서 drain 하면 **방금 post 한 자기 자신의 완료**가 잡힐 수
+     * 있는데(co-located RDMA 5 µs), 그때 c 가 NULL 이면 재개가
+     * conn_resp_unsuspend(NULL, ...) 로 죽는다(실측 segfault at 0xfc).
+     * 여기서 미리 채워두면 아래 g_skip_conn 검사가 자기 자신도 걸러낸다. */
+    p->c = t->cur_conn;
     p->thread = t;
     p->return_cb = storage_return_cb;
     p->finalize_cb = storage_finalize_cb;
@@ -557,6 +565,21 @@ int storage_get_item(LIBEVENT_THREAD *t, item *it, mc_resp *resp) {
     if (settings.ext_submit_inline) {
         eio->next = NULL;
         extstore_worker_submit(t->ext_worker, eio);
+        /* post 한 자리에서 완료도 거둔다. 인라인 이전에는 제출이 pass 시작에
+         * 몰려 바로 뒤에 drain 이 왔는데, 이제 제출이 파싱 도중에 흩어지므로
+         * pass 끝의 drain 까지 CQE 가 기다린다 — GET 에서 걷어낸 대기가
+         * SET 의 ret 로 옮겨간다(실측 0.29 → 26.98 µs).
+         * 지금 파싱 중인 연결만 빼고 재개한다. */
+        /* cur_conn 을 모르면 재개하지 않는다. 지금 파싱 중인 연결을 재개하면
+         * drive_machine 이 아직 그 연결을 돌고 있는 채로 conn_worker_readd 가
+         * 걸린다(실측: 서버 즉사). 디스패치 경로를 하나라도 빠뜨리면 그렇게
+         * 되므로, 완전성에 기대지 않고 모를 때는 안 한다 — pass 끝의 flush 가
+         * 어차피 처리한다. */
+        if (t->cur_conn != NULL && extstore_worker_drain(t->ext_worker, 32) > 0) {
+            g_skip_conn = t->cur_conn;
+            storage_flush_returns();
+            g_skip_conn = NULL;
+        }
         worker_storage_arm_drain(t);
     }
 
@@ -632,6 +655,12 @@ static void storage_release_pending(io_pending_t *pending) {
 
 // Called after an IO has been returned to the worker thread.
 static void storage_return_cb(io_pending_t *pending) {
+    if (g_skip_conn != NULL && pending->c == g_skip_conn) {
+        /* 이 연결은 지금 drive_machine 안에 있다. 재개하면 conn_worker_readd 가
+         * 파싱 도중에 걸린다 — memcached.c 의 FIXME 가 경고하는 경우다. */
+        STAILQ_INSERT_TAIL(&g_ret_defer, pending, iop_next);
+        return;
+    }
     pending->thread->ext_resident--;
     conn_resp_unsuspend(pending->c, pending->resp);
 }
@@ -771,6 +800,10 @@ static void _storage_set_item_cb(void *e, obj_io *io, int ret) {
 static void storage_set_return_cb(io_pending_t *pending) {
     io_pending_storage_write_t *p = (io_pending_storage_write_t *)pending;
     item *it = p->hdr_it;
+    if (g_skip_conn != NULL && pending->c == g_skip_conn) {
+        STAILQ_INSERT_TAIL(&g_ret_defer, pending, iop_next);
+        return;
+    }
     if (g_held && ITEM_LOCK_BUCKET(p->hv) == g_held_bucket) {
         /* 호출자가 이 버킷을 이미 잡고 있다. 루프 레벨에서 다시 시도한다. */
         STAILQ_INSERT_TAIL(&g_ret_defer, pending, iop_next);

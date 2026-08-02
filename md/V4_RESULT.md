@@ -198,6 +198,20 @@ guest   -smp 30 (관리자 확정, 변경 없음)
 누적돼 후반 셀이 낮게 편향된 적이 있다. perf 는 guest 디스크가 6.8 G 뿐이므로
 `-F 199`, 콜그래프 없음, 10 초(약 4 MB)로 뜬다.
 
+세는 법도 조심해야 한다. `pgrep -f shape-trace` 는 **자기 명령줄을 같이
+잡아** 항상 하나 더 센다 — 그 때문에 없는 중복을 있다고 읽은 적이 있고,
+`pkill -f` 로는 자기 자신을 죽인 적도 있다. 대괄호로 끊는다:
+
+```bash
+pgrep -c -f 'shape-trace-v[3].sh'    # 자기 명령줄엔 v[3] 이라 안 맞는다
+```
+
+perf 는 커널 버전을 확인해야 한다. guest 는 `6.16.0-snp-guest` 인데
+`/usr/bin/perf` 는 6.8 래퍼라 거부한다. 실제로 도는 것은
+`/usr/lib/linux-tools/6.8.0-111-generic/perf` 다. **새 계측 스크립트는 창에
+걸기 전에 스모크로 샘플 수를 확인한다** — stderr 를 버린 채 조용히 실패해서
+창 하나를 통째로 날린 적이 있다.
+
 raw 는 `experiments/` 아래. EXP-0 은 `exp0-20260801/FINDINGS.md`,
 EXP-1 축별 판정은 `EXP1_FINDINGS.md`, 프로파일은 `prof-20260802/`.
 

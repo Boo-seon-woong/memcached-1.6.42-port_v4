@@ -520,7 +520,11 @@ int storage_get_item(LIBEVENT_THREAD *t, item *it, mc_resp *resp) {
 
     eio->buf = NULL;   // engine assigns a bounce slot at post time
 
-    STAILQ_INSERT_TAIL(&q->stack, (io_pending_t *)p, iop_next);
+    /* 인라인 제출이면 큐를 거치지 않는다 — 아래에서 eio 가 다 채워진 뒤
+     * 그 자리에서 post 한다. 큐에 넣어두면 이 연결의 나머지 요청이 전부
+     * 파싱될 때까지 기다리고, 그 대기가 span v3 의 admit 이다. */
+    if (!settings.ext_submit_inline)
+        STAILQ_INSERT_TAIL(&q->stack, (io_pending_t *)p, iop_next);
 
     // reference ourselves for the callback.
     eio->data = (void *)p;
@@ -541,6 +545,20 @@ int storage_get_item(LIBEVENT_THREAD *t, item *it, mc_resp *resp) {
     eio->mode = OBJ_IO_READ;
     eio->t_enter = t_enter_v3;
     eio->cb = _storage_get_item_cb;
+
+    /* span v3 로 드러난 구조 문제: 6a~6e·7 은 전부 워커 전용 로컬 작업이라
+     * 200 ns 면 끝나는데, 8(제출)이 연결 파싱이 끝날 때까지 미뤄져 있어
+     * 먼저 파싱된 요청이 같은 배치의 나머지를 기다린다. 실측 admit 6.96 µs
+     * (batch=0, 배치 12건 → 건당 0.58 µs).
+     *
+     * 여기서 바로 post 하면 그 대기가 사라진다. 대가는 체인이 1건이라
+     * 도어벨이 배치당 1회에서 건당 1회로 는다 — _mlx5_post_send 가
+     * 0.026 µs/op 이므로 6.96 µs 와 바꿀 만하다. */
+    if (settings.ext_submit_inline) {
+        eio->next = NULL;
+        extstore_worker_submit(t->ext_worker, eio);
+        worker_storage_arm_drain(t);
+    }
 
     // FIXME: This stat needs to move to reflect # of flash hits vs misses
     // for now it's a good gauge on how often we request out to flash at
@@ -1218,6 +1236,7 @@ int storage_read_config(void *conf, char **subopt) {
         EXT_SETQ_MAX,
         EXT_SUBMIT_BATCH,
         EXT_ADMIT_MAX,
+        EXT_SUBMIT_INLINE,
     };
 
     char *const subopts_tokens[] = {
@@ -1233,6 +1252,7 @@ int storage_read_config(void *conf, char **subopt) {
         [EXT_SETQ_MAX] = "ext_setq_max",
         [EXT_SUBMIT_BATCH] = "ext_submit_batch",
         [EXT_ADMIT_MAX] = "ext_admit_max",
+        [EXT_SUBMIT_INLINE] = "ext_submit_inline",
         NULL
     };
 
@@ -1255,6 +1275,9 @@ int storage_read_config(void *conf, char **subopt) {
                 fprintf(stderr, "ext_worker_window must be >= 1\n");
                 return 1;
             }
+            break;
+        case EXT_SUBMIT_INLINE:
+            settings.ext_submit_inline = true;
             break;
         case EXT_ADMIT_MAX:
             if (subopts_value == NULL ||

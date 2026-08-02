@@ -18,7 +18,7 @@ case "${1:-}" in
   S1) SB=1;  W=40; NQP=4; SLOTS=64 ;;
   W1) SB=${2:?best submit_batch}; W=64; NQP=4; SLOTS=64 ;;
   W2) SB=${2:?best submit_batch}; W=96; NQP=8; SLOTS=128 ;;
-  A*) SB=20; W=40; NQP=4; SLOTS=64; AD=${1#A} ;;   # A<n>: admission 축
+  A*) SB=${SB:-20}; W=40; NQP=4; SLOTS=64; AD=${1#A} ;;   # A<n>: admission 축
   R*) SB=20; W=40; NQP=4; SLOTS=64; R=${1#R} ;;   # R<n>: -R 축. 그 외는 기준선
   [0-9]*) SB=$1; W=${2:?}; NQP=${3:?}; SLOTS=${4:?} ;;
   *) echo "usage: $0 {S3|S2|S1|W1 <sb>|W2 <sb>| <sb> <W> <nqp> <slots>}" >&2; exit 1 ;;

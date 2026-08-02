@@ -258,6 +258,7 @@ static void settings_init(void) {
     settings.shutdown_command = false;
     settings.tail_repair_time = TAIL_REPAIR_TIME_DEFAULT;
     settings.flush_enabled = true;
+    settings.ext_submit_inline = false;
     settings.ext_admit_max = 0;      /* 0 = 무제한 (기존 동작) */
     settings.ext_submit_batch = 20;  /* 상류 하드코딩 값 그대로 */
     settings.ext_drain_spin = 1024; /* v2 P2a: measured knee (see V2_CODE_SPEC) */
@@ -1975,6 +1976,7 @@ void process_stat_settings(ADD_STAT add_stats, void *c) {
     /* 실험 상대가 배포본을 이름이 아니라 값으로 판별할 수 있어야 한다 —
      * ext_pac_set 때 절차서가 빌드를 구분 못 해 옛 바이너리로 잰 적이 있다. */
     APPEND_STAT("ext_admit_max", "%u", settings.ext_admit_max);
+    APPEND_STAT("ext_submit_inline", "%s", settings.ext_submit_inline ? "yes" : "no");
     APPEND_STAT("ext_submit_batch", "%u", settings.ext_submit_batch);
     APPEND_STAT("ext_drain_spin", "%u", settings.ext_drain_spin);
     APPEND_STAT("slab_chunk_max", "%d", settings.slab_chunk_size_max);
@@ -4151,6 +4153,7 @@ static void usage(void) {
            "   - ext_page_size:       remote allocation page size in MiB (default: 64)\n"
            "   - ext_worker_window:   outstanding operations per worker (default: 16)\n"
            "   - ext_qp_per_worker:   RC QPs per worker, 1..4 (default: 1)\n"
+           "   - ext_submit_inline:   post each read as parsed, no io_queue (default: off)\n"
            "   - ext_admit_max:       max async reqs resident per worker, 0=off (default: 0)\n"
            "   - ext_submit_batch:    conns to batch before IO submit (default: 20)\n"
            "   - ext_drain_spin:      CQ drain spin budget, 0..4096 (default: 1024)\n"

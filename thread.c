@@ -535,17 +535,11 @@ static void *worker_libevent(void *arg) {
                     if (extstore_worker_drain(me->ext_worker, 32) > 0) {
                         storage_flush_returns();
                         empty = 0;
-                    } else {
-                        /* 빈 CQ: SMT 짝에게 발행 슬롯을 양보한다. vCPU 30개 중
-                         * 28개가 물리 코어를 공유하므로(짝 (0,16)…(13,29)),
-                         * 힌트 없는 폴링 루프는 짝의 처리량을 직접 먹는다. */
-                        CPU_RELAX();
-                        if (settings.ext_drain_empty_max &&
-                            ++empty >= settings.ext_drain_empty_max) {
-                            /* 빈 CQ를 계속 긁는 대신 event loop로 돌아간다.
-                             * 남은 완료는 drain point (b)가 거둔다. */
-                            break;
-                        }
+                    } else if (settings.ext_drain_empty_max &&
+                               ++empty >= settings.ext_drain_empty_max) {
+                        /* 빈 CQ를 계속 긁는 대신 event loop로 돌아간다.
+                         * 남은 완료는 drain point (b)가 거둔다. */
+                        break;
                     }
                     out = extstore_worker_outstanding(me->ext_worker);
                 } while (out && ++spins < settings.ext_drain_spin);

@@ -975,12 +975,6 @@ int stop_conn_timeout_thread(void);
  * 된다는 점이다. GET 한 건이 item_lock 을 두 번 잡는데(조회, 그리고 완료 후
  * item_remove) 두 번째는 해제가 실제로 필요할 때만 있으면 된다.
  * 깨끗한 GET-only 프로파일에서 락이 C_get 의 18.3%(0.504 µs)다. */
-#if defined(__x86_64__) || defined(__i386__)
-#define CPU_RELAX() __builtin_ia32_pause()
-#else
-#define CPU_RELAX() ((void)0)
-#endif
-
 #define refcount_incr(it) __atomic_add_fetch(&(it)->refcount, 1, __ATOMIC_RELAXED)
 #define refcount_decr(it) __atomic_sub_fetch(&(it)->refcount, 1, __ATOMIC_ACQ_REL)
 void STATS_LOCK(void);

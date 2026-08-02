@@ -30,6 +30,11 @@ static _Thread_local iop_head_t g_ret_head;
  * 확률은 1/2^item_lock_power 이라 사실상 전부 즉시 재개된다. */
 static _Thread_local iop_head_t g_ret_defer;
 static _Thread_local bool g_ret_defer_init;
+static _Atomic uint64_t g_setret_now;     /* post 자리에서 즉시 재개 */
+static _Atomic uint64_t g_setret_skipconn; /* 파싱 중인 연결이라 보류 */
+static _Atomic uint64_t g_setret_locked;   /* trylock 실패로 보류 */
+static _Atomic uint64_t g_setret_loop;     /* 루프 레벨에서 재개 */
+static _Thread_local bool g_at_post;       /* 지금 post 자리 flush 안인가 */
 static _Thread_local unsigned int g_reap_tick;
 static _Thread_local conn *g_skip_conn;  /* 지금 파싱 중이라 재개하면 안 되는 연결 */
 
@@ -240,6 +245,10 @@ void storage_stats(ADD_STAT add_stats, void *c) {
                 (unsigned long long)atomic_load(&g_worker_write_spins));
         APPEND_STAT("ext_pac_posted", "%llu",
                 (unsigned long long)atomic_load(&g_pac_posted));
+        APPEND_STAT("ext_setret_now", "%llu", (unsigned long long)atomic_load(&g_setret_now));
+        APPEND_STAT("ext_setret_loop", "%llu", (unsigned long long)atomic_load(&g_setret_loop));
+        APPEND_STAT("ext_setret_skipconn", "%llu", (unsigned long long)atomic_load(&g_setret_skipconn));
+        APPEND_STAT("ext_setret_locked", "%llu", (unsigned long long)atomic_load(&g_setret_locked));
         APPEND_STAT("ext_pac_fail", "%llu",
                 (unsigned long long)atomic_load(&g_pac_fail));
         APPEND_STAT("ext_pac_fallback", "%llu",
@@ -587,7 +596,9 @@ int storage_get_item(LIBEVENT_THREAD *t, item *it, mc_resp *resp) {
             g_reap_tick = 0;
             extstore_worker_drain(t->ext_worker, 32);
             g_skip_conn = t->cur_conn;
+            g_at_post = true;
             storage_flush_returns();
+            g_at_post = false;
             g_skip_conn = NULL;
         }
         worker_storage_arm_drain(t);
@@ -665,7 +676,8 @@ static void storage_release_pending(io_pending_t *pending) {
 
 // Called after an IO has been returned to the worker thread.
 static void storage_return_cb(io_pending_t *pending) {
-    if (g_skip_conn != NULL && pending->c == g_skip_conn) {
+    if (g_skip_conn != NULL && pending->c == g_skip_conn &&
+        pending->c->resps_suspended <= 1) {
         /* 이 연결은 지금 drive_machine 안에 있다. 재개하면 conn_worker_readd 가
          * 파싱 도중에 걸린다 — memcached.c 의 FIXME 가 경고하는 경우다. */
         STAILQ_INSERT_TAIL(&g_ret_defer, pending, iop_next);
@@ -810,7 +822,17 @@ static void _storage_set_item_cb(void *e, obj_io *io, int ret) {
 static void storage_set_return_cb(io_pending_t *pending) {
     io_pending_storage_write_t *p = (io_pending_storage_write_t *)pending;
     item *it = p->hdr_it;
-    if (g_skip_conn != NULL && pending->c == g_skip_conn) {
+    /* 지금 파싱 중인 연결이라도, 위험한 것은 재개 자체가 아니라 그것이
+     * **마지막** 재개일 때다 — conn_resp_unsuspend 가 resps_suspended 를 0 으로
+     * 만들면 conn_worker_readd 가 drive_machine 이 도는 중에 걸린다.
+     * 아직 보류된 응답이 더 있으면 0 이 되지 않으므로 안전하다.
+     *
+     * 이 구분이 없을 때는 SET 재개의 100% 가 여기서 막혔다(실측:
+     * setret_now 0, skipconn SET 당 7.4 회). 파이프라인 혼합에서는 한 연결의
+     * SET 과 뒤따르는 GET 이 인접해, SET 이 완료될 때 늘 그 연결을 파싱 중이다. */
+    if (g_skip_conn != NULL && pending->c == g_skip_conn &&
+        pending->c->resps_suspended <= 1) {
+        atomic_fetch_add(&g_setret_skipconn, 1);
         STAILQ_INSERT_TAIL(&g_ret_defer, pending, iop_next);
         return;
     }
@@ -820,9 +842,11 @@ static void storage_set_return_cb(io_pending_t *pending) {
      * 다 알아야 했고, 실제로 meta-get 경로를 빠뜨려 서버가 멈췄다. */
     void *ilock = item_trylock(p->hv);
     if (ilock == NULL) {
+        atomic_fetch_add(&g_setret_locked, 1);
         STAILQ_INSERT_TAIL(&g_ret_defer, pending, iop_next);
         return;
     }
+    atomic_fetch_add(g_at_post ? &g_setret_now : &g_setret_loop, 1);
     it->it_flags &= ~ITEM_WFLIGHT;
     /* span v3 종료 — 응용에서 완료로 보이는 시점. CQE 관측(v2)보다 뒤이고
      * completion 관측 지연과 loop 재개 지연을 포함한다. */

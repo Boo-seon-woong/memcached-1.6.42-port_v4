@@ -62,3 +62,57 @@ block,cell,workload,ops_M,span,adm,v2,set_span,set_adm,set_v2,set_ret,note
 2,B2-p256,mix,10.867,19.65,,,8.74,,,,pipeline=256
 2,B2-p384,get,13.343,26.16,3.73,,,,,,pipeline=384 (r12c8 배포값)
 2,B2-p384,mix,10.213,21.16,,,8.71,,,,pipeline=384
+3,B3-A1,get,13.361,,,,,,,,nqp=1 ORD=16 W=16 곱16
+3,B3-A1,mix,10.907,,,,,,,,nqp=1 ORD=16
+3,B3-A2,get,13.22,,,,,,,,nqp=2 ORD=8
+3,B3-A2,mix,10.837,,,,,,,,nqp=2 ORD=8
+3,B3-A3,get,12.951,,,,,,,,nqp=4 ORD=4
+3,B3-A3,mix,10.795,,,,,,,,nqp=4 ORD=4
+3,B3-A4,get,12.23,,,,,,,,nqp=8 ORD=2
+3,B3-A4,mix,10.336,,,,,,,,nqp=8 ORD=2
+3,B3-A5,get,11.472,,,,,,,,nqp=16 ORD=1 480QP
+3,B3-A5,mix,9.699,,,,,,,,nqp=16 ORD=1
+4,B4-B1,get,5.574,,,,,,,,nqp=1 ORD=1 W=64 in-flight 1
+4,B4-B1,mix,5.755,,,,,,,,nqp=1 ORD=1
+4,B4-B2,get,7.976,,,,,,,,nqp=2 ORD=1
+4,B4-B2,mix,7.833,,,,,,,,nqp=2 ORD=1
+4,B4-B3,get,9.301,,,,,,,,nqp=4 ORD=1
+4,B4-B3,mix,9.068,,,,,,,,nqp=4 ORD=1
+4,B4-B4,get,10.292,,,,,,,,nqp=8 ORD=1
+4,B4-B4,mix,9.777,,,,,,,,nqp=8 ORD=1
+4,B4-B5,get,11.486,,,,,,,,nqp=16 ORD=1 480QP
+4,B4-B5,mix,9.77,,,,,,,,nqp=16 ORD=1
+4,B4-B6,get,11.144,,,,,,,,nqp=32 ORD=1 960QP
+4,B4-B6,mix,9.561,,,,,,,,nqp=32 ORD=1
+5,B5-C2-8,get,5.476,,,,,,,,mcT=mtT=8
+5,B5-C2-8,mix,4.734,,,,,,,,mcT=mtT=8
+5,B5-C2-12,get,7.512,,,,,,,,mcT=mtT=12
+5,B5-C2-12,mix,6.466,,,,,,,,mcT=mtT=12
+5,B5-C2-16,get,9.279,,,,,,,,mcT=mtT=16 물리코어 단독 최대
+5,B5-C2-16,mix,7.787,,,,,,,,mcT=mtT=16
+5,B5-C2-20,get,10.491,,,,,,,,mcT=mtT=20
+5,B5-C2-20,mix,8.72,,,,,,,,mcT=mtT=20
+5,B5-C2-24,get,11.523,,,,,,,,mcT=mtT=24
+5,B5-C2-24,mix,9.613,,,,,,,,mcT=mtT=24
+5,B5-C2-28,get,12.812,,,,,,,,mcT=mtT=28
+5,B5-C2-28,mix,10.516,,,,,,,,mcT=mtT=28
+5,B5-C2-30,get,13.278,,,,,,,,mcT=mtT=30 운영점
+5,B5-C2-30,mix,10.892,,,,,,,,mcT=mtT=30
+6,B6-W32,get,13.2,,,,,,,,W=32
+6,B6-W32,mix,10.765,,,,,,,,W=32
+6,B6-W48,get,13.244,,,,,,,,W=48
+6,B6-W48,mix,10.804,,,,,,,,W=48
+6,B6-W64,get,13.076,,,,,,,,W=64 상한
+6,B6-W64,mix,10.732,,,,,,,,W=64
+7,B7-F1p,get,1.902,,,,,,,,nqp=4 ORD=16 pipe=4 (원본 depth=32 불가)
+7,B7-F1p,mix,1.83,,,,,,,,nqp=4 ORD=16 pipe=4
+7,B7-F2,get,3.243,,,,,,,,nqp=8 ORD=16 pipe=8
+7,B7-F2,mix,3.104,,,,,,,,nqp=8 ORD=16 pipe=8
+7,B7-F3,get,2.649,,,,,,,,nqp=8 ORD=16 pipe=6
+7,B7-F3,mix,2.5,,,,,,,,nqp=8 ORD=16 pipe=6
+7,B7-F4,get,1.936,,,,,,,,nqp=6 ORD=16 pipe=4
+7,B7-F4,mix,1.88,,,,,,,,nqp=6 ORD=16 pipe=4
+7,B7-S4,get,2.185,,,,,,,,stock 로컬메모리 pipeline=4
+7,B7-S6,get,3.076,,,,,,,,stock 로컬메모리 pipeline=6
+7,B7-S8,get,3.882,,,,,,,,stock 로컬메모리 pipeline=8
+7,B7-S256,get,16.417,,,,,,,,stock 로컬메모리 pipeline=256 (운영 조건)

@@ -971,10 +971,15 @@ item *item_touch(const char *key, size_t nkey, uint32_t exptime, LIBEVENT_THREAD
  */
 void item_remove(item *item) {
     uint32_t hv;
+    /* 참조가 남아 있으면 락이 필요 없다 — 원자 감소로 끝난다. 0 이 됐을 때만
+     * 잠그고, 그 사이 누군가 해시에서 찾아 다시 참조했을 수 있으므로 락 아래서
+     * 다시 확인한다(링크된 아이템은 링크 참조가 있으므로 0 이면 이미 unlink 다). */
+    if (refcount_decr(item) != 0)
+        return;
     hv = hash(ITEM_key(item), item->nkey);
-
     item_lock(hv);
-    do_item_remove(item);
+    if (item->refcount == 0)
+        item_free(item);
     item_unlock(hv);
 }
 

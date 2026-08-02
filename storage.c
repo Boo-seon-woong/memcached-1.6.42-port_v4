@@ -30,11 +30,8 @@ static _Thread_local iop_head_t g_ret_head;
  * 확률은 1/2^item_lock_power 이라 사실상 전부 즉시 재개된다. */
 static _Thread_local iop_head_t g_ret_defer;
 static _Thread_local bool g_ret_defer_init;
-static _Thread_local uint32_t g_held_bucket;
-static _Thread_local bool g_held;
 static _Thread_local conn *g_skip_conn;  /* 지금 파싱 중이라 재개하면 안 되는 연결 */
 
-#define ITEM_LOCK_BUCKET(hv) ((hv) & ((1u << item_lock_power_used()) - 1))
 static _Thread_local bool g_ret_init = false;
 static unsigned int g_worker_window = 16; // v2 P2a (ext_worker_window)
 static unsigned int g_qp_per_worker = 1;  // v2 P2a (ext_qp_per_worker)
@@ -575,7 +572,13 @@ int storage_get_item(LIBEVENT_THREAD *t, item *it, mc_resp *resp) {
          * 걸린다(실측: 서버 즉사). 디스패치 경로를 하나라도 빠뜨리면 그렇게
          * 되므로, 완전성에 기대지 않고 모를 때는 안 한다 — pass 끝의 flush 가
          * 어차피 처리한다. */
-        if (t->cur_conn != NULL && extstore_worker_drain(t->ext_worker, 32) > 0) {
+        /* drain 이 실제로 뭔가 거뒀을 때만 재개한다. 0 이어도 매번 부르게
+         * 했더니 서버가 멈췄다 — meta-get 경로(limited_get_locked)는
+         * item_lock 을 쥔 채 여기 들어오고, storage_set_return_cb 가 같은
+         * 락을 다시 잡는다. 호출 빈도를 올리자 그 창이 열렸다. 보류분은
+         * pass 끝 flush 가 처리한다. */
+        if (t->cur_conn != NULL) {
+            extstore_worker_drain(t->ext_worker, 32);
             g_skip_conn = t->cur_conn;
             storage_flush_returns();
             g_skip_conn = NULL;
@@ -804,12 +807,15 @@ static void storage_set_return_cb(io_pending_t *pending) {
         STAILQ_INSERT_TAIL(&g_ret_defer, pending, iop_next);
         return;
     }
-    if (g_held && ITEM_LOCK_BUCKET(p->hv) == g_held_bucket) {
-        /* 호출자가 이 버킷을 이미 잡고 있다. 루프 레벨에서 다시 시도한다. */
+    /* 락을 잡을 수 있는지 추측하지 않고 물어본다. 호출자가 이 버킷을 쥐고
+     * 있으면(큐 상한 경로의 do_store_item, meta-get 의 limited_get_locked)
+     * trylock 이 실패하고 우리는 미룬다. 버킷을 비교하던 방식은 호출 경로를
+     * 다 알아야 했고, 실제로 meta-get 경로를 빠뜨려 서버가 멈췄다. */
+    void *ilock = item_trylock(p->hv);
+    if (ilock == NULL) {
         STAILQ_INSERT_TAIL(&g_ret_defer, pending, iop_next);
         return;
     }
-    item_lock(p->hv);
     it->it_flags &= ~ITEM_WFLIGHT;
     /* span v3 종료 — 응용에서 완료로 보이는 시점. CQE 관측(v2)보다 뒤이고
      * completion 관측 지연과 loop 재개 지연을 포함한다. */
@@ -827,7 +833,7 @@ static void storage_set_return_cb(io_pending_t *pending) {
         extstore_free_loc(ext_storage, &p->loc);
         ((item_hdr *)ITEM_data(it))->len = 0;
     }
-    item_unlock(p->hv);
+    item_trylock_unlock(ilock);
     p->thread->ext_resident--;
     setp_out_string(p->resp,
         p->write_ok ? "STORED" : "SERVER_ERROR remote write failed");
@@ -931,13 +937,8 @@ int storage_store_item_pac(void *e, item *it, item **hdr_out, uint32_t hv,
     p->io_ctx.t_enter = t_enter_v3;      /* span v3 시작 (t_start 는 seal 시각) */
     t->ext_resident++;
     g_setq.v[g_setq.n++] = p;
-    if (g_setq.n >= g_setq_max) {
-        /* do_store_item의 item_lock(hv) 아래다 — flush 안에서 재개할 때
-         * 이 버킷만 피하도록 알려준다. */
-        g_held = true; g_held_bucket = ITEM_LOCK_BUCKET(hv);
+    if (g_setq.n >= g_setq_max)
         storage_flush_pending_writes();
-        g_held = false;
-    }
     /* GET이 없는 워크로드에서도 CQE를 걷을 주체를 보장한다 */
     worker_storage_arm_drain(t);
     atomic_fetch_add(&g_pac_posted, 1);
@@ -1011,7 +1012,7 @@ void storage_flush_pending_writes(void) {
     for (int k = 0; k < 8 && extstore_worker_drain(w, 32) > 0; k++)
         ;
 
-    /* 방금 거둔 완료를 여기서 재개한다. 큐 상한 경로로 들어왔다면 g_held가
+    /* 방금 거둔 완료를 여기서 재개한다. 재개는 item_trylock 을 쓰므로
      * 켜져 있어 충돌 버킷만 보류된다. 이 호출이 없으면 재개가 이벤트 루프
      * pass 하나만큼 밀리는데, ext_setq_max=1 이라 모든 SET이 이 경로로 오므로
      * 완료 하나가 그 pass의 남은 SET 수백 개를 통째로 기다린다 — 실측
@@ -1501,7 +1502,7 @@ void storage_flush_returns(void) {
         conn_io_queue_return(io);
     }
     /* 락 충돌로 미룬 것들. 다음 호출(늦어도 루프 레벨)이 다시 시도한다 —
-     * 그때는 g_held가 꺼져 있으므로 반드시 처리된다. */
+     * 그때는 락이 비어 있으므로 처리된다. */
     STAILQ_CONCAT(&g_ret_head, &g_ret_defer);
 }
 

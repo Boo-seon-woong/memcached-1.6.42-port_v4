@@ -700,7 +700,7 @@ int process_get_cmd(LIBEVENT_THREAD *t, const char *key, const int nkey, mc_resp
 #endif
 
         /* item_get() has incremented it->refcount for us */
-        pthread_mutex_lock(&t->stats.mutex);
+        THR_STATS_LOCK(t);
         if (should_touch) {
             t->stats.touch_cmds++;
             t->stats.slab_stats[ITEM_clsid(it)].touch_hits++;
@@ -708,7 +708,7 @@ int process_get_cmd(LIBEVENT_THREAD *t, const char *key, const int nkey, mc_resp
             t->stats.slab_stats[CLEAR_LRU(it->slabs_clsid)].get_hits++;
             t->stats.get_cmds++;
         }
-        pthread_mutex_unlock(&t->stats.mutex);
+        THR_STATS_UNLOCK(t);
 #ifdef EXTSTORE
         /* If ITEM_HDR, an io_wrap owns the reference. */
         if ((it->it_flags & ITEM_HDR) == 0) {
@@ -727,7 +727,7 @@ int process_get_cmd(LIBEVENT_THREAD *t, const char *key, const int nkey, mc_resp
             fprintf(stderr, "\n");
         }
     } else {
-        pthread_mutex_lock(&t->stats.mutex);
+        THR_STATS_LOCK(t);
         if (should_touch) {
             t->stats.touch_cmds++;
             t->stats.touch_misses++;
@@ -735,7 +735,7 @@ int process_get_cmd(LIBEVENT_THREAD *t, const char *key, const int nkey, mc_resp
             t->stats.get_misses++;
             t->stats.get_cmds++;
         }
-        pthread_mutex_unlock(&t->stats.mutex);
+        THR_STATS_UNLOCK(t);
     }
 
     return 0;
@@ -1227,7 +1227,7 @@ void process_mget_cmd(LIBEVENT_THREAD *t, mcp_parser_t *pr, mc_resp *resp,
     // we count this command as a normal one if we've gotten this far.
     // TODO: for autovivify case, miss never happens. Is this okay?
     if (!failed) {
-        pthread_mutex_lock(&t->stats.mutex);
+        THR_STATS_LOCK(t);
         if (ttl_set) {
             t->stats.touch_cmds++;
             t->stats.slab_stats[ITEM_clsid(it)].touch_hits++;
@@ -1235,9 +1235,9 @@ void process_mget_cmd(LIBEVENT_THREAD *t, mcp_parser_t *pr, mc_resp *resp,
             t->stats.slab_stats[CLEAR_LRU(it->slabs_clsid)].get_hits++;
             t->stats.get_cmds++;
         }
-        pthread_mutex_unlock(&t->stats.mutex);
+        THR_STATS_UNLOCK(t);
     } else {
-        pthread_mutex_lock(&t->stats.mutex);
+        THR_STATS_LOCK(t);
         if (ttl_set) {
             t->stats.touch_cmds++;
             t->stats.touch_misses++;
@@ -1245,7 +1245,7 @@ void process_mget_cmd(LIBEVENT_THREAD *t, mcp_parser_t *pr, mc_resp *resp,
             t->stats.get_misses++;
             t->stats.get_cmds++;
         }
-        pthread_mutex_unlock(&t->stats.mutex);
+        THR_STATS_UNLOCK(t);
 
         // This gets elided in noreply mode.
         if (of.no_reply)

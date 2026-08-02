@@ -617,9 +617,9 @@ int storage_get_item(LIBEVENT_THREAD *t, item *it, mc_resp *resp) {
     // FIXME: This stat needs to move to reflect # of flash hits vs misses
     // for now it's a good gauge on how often we request out to flash at
     // least.
-    pthread_mutex_lock(&t->stats.mutex);
+    THR_STATS_LOCK(t);
     t->stats.get_extstore++;
-    pthread_mutex_unlock(&t->stats.mutex);
+    THR_STATS_UNLOCK(t);
 
     return 0;
 }

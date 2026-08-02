@@ -979,8 +979,15 @@ int stop_conn_timeout_thread(void);
 #define refcount_decr(it) __atomic_sub_fetch(&(it)->refcount, 1, __ATOMIC_ACQ_REL)
 void STATS_LOCK(void);
 void STATS_UNLOCK(void);
-#define THR_STATS_LOCK(t) pthread_mutex_lock(&t->stats.mutex)
-#define THR_STATS_UNLOCK(t) pthread_mutex_unlock(&t->stats.mutex)
+/* 워커별 통계는 그 워커만 쓴다. 뮤텍스는 집계 스레드 하나를 위한 것인데
+ * GET 한 건이 두 쌍을 문다(파서의 hit/miss, storage 의 get_extstore).
+ * refcount 를 원자로 바꾼 뒤 남은 락 0.291 µs/op 중 세 쌍 가운데 둘이 이것이다.
+ *
+ * 빼면 집계가 필드 사이에서 일관되지 않을 수 있다. 값 자체는 안 깨진다 —
+ * x86-64 에서 정렬된 64 비트 접근은 찢어지지 않는다. 아이템 카운터를 워커별로
+ * 쪼갠 것과 같은 판단이다. */
+#define THR_STATS_LOCK(t)   do { (void)(t); } while (0)
+#define THR_STATS_UNLOCK(t) do { (void)(t); } while (0)
 void threadlocal_stats_reset(void);
 unsigned int item_lock_power_used(void);
 int64_t item_acct_sum(int clsid, bool bytes);

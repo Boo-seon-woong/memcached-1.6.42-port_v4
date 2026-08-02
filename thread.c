@@ -1031,6 +1031,9 @@ enum store_item_type store_item(item *item, int comm, LIBEVENT_THREAD *t, int *n
     item_lock(hv);
     ret = do_store_item(item, comm, t, hv, nbytes, cas, cas_in, cas_stale);
     item_unlock(hv);
+#ifdef EXTSTORE
+    storage_flush_pending_writes();   /* A-1: 락 밖에서 내보낸다 */
+#endif
     return ret;
 }
 

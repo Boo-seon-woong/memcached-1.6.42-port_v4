@@ -975,7 +975,11 @@ int storage_store_item_pac(void *e, item *it, item **hdr_out, uint32_t hv,
     p->io_ctx.t_enter = t_enter_v3;      /* span v3 시작 (t_start 는 seal 시각) */
     t->ext_resident++;
     g_setq.v[g_setq.n++] = p;
-    if (g_setq.n >= g_setq_max)
+    /* A-1 재시도: 여기서 flush 하면 do_store_item 의 item_lock(hv) 아래에서
+     * advise·post·drain·재개가 전부 돌아 같은 버킷의 GET 을 막는다. 전에
+     * 락 밖으로 뺐을 때는 처리량이 졌지만(9.05 대 9.18) 그때는 refcount 와
+     * stats 락이 그대로였다. 둘을 걷어낸 지금은 부호가 바뀔 수 있다. */
+    if (g_setq.n >= SETQ_HARD_MAX)
         storage_flush_pending_writes();
     /* GET이 없는 워크로드에서도 CQE를 걷을 주체를 보장한다 */
     worker_storage_arm_drain(t);

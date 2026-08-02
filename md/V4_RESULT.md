@@ -346,3 +346,76 @@ mc-log · mc-assocmaint 0
 
 **워커 외 전부 0.01%** 다. LRU maintainer·crawler·slab automove 는 스레드가
 아예 없다.
+
+---
+
+## 10. 2 차 재검 — 현재 빌드 프로파일과 표적 셋
+
+§7 은 MEMSET·A-1 **이전** 프로파일로 골랐다. 그 뒤 처리량이 8.2% 올랐으니
+분포가 달라졌을 것이라 **현재 빌드로 다시 떴다.**
+
+`PROF MIX` 창(10.544 M) 안에서 60,782 샘플. **혼합이 구속 워크로드라 이쪽이
+맞다.**
+
+```text
+ 8.47%  [k] __irqentry_text_start        NIC 인터럽트 (SNP guest 진입 비용)
+ 5.83%  assoc_find                 ┐
+ 1.69%  assoc_prefetch             ├ 해시 조회 8.0%
+ 0.49%  MurmurHash3_x86_32         ┘
+ 2.93%  pthread_mutex_lock         ┐
+ 2.62%  pthread_mutex_unlock       ├ 뮤텍스 6.24%
+ 0.69%  pthread_mutex_unlock@plt   ┘
+ 4.04%  EVP_CIPHER_CTX_get_iv_length  ┐
+ 1.30%  EVP_CIPHER_CTX_ctrl           ├ EVP 6.08%
+ 0.74%  OSSL_PARAM_construct_size_t   ┘
+ 3.15%  mlx5_poll_cq_v1            ┐ CQ 폴링 5.32%
+ 2.17%  extstore_worker_drain      ┘
+ 3.37%  do_item_get / 2.93% storage_get_item / 2.79% resp_allocate
+ 0.60%  extstore_prof_stamp        ← 계측 자체. span 을 재려면 낸다
+```
+
+### 표적 셋 — 전부 무승부
+
+```text
+                  GET-only            1:9 혼합
+기준            13.303 M            10.770 M
+item_lock=17         —              10.742 M   −0.26%
+CPU_RELAX       13.235 M  −0.5%     10.778 M   +0.07%
+-march v3       13.236 M  −0.5%     10.821 M   +0.47%
+```
+
+세 값 다 bed drift 1.4% 안이다. **셋 다 되돌렸다** — 배포 바이너리는
+`b4c18e97`, 이 문서의 모든 수치를 낸 그것이다.
+
+`CPU_RELAX` 와 `-march` 가 GET 에서 `13.235 / 13.236` 으로 겹친다. **서로
+무관한 두 변경이 같은 값을 내면 변경의 효과가 아니라 bed 가 13.30 → 13.24
+로 내려앉은 것**이다. −0.5% 를 퇴행으로 읽지 않는 근거다.
+
+### 각 표적이 왜 안 먹었나
+
+| 표적 | 근거였던 것 | 실제 |
+|---|---|---|
+| `item_lock_power` | 뮤텍스 6.24% | 15→10 은 −4%, 15→17 은 평평. **크기는 지렛대가 아니다** — 경합도 배열 캐시도 아니고 락 자체다 |
+| `CPU_RELAX` | 폴링 5.32% | 운영점은 워커당 체류 11.6 이라 **CQ 가 빌 틈이 없다.** 5.32% 는 빈 poll 낭비가 아니라 실제 수거 비용 |
+| `-march=x86-64-v3` | `-O2` 만 쓰고 있었다 | 무승부. 포인터 추적·락·syscall 이 대부분이라 벡터 폭이 안 는다 |
+
+**프로파일의 심볼 비중은 "줄일 수 있는 양" 이 아니다.** EVP(§4)에 이어 세
+번 확인했다. 비중은 표적을 고르는 데 쓰고 **크기는 A/B 로만 확인한다.**
+
+### 같이 닫은 것
+
+```text
+대량 clear    요청 경로 최대가 io_pending_t 176 B. §7 의 memset 두 자리가 마지막
+잡일 스레드   24 워커 구성에서 워커 외 전부 합쳐 0.01%
+CQ 통합       워커당 CQ 는 이미 하나고 QP 4 개가 공유한다 (extstore.c:615)
+```
+
+### 남은 것과, 왜 지금 안 하나
+
+```text
+assoc_find 8.0%   4 M 버킷(32 MB) 포인터 추적. hashpower 를 낮추면 L3 에
+                  들어갈 수 있으나 탐침이 1.0 → 1.5 로 는다. B-3 에서 잰다
+인터럽트 8.47%    SNP guest 의 인터럽트 진입 비용. coalescing 은 §4 에서 기각
+뮤텍스 6.24%      락 배열을 해시 버킷과 합쳐야 준다. 여유 +7.8% 로 착수할
+                  종류의 변경이 아니다
+```

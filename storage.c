@@ -30,6 +30,7 @@ static _Thread_local iop_head_t g_ret_head;
  * 확률은 1/2^item_lock_power 이라 사실상 전부 즉시 재개된다. */
 static _Thread_local iop_head_t g_ret_defer;
 static _Thread_local bool g_ret_defer_init;
+static _Thread_local unsigned int g_reap_tick;
 static _Thread_local conn *g_skip_conn;  /* 지금 파싱 중이라 재개하면 안 되는 연결 */
 
 static _Thread_local bool g_ret_init = false;
@@ -577,7 +578,13 @@ int storage_get_item(LIBEVENT_THREAD *t, item *it, mc_resp *resp) {
          * item_lock 을 쥔 채 여기 들어오고, storage_set_return_cb 가 같은
          * 락을 다시 잡는다. 호출 빈도를 올리자 그 창이 열렸다. 보류분은
          * pass 끝 flush 가 처리한다. */
-        if (t->cur_conn != NULL) {
+        /* 수거를 K 건마다로 상각한다. post 마다 하면 span 은 최소가 되지만
+         * poll + flush 가 op 당 비용으로 온전히 붙는다(무제한 기준선 대비
+         * CPU/op 2.51 → 3.80). span 예산이 30 인데 6 밖에 안 쓰고 있으므로
+         * 그 여유를 처리량으로 바꾼다 — 늦게 수거하면 v2 가 최대 K/2 건만큼
+         * 늘어난다. */
+        if (t->cur_conn != NULL && ++g_reap_tick >= settings.ext_reap_every) {
+            g_reap_tick = 0;
             extstore_worker_drain(t->ext_worker, 32);
             g_skip_conn = t->cur_conn;
             storage_flush_returns();
@@ -1271,6 +1278,7 @@ int storage_read_config(void *conf, char **subopt) {
         EXT_SUBMIT_BATCH,
         EXT_ADMIT_MAX,
         EXT_SUBMIT_INLINE,
+        EXT_REAP_EVERY,
     };
 
     char *const subopts_tokens[] = {
@@ -1287,6 +1295,7 @@ int storage_read_config(void *conf, char **subopt) {
         [EXT_SUBMIT_BATCH] = "ext_submit_batch",
         [EXT_ADMIT_MAX] = "ext_admit_max",
         [EXT_SUBMIT_INLINE] = "ext_submit_inline",
+        [EXT_REAP_EVERY] = "ext_reap_every",
         NULL
     };
 
@@ -1307,6 +1316,14 @@ int storage_read_config(void *conf, char **subopt) {
                 !safe_strtoul(subopts_value, &ext_cf->worker_window) ||
                 ext_cf->worker_window < 1) {
                 fprintf(stderr, "ext_worker_window must be >= 1\n");
+                return 1;
+            }
+            break;
+        case EXT_REAP_EVERY:
+            if (subopts_value == NULL ||
+                !safe_strtoul(subopts_value, &settings.ext_reap_every) ||
+                settings.ext_reap_every < 1) {
+                fprintf(stderr, "ext_reap_every must be >= 1\n");
                 return 1;
             }
             break;

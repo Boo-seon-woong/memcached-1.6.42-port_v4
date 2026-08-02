@@ -975,16 +975,8 @@ int storage_store_item_pac(void *e, item *it, item **hdr_out, uint32_t hv,
     p->io_ctx.t_enter = t_enter_v3;      /* span v3 시작 (t_start 는 seal 시각) */
     t->ext_resident++;
     g_setq.v[g_setq.n++] = p;
-    /* 여기서 flush 하면 안 된다 — 우리는 do_store_item 의 item_lock(hv) 아래다.
-     * flush 는 advise · RDMA post · CQE drain(최대 256) · storage_flush_returns
-     * 를 전부 하는데, 그동안 같은 버킷의 GET 이 막힌다. 혼합 프로파일에서
-     * pthread_mutex 가 0.452 µs/op(14.2%)로 최대 항목인 이유가 이것이다.
-     *
-     * store_item 이 item_unlock 직후에 flush 한다. 큐 상한(ext_setq_max)은
-     * 그대로 지켜지되 락 밖에서 지켜진다. 그 경로를 안 타는 호출자
-     * (meta 경로)는 루프 레벨 flush 가 받는다. */
-    if (g_setq.n >= SETQ_HARD_MAX)
-        storage_flush_pending_writes();   /* 배열 넘침만 막는다 */
+    if (g_setq.n >= g_setq_max)
+        storage_flush_pending_writes();
     /* GET이 없는 워크로드에서도 CQE를 걷을 주체를 보장한다 */
     worker_storage_arm_drain(t);
     atomic_fetch_add(&g_pac_posted, 1);

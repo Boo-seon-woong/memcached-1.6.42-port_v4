@@ -10,6 +10,8 @@
 set -eu
 G="ssh -n -i $HOME/.ssh/snp_guest -p 2222 -o BatchMode=yes -o ConnectTimeout=8 ubuntu@localhost"
 
+MCT=${MCT:-30}  # 워커 스레드 수
+CPUSET=${CPUSET:-0-29}
 SQ=${SQ:-1}    # ext_setq_max
 PC=${PC:-1}    # ext_post_chain
 RE=${RE:-1}    # ext_reap_every
@@ -27,16 +29,16 @@ case "${1:-}" in
   *) echo "usage: $0 {S3|S2|S1|W1 <sb>|W2 <sb>| <sb> <W> <nqp> <slots>}" >&2; exit 1 ;;
 esac
 
-echo "── 무장: submit_batch=$SB W=$W nqp=$NQP READ_SLOTS=$SLOTS -R $R admit=$AD reap=$RE chain=$PC setq=$SQ (총 QP = 30 × $NQP)"
+echo "── 무장: submit_batch=$SB W=$W nqp=$NQP READ_SLOTS=$SLOTS -R $R admit=$AD reap=$RE chain=$PC setq=$SQ mcT=$MCT cpu=$CPUSET (총 QP = $MCT × $NQP)"
 
 $G "tmux kill-session -t mc 2>/dev/null || true; pkill -x memcached 2>/dev/null || true"
 sleep 3
 
-$G "tmux new-session -d -s mc \"cd \\\$HOME/kvs-port && exec taskset -c 0-29 env \
+$G "tmux new-session -d -s mc \"cd \\\$HOME/kvs-port && exec taskset -c $CPUSET env \
 LD_LIBRARY_PATH=\\\$HOME/coherent-mr-v2/lib:\\\$HOME/kvs-port \
 MLX5_COHERENT_QP=1 MLX5_COHERENT_CQ=1 EXT_RDMA_PROF=1 EXT_SELFTEST=1 \
 EXT_CRYPTO_KEY=\\\$HOME/kvs-port/ext.key EXT_SLOT_SIZE=256 EXT_READ_SLOTS=$SLOTS \
-\\\$HOME/coherent-mr-v2/bin/memcached -p 11411 -U 0 -t 30 -m 2048 -c 16384 -R $R \
+\\\$HOME/coherent-mr-v2/bin/memcached -p 11411 -U 0 -t $MCT -m 2048 -c 16384 -R $R \
 -o ext_path=10.99.0.2:11212:4g,ext_worker_window=$W,ext_qp_per_worker=$NQP,ext_drain_spin=1024,hashpower=22,ext_submit_batch=$SB,ext_admit_max=$AD${INLINE:+,ext_submit_inline},ext_reap_every=$RE,ext_post_chain=$PC,ext_setq_max=$SQ \
 > /tmp/mc.log 2>&1\""
 sleep 10

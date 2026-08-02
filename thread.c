@@ -1026,12 +1026,6 @@ enum store_item_type store_item(item *item, int comm, LIBEVENT_THREAD *t, int *n
     item_lock(hv);
     ret = do_store_item(item, comm, t, hv, nbytes, cas, cas_in, cas_stale);
     item_unlock(hv);
-#ifdef EXTSTORE
-    /* pac 이 큐에 넣어둔 쓰기를 락 밖에서 내보낸다. 안에서 하면 advise·post·
-     * drain·재개가 전부 item_lock 아래에서 돌아 같은 버킷의 GET 을 막는다.
-     * 큐가 비어 있으면 즉시 반환하므로 extstore 를 안 쓰는 SET 도 싸다. */
-    storage_flush_pending_writes();
-#endif
     return ret;
 }
 

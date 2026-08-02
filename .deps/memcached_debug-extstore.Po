@@ -96,7 +96,9 @@ memcached_debug-extstore.o: extstore.c /usr/include/stdc-predef.h \
  /usr/include/x86_64-linux-gnu/bits/errno.h /usr/include/linux/errno.h \
  /usr/include/x86_64-linux-gnu/asm/errno.h \
  /usr/include/asm-generic/errno.h /usr/include/asm-generic/errno-base.h \
- /usr/include/x86_64-linux-gnu/bits/types/error_t.h \
+ /usr/include/x86_64-linux-gnu/bits/types/error_t.h /usr/include/dlfcn.h \
+ /usr/include/x86_64-linux-gnu/bits/dlfcn.h \
+ /usr/include/x86_64-linux-gnu/bits/dl_find_object.h \
  /usr/include/x86_64-linux-gnu/sys/socket.h \
  /usr/include/x86_64-linux-gnu/bits/types/struct_iovec.h \
  /usr/include/x86_64-linux-gnu/bits/socket.h \
@@ -248,6 +250,9 @@ config.h:
 /usr/include/asm-generic/errno.h:
 /usr/include/asm-generic/errno-base.h:
 /usr/include/x86_64-linux-gnu/bits/types/error_t.h:
+/usr/include/dlfcn.h:
+/usr/include/x86_64-linux-gnu/bits/dlfcn.h:
+/usr/include/x86_64-linux-gnu/bits/dl_find_object.h:
 /usr/include/x86_64-linux-gnu/sys/socket.h:
 /usr/include/x86_64-linux-gnu/bits/types/struct_iovec.h:
 /usr/include/x86_64-linux-gnu/bits/socket.h:

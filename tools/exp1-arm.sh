@@ -18,6 +18,8 @@ RE=${RE:-1}    # ext_reap_every
 AD=${AD:-0}    # ext_admit_max: 워커당 backend 체류 상한 (0=무제한)
 ILP=${ILP:-0}  # item_lock_power: 0 = 스레드수에서 유도(30스레드면 15)
 HP=${HP:-22}  # hashpower
+ORD=${ORD:-0}  # ext_ord_limit: QP당 READ 게이트. 0 = CM 협상값(16)
+ORDOPT=""; [ "$ORD" != 0 ] && ORDOPT=",ext_ord_limit=$ORD"
 ILPOPT=""; [ "$ILP" != 0 ] && ILPOPT=",item_lock_power=$ILP"
 R=${R:-1024}   # reqs_per_event: pass 당 명령 수 상한 (= backend 유입 조리개)
 case "${1:-}" in
@@ -32,7 +34,7 @@ case "${1:-}" in
   *) echo "usage: $0 {S3|S2|S1|W1 <sb>|W2 <sb>| <sb> <W> <nqp> <slots>}" >&2; exit 1 ;;
 esac
 
-echo "── 무장: submit_batch=$SB W=$W nqp=$NQP READ_SLOTS=$SLOTS -R $R admit=$AD reap=$RE chain=$PC setq=$SQ mcT=$MCT ilp=$ILP hp=$HP cpu=$CPUSET (총 QP = $MCT × $NQP)"
+echo "── 무장: submit_batch=$SB W=$W nqp=$NQP READ_SLOTS=$SLOTS -R $R admit=$AD reap=$RE chain=$PC setq=$SQ mcT=$MCT ilp=$ILP hp=$HP ord=$ORD cpu=$CPUSET (총 QP = $MCT × $NQP)"
 
 $G "tmux kill-session -t mc 2>/dev/null || true; pkill -x memcached 2>/dev/null || true"
 sleep 3
@@ -42,7 +44,7 @@ LD_LIBRARY_PATH=\\\$HOME/coherent-mr-v2/lib:\\\$HOME/kvs-port \
 MLX5_COHERENT_QP=1 MLX5_COHERENT_CQ=1 EXT_RDMA_PROF=1 EXT_SELFTEST=1 \
 EXT_CRYPTO_KEY=\\\$HOME/kvs-port/ext.key EXT_SLOT_SIZE=256 EXT_READ_SLOTS=$SLOTS \
 \\\$HOME/coherent-mr-v2/bin/memcached -p 11411 -U 0 -t $MCT -m 2048 -c 16384 -R $R \
--o ext_path=10.99.0.2:11212:4g,ext_worker_window=$W,ext_qp_per_worker=$NQP,ext_drain_spin=1024,hashpower=$HP,ext_submit_batch=$SB,ext_admit_max=$AD${INLINE:+,ext_submit_inline},ext_reap_every=$RE,ext_post_chain=$PC,ext_setq_max=$SQ$ILPOPT \
+-o ext_path=10.99.0.2:11212:4g,ext_worker_window=$W,ext_qp_per_worker=$NQP,ext_drain_spin=1024,hashpower=$HP,ext_submit_batch=$SB,ext_admit_max=$AD${INLINE:+,ext_submit_inline},ext_reap_every=$RE,ext_post_chain=$PC,ext_setq_max=$SQ$ILPOPT$ORDOPT \
 > /tmp/mc.log 2>&1\""
 sleep 10
 

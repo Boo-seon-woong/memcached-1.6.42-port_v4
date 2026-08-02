@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="560" viewBox="0 0 900 560" font-family="DejaVu Sans,sans-serif">
+<rect width="900" height="560" fill="#fff"/>
+<text x="78" y="30" font-size="17" font-weight="bold">v4 프론티어 — 1:9 혼합 (구속 워크로드)</text>
+<text x="78" y="48" font-size="12" fill="#666">초록 영역이 계약(≥10 M, span ≤30 µs). 새 셀 없음 — B-1b·B-2 에서 이미 잰 점이다.</text>
+<rect x="603.3" y="58.0" width="262.7" height="440.0" fill="#2ca02c" opacity="0.09"/>
+<line x1="78" y1="498.0" x2="866" y2="498.0" stroke="#ececec"/>
+<text x="70" y="502.0" font-size="11" fill="#555" text-anchor="end">16</text>
+<line x1="78" y1="388.0" x2="866" y2="388.0" stroke="#ececec"/>
+<text x="70" y="392.0" font-size="11" fill="#555" text-anchor="end">18</text>
+<line x1="78" y1="278.0" x2="866" y2="278.0" stroke="#ececec"/>
+<text x="70" y="282.0" font-size="11" fill="#555" text-anchor="end">20</text>
+<line x1="78" y1="168.0" x2="866" y2="168.0" stroke="#ececec"/>
+<text x="70" y="172.0" font-size="11" fill="#555" text-anchor="end">22</text>
+<line x1="78" y1="58.0" x2="866" y2="58.0" stroke="#ececec"/>
+<text x="70" y="62.0" font-size="11" fill="#555" text-anchor="end">24</text>
+<line x1="78.0" y1="58" x2="78.0" y2="498" stroke="#ececec"/>
+<text x="78.0" y="516" font-size="11" fill="#555" text-anchor="middle">6</text>
+<line x1="209.3" y1="58" x2="209.3" y2="498" stroke="#ececec"/>
+<text x="209.3" y="516" font-size="11" fill="#555" text-anchor="middle">7</text>
+<line x1="340.7" y1="58" x2="340.7" y2="498" stroke="#ececec"/>
+<text x="340.7" y="516" font-size="11" fill="#555" text-anchor="middle">8</text>
+<line x1="472.0" y1="58" x2="472.0" y2="498" stroke="#ececec"/>
+<text x="472.0" y="516" font-size="11" fill="#555" text-anchor="middle">9</text>
+<line x1="603.3" y1="58" x2="603.3" y2="498" stroke="#ececec"/>
+<text x="603.3" y="516" font-size="11" fill="#555" text-anchor="middle">10</text>
+<line x1="734.7" y1="58" x2="734.7" y2="498" stroke="#ececec"/>
+<text x="734.7" y="516" font-size="11" fill="#555" text-anchor="middle">11</text>
+<line x1="866.0" y1="58" x2="866.0" y2="498" stroke="#ececec"/>
+<text x="866.0" y="516" font-size="11" fill="#555" text-anchor="middle">12</text>
+<line x1="603.3" y1="58" x2="603.3" y2="498" stroke="#2ca02c" stroke-width="2" stroke-dasharray="6,4"/>
+<text x="597.3" y="490" font-size="11" fill="#2ca02c" text-anchor="end">10 M</text>
+<text x="860" y="73" font-size="11" fill="#2ca02c" text-anchor="end">span 상한 30 µs — 축 밖(전 점 통과)</text>
+<text x="472" y="544" font-size="13" text-anchor="middle">처리량 (M ops/s)</text>
+<text x="18" y="278" font-size="13" text-anchor="middle" transform="rotate(-90 18 278)">GET span v3 (µs)</text>
+<path d="M155.5,197.2 L369.2,154.8 L628.8,242.3 L704.5,286.2 L617.6,198.8" fill="none" stroke="#1f77b4" stroke-width="1.6" opacity="0.4"/>
+<path d="M388.6,412.7 L538.2,368.2 L652.7,312.6 L704.5,286.2" fill="none" stroke="#d62728" stroke-width="1.6" opacity="0.4"/>
+<circle cx="155.5" cy="197.2" r="5.5" fill="#1f77b4" stroke="#fff" stroke-width="1.5"/>
+<circle cx="369.2" cy="154.8" r="5.5" fill="#1f77b4" stroke="#fff" stroke-width="1.5"/>
+<circle cx="628.8" cy="242.3" r="9.0" fill="none" stroke="#2ca02c" stroke-width="1.8"/>
+<circle cx="628.8" cy="242.3" r="5.5" fill="#1f77b4" stroke="#fff" stroke-width="1.5"/>
+<circle cx="617.6" cy="198.8" r="9.0" fill="none" stroke="#2ca02c" stroke-width="1.8"/>
+<circle cx="617.6" cy="198.8" r="5.5" fill="#1f77b4" stroke="#fff" stroke-width="1.5"/>
+<circle cx="388.6" cy="412.7" r="5.5" fill="#d62728" stroke="#fff" stroke-width="1.5"/>
+<circle cx="538.2" cy="368.2" r="5.5" fill="#d62728" stroke="#fff" stroke-width="1.5"/>
+<circle cx="652.7" cy="312.6" r="9.0" fill="none" stroke="#2ca02c" stroke-width="1.8"/>
+<circle cx="652.7" cy="312.6" r="5.5" fill="#d62728" stroke="#fff" stroke-width="1.5"/>
+<circle cx="704.5" cy="286.2" r="10.5" fill="none" stroke="#2ca02c" stroke-width="1.8"/>
+<circle cx="704.5" cy="286.2" r="7" fill="#111111" stroke="#fff" stroke-width="1.5"/>
+<text x="155.5" y="184.2" font-size="10.5" fill="#333" text-anchor="middle">p32</text>
+<text x="369.2" y="141.8" font-size="10.5" fill="#333" text-anchor="middle">p64</text>
+<text x="388.6" y="399.7" font-size="10.5" fill="#333" text-anchor="middle">t20</text>
+<text x="538.2" y="355.2" font-size="10.5" fill="#333" text-anchor="middle">t24</text>
+<text x="617.6" y="185.8" font-size="10.5" fill="#333" text-anchor="middle">p384</text>
+<text x="628.8" y="229.3" font-size="10.5" fill="#333" text-anchor="middle">p128</text>
+<text x="652.7" y="299.6" font-size="10.5" fill="#333" text-anchor="middle">t28</text>
+<text x="704.5" y="273.2" font-size="10.5" fill="#333" text-anchor="middle">운영점 p256=t30</text>
+<circle cx="92" cy="432" r="5" fill="#1f77b4"/>
+<text x="103" y="436" font-size="11">pipeline 축 (mcT=30)</text>
+<circle cx="92" cy="449" r="5" fill="#d62728"/>
+<text x="103" y="453" font-size="11">mcT 축 (pipe=256)</text>
+<circle cx="92" cy="466" r="5" fill="#111111"/>
+<text x="103" y="470" font-size="11">운영점 — 두 축의 만나는 점</text>
+</svg>

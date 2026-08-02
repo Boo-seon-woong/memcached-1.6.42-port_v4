@@ -226,6 +226,25 @@ perf 는 커널 버전을 확인해야 한다. guest 는 `6.16.0-snp-guest` 인�
 걸기 전에 스모크로 샘플 수를 확인한다** — stderr 를 버린 채 조용히 실패해서
 창 하나를 통째로 날린 적이 있다.
 
+**서버 바이너리를 갈아탄 뒤에는 무엇이 11411 을 쥐고 있는지 직접 확인한다.**
+stock 대조(`/tmp/mc_stock`)는 이름이 `memcached` 가 아니라
+`pkill -x memcached` 로 안 죽는다. 그 상태로 포트를 띄우면 bind 실패로
+즉사하고 **`/tmp/mc.log` 가 안 덮여 옛 내용이 남는다** — 그 낡은 로그를 읽고
+"coherent MR 게이트 2 통과"라고 **두 번** 보고한 적이 있다. `curr_items` 와
+`num_threads` 는 두 바이너리가 같아 구분이 안 된다.
+
+```bash
+pkill -f '^/tmp/mc_'                     # 스테이징 바이너리도 죽인다
+: > /tmp/mc.log                          # 기동 전에 비운다
+stats settings | grep ext_submit_inline  # stock 에 없다 → 이것으로 판별
+```
+
+`ps` 는 tmux 명령줄을 잡아서 못 쓴다.
+
+**세 번 다 같은 형태다** — 낡은 산출물(중복 추적기, 안 만들어진 perf 파일,
+안 덮인 로그)이 검증을 대신했다. **검증은 실패 모드가 남길 수 없는 것을
+읽어야 한다.**
+
 raw 는 `experiments/` 아래. EXP-0 은 `exp0-20260801/FINDINGS.md`,
 EXP-1 축별 판정은 `EXP1_FINDINGS.md`, 프로파일은 `prof-20260802/`.
 

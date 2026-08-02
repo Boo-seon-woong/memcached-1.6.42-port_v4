@@ -2034,9 +2034,9 @@ bool get_stats(const char *stat_type, int nkey, ADD_STAT add_stats, void *c) {
         if (!stat_type) {
             /* prepare general statistics for the engine */
             STATS_LOCK();
-            APPEND_STAT("bytes", "%llu", (unsigned long long)stats_state.curr_bytes);
-            APPEND_STAT("curr_items", "%llu", (unsigned long long)stats_state.curr_items);
-            APPEND_STAT("total_items", "%llu", (unsigned long long)stats.total_items);
+            APPEND_STAT("bytes", "%llu", (unsigned long long)item_curr_bytes());
+            APPEND_STAT("curr_items", "%llu", (unsigned long long)item_curr_items());
+            APPEND_STAT("total_items", "%llu", (unsigned long long)item_total_items());
             STATS_UNLOCK();
             APPEND_STAT("slab_global_page_pool", "%u", global_page_pool_size(NULL));
             item_stats_totals(add_stats, c);
@@ -3965,7 +3965,7 @@ static void clock_handler(const evutil_socket_t fd, const short which, void *arg
 
     // While we're here, check for hash table expansion.
     // This function should be quick to avoid delaying the timer.
-    assoc_start_expand(stats_state.curr_items);
+    assoc_start_expand(item_curr_items());
     // also, if HUP'ed we need to do some maintenance.
     // for now that's just the authfile and TLS certificates reload.
     if (settings.sig_hup) {

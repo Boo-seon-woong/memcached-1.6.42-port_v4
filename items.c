@@ -28,8 +28,49 @@ typedef struct {
 
 /* Indexed by plain slab class id; lru_locks kept as the per-class stat lock. */
 static itemstats_t itemstats[LARGEST_ID];
-static unsigned int sizes[LARGEST_ID];
-static uint64_t sizes_bytes[LARGEST_ID];
+/* SET 한 건이 이 카운터들을 열 번 갱신한다 — link 에서 curr_bytes·curr_items·
+ * total_items·sizes[id]·sizes_bytes[id], unlink 에서 같은 것 반대로. 원자
+ * 연산이라 락은 없지만, **stub item 이 전부 같은 slab class** 라 30 개 워커가
+ * 같은 두 캐시라인을 두드린다. SET-only 프로파일에서
+ * item_acct_add 0.401 / do_item_link 0.556 / do_item_unlink 0.799 µs/op 다.
+ *
+ * 워커별로 쪼개고 읽을 때 합친다. thread_stats 가 이미 쓰는 방식이고,
+ * 읽는 쪽은 stats 출력 세 줄과 해시 확장 트리거뿐이라 약간 늦어도 된다. */
+#define ACCT_SLOTS 64
+struct item_acct {
+    int64_t sizes[LARGEST_ID];
+    int64_t sizes_bytes[LARGEST_ID];
+    int64_t curr_bytes, curr_items, total_items;
+    char pad[64];
+};
+static struct item_acct g_iacct[ACCT_SLOTS];
+static unsigned int acct_next;
+static _Thread_local int acct_slot = -1;
+
+static inline struct item_acct *acct_me(void) {
+    if (acct_slot < 0)
+        acct_slot = (int)(__atomic_fetch_add(&acct_next, 1u, __ATOMIC_RELAXED) % ACCT_SLOTS);
+    return &g_iacct[acct_slot];
+}
+
+int64_t item_acct_sum(int clsid, bool bytes) {
+    int64_t t = 0;
+    for (int i = 0; i < ACCT_SLOTS; i++)
+        t += bytes ? g_iacct[i].sizes_bytes[clsid] : g_iacct[i].sizes[clsid];
+    return t < 0 ? 0 : t;
+}
+uint64_t item_curr_bytes(void) {
+    int64_t t = 0; for (int i = 0; i < ACCT_SLOTS; i++) t += g_iacct[i].curr_bytes;
+    return t < 0 ? 0 : (uint64_t)t;
+}
+uint64_t item_curr_items(void) {
+    int64_t t = 0; for (int i = 0; i < ACCT_SLOTS; i++) t += g_iacct[i].curr_items;
+    return t < 0 ? 0 : (uint64_t)t;
+}
+uint64_t item_total_items(void) {
+    int64_t t = 0; for (int i = 0; i < ACCT_SLOTS; i++) t += g_iacct[i].total_items;
+    return t < 0 ? 0 : (uint64_t)t;
+}
 static unsigned int *stats_sizes_hist = NULL;
 static int stats_sizes_buckets = 0;
 static uint64_t cas_id = 1;
@@ -341,26 +382,28 @@ bool item_size_ok(const size_t nkey, const client_flags_t flags, const int nbyte
  * 동작했다(측정: item_acct_add/remove가 SET CPU의 상위). */
 static void item_acct_add(item *it) {
     unsigned int id = ITEM_clsid(it);
-    __atomic_add_fetch(&sizes[id], 1, __ATOMIC_RELAXED);
+    struct item_acct *a = acct_me();
+    a->sizes[id]++;
 #ifdef EXTSTORE
     uint64_t nb = (it->it_flags & ITEM_HDR)
         ? (ITEM_ntotal(it) - it->nbytes) + sizeof(item_hdr) : ITEM_ntotal(it);
 #else
     uint64_t nb = ITEM_ntotal(it);
 #endif
-    __atomic_add_fetch(&sizes_bytes[id], nb, __ATOMIC_RELAXED);
+    a->sizes_bytes[id] += (int64_t)nb;
 }
 
 static void item_acct_remove(item *it) {
     unsigned int id = ITEM_clsid(it);
-    __atomic_sub_fetch(&sizes[id], 1, __ATOMIC_RELAXED);
+    struct item_acct *a = acct_me();
+    a->sizes[id]--;
 #ifdef EXTSTORE
     uint64_t nb = (it->it_flags & ITEM_HDR)
         ? (ITEM_ntotal(it) - it->nbytes) + sizeof(item_hdr) : ITEM_ntotal(it);
 #else
     uint64_t nb = ITEM_ntotal(it);
 #endif
-    __atomic_sub_fetch(&sizes_bytes[id], nb, __ATOMIC_RELAXED);
+    a->sizes_bytes[id] -= (int64_t)nb;
 }
 
 /* fixing stats/references during warm start */
@@ -390,9 +433,8 @@ int do_item_link(item *it, const uint32_t hv, const uint64_t cas) {
 
     /* 전역 STATS_LOCK 대신 원자 갱신 — 순수 카운터이고 SET 1건마다
      * link/unlink에서 두 번 잡히던 지점이다. */
-    __atomic_add_fetch(&stats_state.curr_bytes, (uint64_t)ITEM_ntotal(it), __ATOMIC_RELAXED);
-    __atomic_add_fetch(&stats_state.curr_items, 1, __ATOMIC_RELAXED);
-    __atomic_add_fetch(&stats.total_items, 1, __ATOMIC_RELAXED);
+    {   struct item_acct *a = acct_me();
+        a->curr_bytes += ITEM_ntotal(it); a->curr_items++; a->total_items++; }
 
     /* Allocate a new CAS ID on link. */
     ITEM_set_cas(it, cas);
@@ -408,8 +450,8 @@ void do_item_unlink(item *it, const uint32_t hv) {
     MEMCACHED_ITEM_UNLINK(ITEM_key(it), it->nkey, it->nbytes);
     if ((it->it_flags & ITEM_LINKED) != 0) {
         it->it_flags &= ~ITEM_LINKED;
-        __atomic_sub_fetch(&stats_state.curr_bytes, (uint64_t)ITEM_ntotal(it), __ATOMIC_RELAXED);
-        __atomic_sub_fetch(&stats_state.curr_items, 1, __ATOMIC_RELAXED);
+        {   struct item_acct *a = acct_me();
+            a->curr_bytes -= ITEM_ntotal(it); a->curr_items--; }
         item_stats_sizes_remove(it);
         assoc_delete(ITEM_key(it), it->nkey, hv);
         item_acct_remove(it);
@@ -499,8 +541,8 @@ void item_stats(ADD_STAT add_stats, void *c) {
         itemstats_t istats;
 
         pthread_mutex_lock(&lru_locks[n]);
-        size = sizes[n];
-        bytes = sizes_bytes[n];
+        size = (unsigned int)item_acct_sum(n, false);
+        bytes = (uint64_t)item_acct_sum(n, true);
         istats = itemstats[n];
         pthread_mutex_unlock(&lru_locks[n]);
 

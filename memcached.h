@@ -978,6 +978,10 @@ void STATS_UNLOCK(void);
 #define THR_STATS_UNLOCK(t) pthread_mutex_unlock(&t->stats.mutex)
 void threadlocal_stats_reset(void);
 unsigned int item_lock_power_used(void);
+int64_t item_acct_sum(int clsid, bool bytes);
+uint64_t item_curr_bytes(void);
+uint64_t item_curr_items(void);
+uint64_t item_total_items(void);
 void threadlocal_stats_aggregate(struct thread_stats *stats);
 void slab_stats_aggregate(struct thread_stats *stats, struct slab_stats *out);
 void thread_setname(pthread_t thread, const char *name);

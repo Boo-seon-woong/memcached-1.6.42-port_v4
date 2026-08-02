@@ -1552,6 +1552,8 @@ void *storage_init(void *conf) {
 }
 
 /* v2 (P2a): resume conns whose READs completed in the drain that just ended. */
+unsigned int storage_setq_max(void) { return g_setq_max; }
+
 void storage_post_chain_flush(void *t) {
     if (g_chain_head != NULL) pending_chain_flush((LIBEVENT_THREAD *)t);
 }

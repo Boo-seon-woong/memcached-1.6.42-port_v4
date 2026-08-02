@@ -1981,6 +1981,9 @@ void process_stat_settings(ADD_STAT add_stats, void *c) {
     APPEND_STAT("ext_submit_inline", "%s", settings.ext_submit_inline ? "yes" : "no");
     APPEND_STAT("ext_reap_every", "%u", settings.ext_reap_every);
     APPEND_STAT("ext_post_chain", "%u", settings.ext_post_chain);
+    /* extstore 통계 블록에도 있지만 여기에도 둔다 — 구성 판별자는 한 군데서
+     * 다 보여야 한다. 이게 없어서 상대가 20분을 헛기다렸다. */
+    APPEND_STAT("ext_setq_max", "%u", storage_setq_max());
     APPEND_STAT("ext_submit_batch", "%u", settings.ext_submit_batch);
     APPEND_STAT("ext_drain_spin", "%u", settings.ext_drain_spin);
     APPEND_STAT("slab_chunk_max", "%d", settings.slab_chunk_size_max);

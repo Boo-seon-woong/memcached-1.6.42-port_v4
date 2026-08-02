@@ -12,3 +12,53 @@ block,cell,workload,ops_M,span,adm,v2,set_span,set_adm,set_v2,set_ret,note
 1,A2-r12c12,mix,11.042,,,,,,,,reap=12 chain=12 확인셀
 1,A2-r12c2,get,12.837,19.12,0.76,18.36,,,,,reap=12 chain=2
 1,A2-r12c2,mix,10.495,13.98,1.47,12.52,9.75,0.51,8.59,0.65,reap=12 chain=2
+1,A2-r12c1,get,11.851,,,,,,,,reap=12 chain=1 상류기본값
+1,A2-r12c1,mix,9.793,,,,,,,,reap=12 chain=1 상류기본값
+1,A2-r12c16,get,13.759,,,,,,,,reap=12 chain=16
+1,A2-r12c16,mix,11.157,,,,,,,,reap=12 chain=16
+1,A2-r12c24,get,13.699,,,,,,,,reap=12 chain=24
+1,A2-r12c24,mix,11.088,,,,,,,,reap=12 chain=24
+1,A2-r12c32,get,13.669,,,,,,,,reap=12 chain=32 (POST_CHAIN_MAX)
+1,A2-r12c32,mix,11.121,,,,,,,,reap=12 chain=32
+1,A2-r12c20,get,13.783,,,,,,,,reap=12 chain=20
+1,A2-r12c20,mix,11.158,,,,,,,,reap=12 chain=20
+1,A2-r8c4,get,13.094,,,,,,,,reap=8 chain=4
+1,A2-r8c4,mix,10.796,,,,,,,,reap=8 chain=4
+1,A2-r14c4,get,13.227,,,,,,,,reap=14 chain=4
+1,A2-r14c4,mix,10.809,,,,,,,,reap=14 chain=4
+1,A2-r4c4,get,12.644,,,,,,,,reap=4 chain=4
+1,A2-r4c4,mix,10.664,,,,,,,,reap=4 chain=4
+1,A2-r6c4,get,12.82,,,,,,,,reap=6 chain=4
+1,A2-r6c4,mix,10.727,,,,,,,,reap=6 chain=4
+1,A2-r2c4,get,11.767,,,,,,,,reap=2 chain=4
+1,A2-r2c4,mix,10.151,,,,,,,,reap=2 chain=4
+1,A2-r1c4,get,10.664,,,,,,,,reap=1 chain=4 상류기본값
+1,A2-r1c4,mix,9.399,,,,,,,,reap=1 chain=4
+1,A2-r10c4,get,13.133,,,,,,,,reap=10 chain=4
+1,A2-r10c4,mix,10.689,,,,,,,,reap=10 chain=4
+1,A2-r8c8,get,13.405,,,,,,,,reap=8 chain=8
+1,A2-r8c8,mix,11.091,,,,,,,,reap=8 chain=8
+1,A2-r10c8,get,13.293,,,,,,,,reap=10 chain=8
+1,A2-r10c8,mix,10.859,,,,,,,,reap=10 chain=8
+1,A2-r14c8,get,13.487,,,,,,,,reap=14 chain=8
+1,A2-r14c8,mix,10.933,,,,,,,,reap=14 chain=8
+1,A2-r8c12,get,13.412,,,,,,,,reap=8 chain=12
+1,A2-r8c12,mix,11.054,,,,,,,,reap=8 chain=12
+1,A2-r10c12,get,13.571,,,,,,,,reap=10 chain=12
+1,A2-r10c12,mix,11.064,,,,,,,,reap=10 chain=12
+1,A2-r14c12,get,13.481,,,,,,,,reap=14 chain=12
+1,A2-r14c12,mix,10.849,,,,,,,,reap=14 chain=12
+2,B2-p8,get,3.462,25.40,5.83,,,,,,pipeline=8 (r12c8 배포값)
+2,B2-p8,mix,3.182,25.86,,,13.25,,,,pipeline=8
+2,B2-p16,get,5.347,25.42,5.58,,,,,,pipeline=16 (r12c8 배포값)
+2,B2-p16,mix,4.781,22.88,,,12.21,,,,pipeline=16
+2,B2-p32,get,7.541,24.84,4.43,,,,,,pipeline=32 (r12c8 배포값)
+2,B2-p32,mix,6.605,21.04,,,10.34,,,,pipeline=32
+2,B2-p64,get,9.869,26.05,4.61,,,,,,pipeline=64 (r12c8 배포값)
+2,B2-p64,mix,8.298,22.44,,,10.75,,,,pipeline=64
+2,B2-p128,get,12.403,26.89,3.88,,,,,,pipeline=128 (r12c8 배포값)
+2,B2-p128,mix,10.345,20.56,,,9.54,,,,pipeline=128
+2,B2-p256,get,13.287,26.24,3.70,,,,,,pipeline=256 (r12c8 배포값)
+2,B2-p256,mix,10.867,19.65,,,8.74,,,,pipeline=256
+2,B2-p384,get,13.343,26.16,3.73,,,,,,pipeline=384 (r12c8 배포값)
+2,B2-p384,mix,10.213,21.16,,,8.71,,,,pipeline=384

@@ -469,6 +469,7 @@ struct settings {
     bool shutdown_command; /* allow shutdown command */
     int tail_repair_time;   /* LRU tail refcount leak repair time */
     unsigned int ext_submit_batch; /* conns to accumulate before submitting */
+    unsigned int ext_post_chain;  /* 인라인 post 를 N 건씩 묶는다 */
     unsigned int ext_reap_every;  /* 인라인 post N 건마다 완료 수거 */
     bool ext_submit_inline;       /* 파싱 즉시 post (큐 경유 안 함) */
     unsigned int ext_admit_max;   /* backend 체류 상한(워커당). 0 = 무제한 */

@@ -30,12 +30,21 @@ static _Thread_local iop_head_t g_ret_head;
  * 확률은 1/2^item_lock_power 이라 사실상 전부 즉시 재개된다. */
 static _Thread_local iop_head_t g_ret_defer;
 static _Thread_local bool g_ret_defer_init;
-static _Atomic uint64_t g_setret_now;     /* post 자리에서 즉시 재개 */
-static _Atomic uint64_t g_setret_skipconn; /* 파싱 중인 연결이라 보류 */
-static _Atomic uint64_t g_setret_locked;   /* trylock 실패로 보류 */
-static _Atomic uint64_t g_setret_loop;     /* 루프 레벨에서 재개 */
-static _Thread_local bool g_at_post;       /* 지금 post 자리 flush 안인가 */
 static _Thread_local unsigned int g_reap_tick;
+/* 체인 없이 요청마다 ibv_post_send 를 부르면 mlx5 의 QP 당 스핀락을 매번
+ * 잡는다(프로파일: pthread_spin_lock +0.093, _mlx5_post_send +0.051 µs/op).
+ * K 건을 모아 한 번에 넘기면 둘 다 1/K 이 되고, 대신 앞쪽 요청의 admit 이
+ * 최대 K-1 건의 파싱만큼 늘어난다 — 건당 0.1 µs 수준이라 span 예산 안이다. */
+#define POST_CHAIN_MAX 32
+static _Thread_local obj_io *g_chain_head, *g_chain_tail;
+static _Thread_local unsigned int g_chain_n;
+
+static void pending_chain_flush(LIBEVENT_THREAD *t) {
+    if (g_chain_head == NULL) return;
+    obj_io *h = g_chain_head;
+    g_chain_head = g_chain_tail = NULL; g_chain_n = 0;
+    extstore_worker_submit(t->ext_worker, h);
+}
 static _Thread_local conn *g_skip_conn;  /* 지금 파싱 중이라 재개하면 안 되는 연결 */
 
 static _Thread_local bool g_ret_init = false;
@@ -245,10 +254,9 @@ void storage_stats(ADD_STAT add_stats, void *c) {
                 (unsigned long long)atomic_load(&g_worker_write_spins));
         APPEND_STAT("ext_pac_posted", "%llu",
                 (unsigned long long)atomic_load(&g_pac_posted));
-        APPEND_STAT("ext_setret_now", "%llu", (unsigned long long)atomic_load(&g_setret_now));
-        APPEND_STAT("ext_setret_loop", "%llu", (unsigned long long)atomic_load(&g_setret_loop));
-        APPEND_STAT("ext_setret_skipconn", "%llu", (unsigned long long)atomic_load(&g_setret_skipconn));
-        APPEND_STAT("ext_setret_locked", "%llu", (unsigned long long)atomic_load(&g_setret_locked));
+
+
+
         APPEND_STAT("ext_pac_fail", "%llu",
                 (unsigned long long)atomic_load(&g_pac_fail));
         APPEND_STAT("ext_pac_fallback", "%llu",
@@ -571,7 +579,10 @@ int storage_get_item(LIBEVENT_THREAD *t, item *it, mc_resp *resp) {
      * 0.026 µs/op 이므로 6.96 µs 와 바꿀 만하다. */
     if (settings.ext_submit_inline) {
         eio->next = NULL;
-        extstore_worker_submit(t->ext_worker, eio);
+        if (g_chain_tail) g_chain_tail->next = eio; else g_chain_head = eio;
+        g_chain_tail = eio;
+        if (++g_chain_n >= settings.ext_post_chain || g_chain_n >= POST_CHAIN_MAX)
+            pending_chain_flush(t);
         /* post 한 자리에서 완료도 거둔다. 인라인 이전에는 제출이 pass 시작에
          * 몰려 바로 뒤에 drain 이 왔는데, 이제 제출이 파싱 도중에 흩어지므로
          * pass 끝의 drain 까지 CQE 가 기다린다 — GET 에서 걷어낸 대기가
@@ -593,12 +604,11 @@ int storage_get_item(LIBEVENT_THREAD *t, item *it, mc_resp *resp) {
          * 그 여유를 처리량으로 바꾼다 — 늦게 수거하면 v2 가 최대 K/2 건만큼
          * 늘어난다. */
         if (t->cur_conn != NULL && ++g_reap_tick >= settings.ext_reap_every) {
+            pending_chain_flush(t);
             g_reap_tick = 0;
             extstore_worker_drain(t->ext_worker, 32);
             g_skip_conn = t->cur_conn;
-            g_at_post = true;
             storage_flush_returns();
-            g_at_post = false;
             g_skip_conn = NULL;
         }
         worker_storage_arm_drain(t);
@@ -832,7 +842,6 @@ static void storage_set_return_cb(io_pending_t *pending) {
      * SET 과 뒤따르는 GET 이 인접해, SET 이 완료될 때 늘 그 연결을 파싱 중이다. */
     if (g_skip_conn != NULL && pending->c == g_skip_conn &&
         pending->c->resps_suspended <= 1) {
-        atomic_fetch_add(&g_setret_skipconn, 1);
         STAILQ_INSERT_TAIL(&g_ret_defer, pending, iop_next);
         return;
     }
@@ -842,11 +851,9 @@ static void storage_set_return_cb(io_pending_t *pending) {
      * 다 알아야 했고, 실제로 meta-get 경로를 빠뜨려 서버가 멈췄다. */
     void *ilock = item_trylock(p->hv);
     if (ilock == NULL) {
-        atomic_fetch_add(&g_setret_locked, 1);
         STAILQ_INSERT_TAIL(&g_ret_defer, pending, iop_next);
         return;
     }
-    atomic_fetch_add(g_at_post ? &g_setret_now : &g_setret_loop, 1);
     it->it_flags &= ~ITEM_WFLIGHT;
     /* span v3 종료 — 응용에서 완료로 보이는 시점. CQE 관측(v2)보다 뒤이고
      * completion 관측 지연과 loop 재개 지연을 포함한다. */
@@ -1303,6 +1310,7 @@ int storage_read_config(void *conf, char **subopt) {
         EXT_ADMIT_MAX,
         EXT_SUBMIT_INLINE,
         EXT_REAP_EVERY,
+        EXT_POST_CHAIN,
     };
 
     char *const subopts_tokens[] = {
@@ -1320,6 +1328,7 @@ int storage_read_config(void *conf, char **subopt) {
         [EXT_ADMIT_MAX] = "ext_admit_max",
         [EXT_SUBMIT_INLINE] = "ext_submit_inline",
         [EXT_REAP_EVERY] = "ext_reap_every",
+        [EXT_POST_CHAIN] = "ext_post_chain",
         NULL
     };
 
@@ -1340,6 +1349,15 @@ int storage_read_config(void *conf, char **subopt) {
                 !safe_strtoul(subopts_value, &ext_cf->worker_window) ||
                 ext_cf->worker_window < 1) {
                 fprintf(stderr, "ext_worker_window must be >= 1\n");
+                return 1;
+            }
+            break;
+        case EXT_POST_CHAIN:
+            if (subopts_value == NULL ||
+                !safe_strtoul(subopts_value, &settings.ext_post_chain) ||
+                settings.ext_post_chain < 1 ||
+                settings.ext_post_chain > POST_CHAIN_MAX) {
+                fprintf(stderr, "ext_post_chain must be 1..%d\n", POST_CHAIN_MAX);
                 return 1;
             }
             break;
@@ -1534,6 +1552,10 @@ void *storage_init(void *conf) {
 }
 
 /* v2 (P2a): resume conns whose READs completed in the drain that just ended. */
+void storage_post_chain_flush(void *t) {
+    if (g_chain_head != NULL) pending_chain_flush((LIBEVENT_THREAD *)t);
+}
+
 void storage_flush_returns(void) {
     if (!g_ret_defer_init) { STAILQ_INIT(&g_ret_defer); g_ret_defer_init = true; }
     if (!g_ret_init) { STAILQ_INIT(&g_ret_head); g_ret_init = true; return; }

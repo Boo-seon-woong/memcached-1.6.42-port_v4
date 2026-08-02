@@ -258,6 +258,7 @@ static void settings_init(void) {
     settings.shutdown_command = false;
     settings.tail_repair_time = TAIL_REPAIR_TIME_DEFAULT;
     settings.flush_enabled = true;
+    settings.ext_post_chain = 1;
     settings.ext_reap_every = 1;
     settings.ext_submit_inline = false;
     settings.ext_admit_max = 0;      /* 0 = 무제한 (기존 동작) */
@@ -1979,6 +1980,7 @@ void process_stat_settings(ADD_STAT add_stats, void *c) {
     APPEND_STAT("ext_admit_max", "%u", settings.ext_admit_max);
     APPEND_STAT("ext_submit_inline", "%s", settings.ext_submit_inline ? "yes" : "no");
     APPEND_STAT("ext_reap_every", "%u", settings.ext_reap_every);
+    APPEND_STAT("ext_post_chain", "%u", settings.ext_post_chain);
     APPEND_STAT("ext_submit_batch", "%u", settings.ext_submit_batch);
     APPEND_STAT("ext_drain_spin", "%u", settings.ext_drain_spin);
     APPEND_STAT("slab_chunk_max", "%d", settings.slab_chunk_size_max);
@@ -4155,6 +4157,7 @@ static void usage(void) {
            "   - ext_page_size:       remote allocation page size in MiB (default: 64)\n"
            "   - ext_worker_window:   outstanding operations per worker (default: 16)\n"
            "   - ext_qp_per_worker:   RC QPs per worker, 1..4 (default: 1)\n"
+           "   - ext_post_chain:      chain N inline posts into one submit (default: 1)\n"
            "   - ext_reap_every:      reap completions every N inline posts (default: 1)\n"
            "   - ext_submit_inline:   post each read as parsed, no io_queue (default: off)\n"
            "   - ext_admit_max:       max async reqs resident per worker, 0=off (default: 0)\n"

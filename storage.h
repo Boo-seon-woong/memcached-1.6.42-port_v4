@@ -3,6 +3,7 @@
 
 void storage_delete(void *e, item *it);
 void storage_free_hdr(item *it);   /* item_free 훅 */
+void storage_post_chain_flush(void *t);  /* pass 끝에 남은 체인을 비운다 */
 /* unlink 시점 회수는 하지 않는다. 호출처가 9군데(items/proto_parser/
  * proto_bin/proto_proxy/memcached)라 하나씩 지우면 하나를 빠뜨린다 — 한 곳에서
  * 막고, 실제 회수는 item_free 훅(storage_free_hdr)이 한다.

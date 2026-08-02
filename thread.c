@@ -519,6 +519,7 @@ static void *worker_libevent(void *arg) {
             /* v3 pac: 이 pass에서 수락된 SET들을 advise 1회로 동기화하고
              * post한다. 수면 판단보다 반드시 앞서야 한다 — 큐가 남은 채
              * 잠들면 그 연결들은 영원히 재개되지 않는다. */
+            storage_post_chain_flush(me);   /* 이 pass 에 모인 READ 체인을 먼저 내보낸다 */
             storage_flush_pending_writes();
             /* flush의 4단계가 앞선 배치의 CQE를 거둬 ready 목록에 올려두는데,
              * 그것이 CQ를 비우면 아래 out==0이 되어 블록이 통째로 건너뛰고

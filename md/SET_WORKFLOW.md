@@ -439,7 +439,81 @@ GET과의 구조 차이는 7h 하나로 요약된다: GET은 7 시점에 요청�
 **즉시 반환**(suspend)하여 워커당 W=24건이 wire에 동시에 떠 있지만, SET은
 자기 CQE까지 워커를 점유하므로 **워커당 1건**이다.
 
-## 2. 단계별 상세
+## 2-pac. 단계별 상세 — **운영 경로** (`storage_store_item_pac`)
+
+아래 §2 는 동기 경로다. 실제로 도는 것은 이쪽이다.
+
+### 진입 (storage.c:894)
+
+```c
+uint64_t t_enter_v3 = extstore_prof_stamp();   /* :895  span v3 시작 */
+```
+
+`ITEM_CHUNKED|ITEM_HDR` 이면 0 을 반환해 상위가 동기 경로로 떨어뜨린다.
+
+### a. stub + 원격 슬롯
+
+```text
+do_item_alloc(key, nkey, flags, exptime, sizeof(item_hdr))   :907  hdr stub
+extstore_alloc(e, rlen, PAGE_BUCKET_DEFAULT, &loc)           :915  원격 슬롯
+```
+
+**실패 경로가 셋(alloc·seal·post)이라 `io_pending` 을 `memset` 으로 먼저
+0 으로 만든다**(`:928`) — 초기화가 없으면 부분 구성된 채 해제 경로로 간다.
+`io_pending_t` 는 176 B 라 이 clear 는 비용이 아니다.
+
+### b. 봉인 — 즉시 또는 flush 시점
+
+```text
+!settings.ext_seal_at_flush → pac_seal(p) 를 그 자리에서   :951
+                              (기본. t_start = seal 시각 = span v2 시작)
+ext_seal_at_flush=on        → flush 때 봉인
+```
+
+### c. publish — `item_lock` 아래
+
+```c
+hdr_it->it_flags |= ITEM_HDR | ITEM_WFLIGHT | ...    /* :965 */
+```
+
+**이것이 pac 의 핵심이다.** 값이 아직 원격에 안 갔는데 stub 을 해시에
+올린다. `ITEM_WFLIGHT` 가 그 사이 `storage_delete` 가 loc 을 걷어가는 것을
+막는다(`storage.c:167` 이 WFLIGHT stub 을 건너뛴다).
+
+### d. 큐 삽입 — **post 는 미룬다**
+
+```c
+p->io_ctx.t_enter = t_enter_v3;        /* :975 */
+g_setq.v[g_setq.n++] = p;              /* :978 */
+if (g_setq.n >= SETQ_HARD_MAX) storage_flush_pending_writes();
+```
+
+> **여기서 `storage_flush_returns()` 를 부르면 안 된다.** 큐 상한 경로는
+> `do_store_item` 의 `item_lock(hv)` 아래에서 실행되는데 재개(`return_cb`)가
+> `item_lock(p->hv)` 를 다시 잡는다 — **같은 버킷이면 데드락**이다
+> (`storage.c:995` 주석). v4 가 "마지막 재개만 보류" 로 푼 문제가 이것이다.
+
+`ext_setq_max=1` 이 운영값이라 실질적으로 **enqueue 마다 flush** 한다.
+2 이상은 span 계약을 깬다(§0-3 의 배치 스윕 참조 — 그 표의 처리량 수치는
+alloc 결함 이전이라 무효지만 **span 이 배치에 비례해 커진다는 부호는 유효**).
+
+### e. 완료 — WFLIGHT 해제가 span v3 의 끝
+
+```c
+it->it_flags &= ~ITEM_WFLIGHT;    /* storage.c:857 */
+```
+
+`storage.c:831` 주석이 순서를 못박는다 — **WFLIGHT 해소와 loc 소유권 판정을
+먼저 끝낸 뒤 응답을 쓴다.** in-flight 중에 delete/replace 됐으면
+(`:869`) `storage_delete` 가 WFLIGHT 를 보고 남겨둔 loc 을 여기서 걷는다.
+
+**v4 가 바꾼 것은 이 재개가 언제 실행되느냐 하나다** — §v4 참조.
+
+---
+
+## 2. 단계별 상세 — 동기 경로 (`ext_pac_set=off`)
+
+> 아래는 §1 동기 경로의 상세다. 운영 경로는 위 §2-pac 이다.
 
 ### 1~2. 이벤트 → 파싱
 
@@ -668,10 +742,25 @@ off-CPU 프로파일(예: sched switch 스택)이 도구다.
 ## 6. 관측 지점
 
 ```text
-EXT_RDMA_PROF=1            span 계측 (Sspan = encrypt 시작 → SYNC → WRITE CQE)
-                           주의: SET span은 window 대기 포함 — GET span과 정의가 다르다
+EXT_RDMA_PROF=1
+  ── span v3 (계약이 쓰는 것) ────────────────────────────
+  extstore_prof_write_e2e_avg_ns   ★ Sv3.  pac 진입 → WFLIGHT 해제(응용 가시)
+  extstore_prof_write_e2e_count / _p99_ns
+  extstore_prof_write_admit_avg_ns ★ adm.  진입 → seal
+  extstore_prof_write_ret_avg_ns   ★ ret.  CQE → WFLIGHT 해제  ← v4 가 고친 구간
+  ── span v2 (참고) ─────────────────────────────────────
+  extstore_prof_write_avg_ns       seal → CQE.  큐잉·재개를 빠뜨린다
+  extstore_prof_write_crypto_avg_ns / _xfer_avg_ns
+  extstore_prof_write_sync_avg_ns  coherent MR 에서는 계측 하한. 수천 ns 면 폴백이다
+
+  `_avg_ns`(v2) 와 `_e2e_avg_ns`(v3) 를 혼동하지 말 것. 계약은 후자다.
+  세 성분은 독립 집계라 `adm + v2 + ret = v3` 가 정합성 검사다 —
+  최종 게이트에서 0.52 + 7.97 + 0.62 = 9.11.
+  (v3 이전 판은 여기에 "Sspan = encrypt 시작 → SYNC → WRITE CQE" 만 적었다.
+   그것은 v2 정의이고 SYNC 는 coherent MR 이후 데이터 경로에 없다.)
+
 stats:
-  ext_worker_write_spins   busy-wait 총 회전수 (÷cmd_set = SET당 CQ 폴링 횟수)
+  ext_worker_write_spins   busy-wait 회전수. **동기 경로 전용** — pac 에서는 안 돈다
   ext_worker_drain_*       drain 호출/empty 횟수
   ext_loc_mag_depth        loc magazine 깊이 (0 = off, A/B용)
   ext_slot_acct_leak       loc 검증 격리 건수 (A-9)

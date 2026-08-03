@@ -220,20 +220,39 @@ sha256sum ~/coherent-mr-v2/bin/memcached | cut -c1-24   # 새 sha 를 기록해 
 > 는 guest 에 남아 있으면 그대로 두어도 되지만 **v4 기준선이 아니다.**
 > v4 의 유일한 무변수 A/B 는 §F-4 의 `EXT_DISABLE_COHERENT_MR=1` 이다.
 
-기동 후 표지 세 개를 확인한다. **셋 다 통과해야 이 절차서가 유효하다.**
+> 🛑 **아래 `stats` 확인은 D-1 로 서버를 띄운 *다음*에 한다.** 여기 D-0 에
+> 적혀 있는 것은 "무엇을 확인할지"의 목록이고, 실행 시점은 D-1 이후다.
+> **위에서부터 순서대로 실행하면 서버가 없는 상태에서 `nc` 를 때리게 되고,
+> 연결 거부는 조용해서 출력이 한 줄도 안 나온다** — 그 침묵은 "pac 없는
+> 동기 바이너리"와 화면상 구별되지 않는다. 2026-08-03 에 이 함정을 밟았다.
+>
+> **판별법**: `cmd_set` 은 어떤 memcached 에도 있다. 아래에서 `cmd_set` 조차
+> 안 나오면 그것은 바이너리 문제가 아니라 **서버가 안 떠 있는 것**이다.
+
+D-1 기동 후 아래를 확인한다. **전부 통과해야 이 절차서가 유효하다.**
 
 ```sh
-printf 'stats settings\r\nquit\r\n' | nc 127.0.0.1 11411 | grep -E 'ext_pac_set|ext_seal_at_flush'
+printf 'stats settings\r\nquit\r\n' | nc -q1 127.0.0.1 11411 | grep -E 'ext_pac_set|ext_seal_at_flush'
 # => STAT ext_pac_set yes           (없으면 pac이 없는 동기 바이너리)
 # => STAT ext_seal_at_flush no      (yes면 처리량이 3.15배 떨어진다 — 기각된 노브)
-printf 'stats\r\nquit\r\n' | nc 127.0.0.1 11411 | grep -E 'ext_setq_max|extstore_alloc_failures'
+printf 'stats\r\nquit\r\n' | nc -q1 127.0.0.1 11411 | grep -E 'ext_setq_max|extstore_alloc_failures'
 # => STAT ext_setq_max 1            (기본값. SET span < 30 µs를 위한 설정)
 # => STAT extstore_alloc_failures 0 (항목 자체가 없으면 678e7a3 이전 빌드다)
 
 # 부하를 조금 준 뒤 pac 경로가 실제로 타는지 (핵심 확인)
-printf 'stats\r\nquit\r\n' | nc 127.0.0.1 11411 | grep -E "cmd_set|ext_pac_posted"
-# => ext_pac_posted 가 cmd_set 과 같아야 한다. 0이면 전부 동기 폴백이다.
+printf 'stats\r\nquit\r\n' | nc -q1 127.0.0.1 11411 | grep -E "cmd_set|ext_pac_posted|ext_pac_fallback"
+# => ext_pac_fallback 0   ★ 이것이 판정 기준이다. 0 이면 전 건이 비동기 경로.
+# => ext_pac_posted 는 0 보다 커야 한다 (0 이면 전부 동기 폴백)
 ```
+
+> ⚠️ **`ext_pac_posted == cmd_set` 으로 판정하지 말 것.** 옛 문서에 그렇게
+> 적혀 있었지만 틀렸다. `g_pac_posted`/`g_pac_fallback`(`storage.c:57,59`)은
+> **기동 이후 누적이고 리셋되지 않는데**, `cmd_set` 은 `stats reset` 으로
+> 0 이 된다(`memcached.c:211`). obwatch 는 창을 열 때마다 `stats reset` 을
+> 하므로, 측정을 한 번이라도 돌린 뒤에는 `ext_pac_posted > cmd_set` 이 되는
+> 것이 **정상**이다(실측: posted 593,039,296 vs cmd_set 552,699,145).
+> 굳이 대조하려면 두 값 모두 차분을 쓰고, 평소 판정은 **`ext_pac_fallback = 0`**
+> 하나로 한다.
 
 `ext_setq_max`를 1보다 크게 두면 SET들이 한 이벤트루프 통과분으로 묶여
 SYNC를 분할상환하지만 **span 계약이 깨진다**(batch=64에서 SET span 255 µs).
@@ -642,6 +661,9 @@ CPU를 쓰지 않고, 다음 시행에서 조율 없이 바로 연결된다.
 
 | 증상 | 원인 / 조치 |
 |---|---|
+| `stats` grep 이 **한 줄도** 안 나옴 (`cmd_set` 조차) | **서버가 안 떠 있다.** `nc` 연결 거부는 조용하다 — "pac 없는 바이너리"로 오독하기 쉽다. `pgrep -x "memcached[.a-z]*"` 로 먼저 확인 (§D-0 배너) |
+| `ext_pac_posted` 가 `cmd_set` 보다 큼 | **정상.** pac 카운터는 리셋되지 않고 `cmd_set` 은 `stats reset` 으로 0 이 된다. 판정은 `ext_pac_fallback = 0` 으로 (§D-0) |
+| guest 에 `ibp1s0` 없음 / `ibv_devinfo` 가 `No IB devices found` | HCA 가 guest 에 안 넘어온 것. `guestctl.sh down` 은 NIC 를 호스트 `mlx5_core` 로 되돌린다 — 호스트에서 `lspci -nnk` 로 `c1:00.0` 의 드라이버를 확인하고, `mlx5_core` 면 guest 를 내렸다 다시 올린다(§B) |
 | `ping 10.99.0.2` 실패 | genie 재부팅됨 → Phase A-2 |
 | `ibp1s0` MTU가 2044로 되돌아감 | genie opensm의 4K group 없음 → A-2 |
 | `create_cq failed: Invalid argument` | stock mlx5_ib가 로드됨 → C-1 재실행 (꼬이면 guest 재부팅이 가장 빠름) |

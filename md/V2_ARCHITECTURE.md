@@ -2,7 +2,9 @@
 
 > **[v2 시점 기록]** 이 문서는 그 시점의 기록으로 보존한다. 현재 운영값은
 > [`OPTIMAL_RUNBOOK.md`](OPTIMAL_RUNBOOK.md), 최신 결과는
-> [`V4_RESULT.md`](V4_RESULT.md) 다.  구조 정본은 v2 시점. v3·v4 변화는 V3_ARCHITECTURE.md 와 V3_TO_V4_CHANGES.md.
+> [`V4_RESULT.md`](V4_RESULT.md) 다. 구조는 v2 시점 기준이고, v3·v4 변화는
+> [`V3_ARCHITECTURE.md`](V3_ARCHITECTURE.md) 와
+> [`V3_TO_V4_CHANGES.md`](V3_TO_V4_CHANGES.md) 에 있다.
 
 기준일: 2026-07-28. 기준 commit: `f6cdffd`.
 

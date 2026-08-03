@@ -30,7 +30,10 @@
 
 ---
 
-## 1. 현재 실측 기준선 (정본 off-box, `span-1f3390a`, batch=1)
+## 1. v3 시점 실측 기준선 (off-box, `span-1f3390a`, batch=1)
+
+> **현행 기준선이 아니다.** v4 최종은 GET-only 13.397 M / span 21.90,
+> 1:9 혼합 11.099 M / 22.31 / 9.11 이다([`V4_RESULT.md`](V4_RESULT.md)).
 
 | 워크로드 | 처리량 | Gspan | Sspan | busyCPU | CPU/op |
 |---|---:|---:|---:|---:|---:|

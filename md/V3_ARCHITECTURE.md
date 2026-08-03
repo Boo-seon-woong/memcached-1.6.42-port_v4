@@ -13,8 +13,10 @@
 > §6의 "현재 실측" 블록과 §7·§8의 브랜치 기준 서술은 **당시 기록으로만**
 > 읽을 것.
 >
-> 현행 수치와 구조는 [`SET_CAMPAIGN_HANDOFF.md`](SET_CAMPAIGN_HANDOFF.md) §16,
-> 운영점은 [`OPTIMAL_RUNBOOK.md`](OPTIMAL_RUNBOOK.md)가 정본이다.
+> ~~현행 수치와 구조는 `SET_CAMPAIGN_HANDOFF.md` §16~~ — **그 문서도 v3 기록이다.**
+> 현행 수치는 [`V4_RESULT.md`](V4_RESULT.md), 운영점은
+> [`OPTIMAL_RUNBOOK.md`](OPTIMAL_RUNBOOK.md), v3→v4 구조 변화는
+> [`V3_TO_V4_CHANGES.md`](V3_TO_V4_CHANGES.md) 가 정본이다.
 
 > **개정 이력.** 초판은 `746bcab`(branch `v3-async-set`) 기준으로 작성됐다.
 > 이후 관리자 실측으로 비동기 SET **두 갈래가 모두 main 밖으로** 처분됐다:
@@ -27,7 +29,8 @@
 >
 > main에는 동기 경로(§6) + magazine/원자화(§4·§5) + A-결함 수정(58d24b5,
 > A-2)만 있다. §7·§8의 비동기 knob/stat·§10은 브랜치 기준 서술로 남겨둔다.
-> 동기 경로의 단계별 워크플로·비용은 `SET_WORKFLOW.md`가 정본이다.
+> 단계별 워크플로는 `SET_WORKFLOW.md` 가 정본이다 — **운영 경로(pac)는
+> §1-pac·§2-pac, 동기 경로는 §1·§2** 로 갈려 있다.
 
 이 문서는 **v3에서 v2 대비 무엇이 바뀌었는지**만 다룬다. v2 구조 전체는
 [`V2_ARCHITECTURE.md`](V2_ARCHITECTURE.md)에 있고 그 내용은 v3에서도 그대로
@@ -233,7 +236,10 @@ SET당 15.6회 × 1.68M = 초당 2600만 RMW가 워커 28개 공유 캐시라인
 
 ---
 
-## 6. 동기 SET 경로 (현재 동작하는 것)
+## 6. 동기 SET 경로 (**v3 시점에 동작하던 것**)
+
+> **v4 에서는 pac 이 기본이다**(`ext_pac_set` 기본 `true`). 아래 동기 경로는
+> `ext_pac_set=off` 일 때만 돈다 — `SET_WORKFLOW.md` §1-pac / §2-pac 참조.
 
 v2 §5의 구조 그대로이고, 위 최적화만 얹혔다.
 

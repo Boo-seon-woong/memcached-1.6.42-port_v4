@@ -75,6 +75,9 @@ READ가 동시에 wire 위에 떠 있고, 워커는 그동안 다른 일을 한�
 
 ## 2. SET — 동기 대기 (synchronous)
 
+> **v3 말에 pac 이 이것을 바꿨고 v4 의 기본값이다.** 아래는 `ext_pac_set=off`
+> 경로다 — 운영 경로는 `SET_WORKFLOW.md` §1-pac.
+
 `storage_store_item()`은 명령 처리 경로 **한복판에서 인라인 호출**된다
 (`memcached.c:1655`, `do_store_item()` 안).
 

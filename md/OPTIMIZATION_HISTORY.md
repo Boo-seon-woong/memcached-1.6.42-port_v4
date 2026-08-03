@@ -149,7 +149,11 @@ hash해 bucket을 prefetch.
 런 하락**(bucket이 assoc_find 도달 전에 도착 → lock→decrypt 경로 단축),
 CPU/op 2.50까지 하락. xpf 레그 전부가 −3% 등급 bed에서도 개별 10.18M+.
 
-## 최종 운영점
+## v3 최종 운영점
+
+> **v4 의 운영점은 다르다** — `mcT=30 W=24 nqp=4 reap=8 chain=8 pipeline=256`.
+> [`OPTIMAL_RUNBOOK.md`](OPTIMAL_RUNBOOK.md) 와
+> [`V3_TO_V4_CHANGES.md`](V3_TO_V4_CHANGES.md) §7 참조.
 
 ```text
 binary   memcached @ v3 tree (⑥+⑦ 포함), 태그 v3-10.35M-sustained

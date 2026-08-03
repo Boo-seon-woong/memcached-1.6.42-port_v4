@@ -6651,3 +6651,16 @@ KD-T-MIX-090   --key-zipf-exp=0.90
 **θ 임계값을 아는 것이 "균등에서 10 M" 보다 훨씬 방어 가능한 주장이다.**
 
 NEXT: genie (KD-Z-MIX-r3, 이후 θ 스윕 3 셀)
+---
+
+## [2026-08-03 KST] genie — KD-Z-MIX-r3
+
+```text
+CELL KD-Z-MIX-r3 DONE  7.503 M ops/s  p50 3.95100 / p99 7.39100 / p99.9 9.59900 ms
+창(UTC)  08:01:21 ~ 08:03:21   --key-pattern=Z:Z --key-zipf-exp=0.99 --ratio=1:9 -t 30 -c 4 pipe=256 --test-time=120
+gets/misses  6752872/5971
+서버     reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_worker_window=24 
+raw      experiments/keydist-20260803/genie/KD-Z-MIX-r3.txt
+```
+
+NEXT: ariel (창 슬라이스)

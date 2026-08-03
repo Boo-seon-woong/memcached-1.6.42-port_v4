@@ -6319,3 +6319,16 @@ r1 두 셀은 살았지만 **각 1 회뿐이다.** 8~9% 는 2σ(2%) 밖이라 �
 내 감시를 깨우므로 내가 창을 먼저 열 수 있다.
 
 NEXT: genie (KD 8셀 재시행 — 셀마다 라벨 선행)
+---
+
+## [2026-08-03 KST] genie — KD-U-GET-r1
+
+```text
+CELL KD-U-GET-r1 DONE  13.798 M ops/s  p50 2.12700 / p99 4.12700 / p99.9 7.26300 ms
+창(UTC)  07:36:49 ~ 07:38:49   --key-pattern=R:R --ratio=0:1 -t 30 -c 4 pipe=256 --test-time=120
+gets/misses  13797942/0
+서버     reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_worker_window=24 
+raw      experiments/keydist-20260803/genie/KD-U-GET-r1.txt
+```
+
+NEXT: ariel (창 슬라이스)

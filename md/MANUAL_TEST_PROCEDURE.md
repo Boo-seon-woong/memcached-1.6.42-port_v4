@@ -2,7 +2,14 @@
 
 사람이 두 박스에 직접 접속해 순차 실행하고 결과를 검증하기 위한 문서.
 **모든 단계에 실행 위치가 명시돼 있다.** 참조용 배경은
-`md/OPTIMAL_RUNBOOK.md`, 최적화 이력은 `md/OPTIMIZATION_HISTORY.md`.
+`md/OPTIMAL_RUNBOOK.md`, v3→v4 구조 변화는 `md/V3_TO_V4_CHANGES.md`,
+최적화 이력은 `md/OPTIMIZATION_HISTORY.md`.
+
+> **2026-08-03 v4 운영값으로 갱신됨.** 서버 파라미터가 바뀌었다
+> (`-t 30`, `taskset 0-29`, `nqp=4`, `reap=8`, `chain=8`, `submit_inline`),
+> 부하는 `-t 30 --pipeline=256`, 기대치는 §F-2 다. 기동 게이트에
+> **`ext_submit_inline` 판별이 추가**됐다 — stock 이나 옛 빌드가 포트를 쥐고
+> 있어도 낡은 로그 때문에 통과처럼 보인 전례가 있다(§D-1).
 
 ```text
 소요 시간   준비 10~15분 + 측정 6분
@@ -265,6 +272,10 @@ pid=$(pgrep -x "memcached[.a-z]*")
 tr '\0' '\n' < /proc/$pid/environ | grep -E 'EXT_DISABLE_COHERENT_MR|LD_LIBRARY_PATH'
 # => LD_LIBRARY_PATH=/home/ubuntu/coherent-mr-v2/lib:...
 # => EXT_DISABLE_COHERENT_MR 은 나오지 않아야 한다 (나오면 대조군이 떠 있는 것)
+
+# 떠 있는 것이 v4 포트인지 판별한다 — stock 에는 이 설정이 없다
+printf 'stats settings\r\nquit\r\n' | nc -q1 127.0.0.1 11411 | grep -c ext_submit_inline
+# => 1      ★ 0 이면 stock 이나 옛 빌드가 포트를 쥐고 있다
 ```
 
 > **로그 파일 이름만 믿지 말 것.** 2026-07-31에 이 함정을 밟았다 — A/B
@@ -275,7 +286,7 @@ tr '\0' '\n' < /proc/$pid/environ | grep -E 'EXT_DISABLE_COHERENT_MR|LD_LIBRARY_
 기대 출력:
 
 ```text
-extstore: genie_connect OK (raddr=0x... rkey=0x... size=4294967296, workers=28 ...)
+extstore: genie_connect OK (raddr=0x... rkey=0x... size=4294967296, workers=30 ...)
 extstore: coherent MR 458752B at 0x...          ← READ 바운스 풀
 extstore: coherent MR 236544B at 0x...          ← WRITE staging 풀
 extstore selftest: SYNC_FOR_DEVICE advise failed: No such file or directory
@@ -477,18 +488,23 @@ E-3 출력이 곧 판정 자료다. 아래 기준으로 읽는다.
 
 ### F-2. 워크로드별 기대치 (참고)
 
-**직전 off-box 정본** — 빌드 `span-1f3390a`(pac 있음, **coherent MR 이전**),
-동일 bed, mc28/W24/nqp2/hp22. 이번 측정이 넘어서야 할 기준선이다.
+**v4 최종 게이트** (2026-08-03, 각 120 초, `mcT30/W24/nqp4/reap8/chain8`):
 
-| 워크로드 | 총 ops/s | GET span | SET span | CPU/op | 판정 |
-|---|---:|---:|---:|---:|---|
-| GET only | **10.241 M** | 24.49 µs | — | 2.754 µs | 두 게이트 PASS |
-| SET only | **2.348 M** | — | 15.63 µs | 10.562 µs | span PASS, 처리량 미달 |
-| 1:9 혼합 | **8.035 M** (GET 7.23 + SET 0.80) | 24.46 µs | 19.34 µs | 3.472 µs | span PASS, 처리량 미달 |
+| 워크로드 | 총 ops/s | GET span | SET span | 판정 |
+|---|---:|---:|---:|---|
+| GET only (`--ratio=0:1`) | **13.397 M** | 21.90 µs | — | 두 게이트 PASS |
+| 1:9 혼합 (`--ratio=1:9`) | **11.099 M** | 22.31 µs | 9.11 µs | 두 게이트 PASS |
+| SET only (`--ratio=1:0`) | v4 미측정 | — | — | — |
 
-**세 워크로드 모두 span 게이트는 이미 통과한다.** 남은 것은 혼합·GET-only
-동시 10 M이고, 부족분은 평균 CPU/op **−18.6%**다. 1:9 → 1:10 비율 변경으로는
-+1.4%밖에 못 얻으므로(8.03 M → 8.14 M) CPU를 실제로 줄여야 한다.
+**재현성**: 처리량 σ 약 1.0%, span σ 0.60%. **2% 보다 작은 델타는 한 셀로
+판정할 수 없다** — 개선을 주장하려면 반복하라.
+
+**비율 주의**: 위 혼합은 `1:9`(SET 10%)다. 계약 문구는 `1:10`(SET 9.09%)이고
+그쪽이 더 쉽다. 두 비율의 수치를 섞어 인용하지 말 것.
+
+참고로 **v3 정본**(빌드 `span-1f3390a`, coherent MR 이전, mc28/W24/nqp2)은
+GET-only 10.241 M / 24.49 µs, 1:9 혼합 8.035 M / 24.46 / 19.34 였다.
+v4 는 그 대비 혼합 **+38%**, GET span **−9%** 다.
 
 **coherent MR에 기대하는 것.** 게스트 내 co-located A/B(100 K 키 20초,
 mtT=4/mcT=28, **절대값 무의미·델타만**)에서:

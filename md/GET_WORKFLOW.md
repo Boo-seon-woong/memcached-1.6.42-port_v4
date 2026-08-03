@@ -202,7 +202,7 @@ libevent가 소켓 가독 이벤트를 올리면 `event_handler()`가 connection
 machine을 실행하고, 수신 바이트는 워커의 rbuf로 들어간다.
 `try_read_command_ascii()`는 현재 명령 다음에 이미 `"get "`이 들어와 있으면
 다음 첫 key의 hash bucket을 `assoc_prefetch()`한다
-(`proto_text.c:392-409`). 현재 요청을 처리하는 동안 다음 bucket의 DRAM
+(`proto_text.c:436`). 현재 요청을 처리하는 동안 다음 bucket의 DRAM
 fetch를 겹치는 cross-request 최적화다.
 
 `process_command_ascii()`는 `CMD_GET`, `CMD_GETS`, `CMD_GAT`, `CMD_GATS`를
@@ -245,7 +245,10 @@ entry에는 값이 아니라 key와 `item_hdr`만 든 `ITEM_HDR` stub이 있고,
    성공해야 실제 `ITEM_data(read_it)`로 바뀐다.
 4. `ITEM_HDR`의 remote location을 `obj_io`에 복사하고
    `mode=OBJ_IO_READ`, callback=`_storage_get_item_cb`로 지정한다.
-5. worker의 `IO_QUEUE_EXTSTORE`에 pending을 넣고 즉시 0을 반환한다.
+5. **v4**: `p->c = t->cur_conn` 을 채우고 **체인에 append** 한다. 체인이
+   `ext_post_chain`(8) 건이면 `pending_chain_flush()` 로 **그 자리에서 post**
+   하고, reap 틱이면 수거·재개까지 여기서 한다. 그러고 0 을 반환한다.
+   (v3 는 `IO_QUEUE_EXTSTORE` 에 넣기만 하고 반환했다.)
 
 호출자는 `resp->io_pending`을 확인해 `conn_resp_suspend()`를 실행한다. 이는
 `resp->suspended=true`, `c->resps_suspended++`만 설정한다. connection이
@@ -255,48 +258,70 @@ entry에는 값이 아니라 key와 `item_hdr`만 든 `ITEM_HDR` stub이 있고,
 이 시점까지 원격 값은 읽지 않았다. 로컬에 존재하는 것은 stub, 빈 응답 자리,
 pending context, 복호 목적지뿐이다.
 
-### 8~9. 이벤트 루프 단위 batch 제출 → RDMA READ
+### 8~9. post — **v4 는 파싱 루프 안에서 나간다**
 
-이벤트 루프 한 번이 끝나면 worker가 `thread_io_queue_submit()`을 호출한다
-(`thread.c:507-511`). `storage_submit_cb()`는 쌓인 pending을 `obj_io`
-chain으로 바꿔 해당 worker의 `extstore_worker_submit()`에 넘기고 drain
-event를 arm한다.
+> **v3 는 여기가 "이벤트 루프 단위 batch 제출" 이었다.** `thread_io_queue_submit()`
+> 가 pass 끝에 쌓인 것을 한 번에 냈다. v4 는 `ext_submit_inline` 으로 그 경로를
+> 우회한다.
 
-`worker_post()`는 owner worker만 건드리는 자원으로 READ를 게시한다.
+v4 의 post 시점은 셋이다:
+
+```text
+① 체인이 ext_post_chain(8) 건       storage.c:584   pending_chain_flush()
+② reap 틱 (ext_reap_every(8) 건)     storage.c:607   체인 flush + drain + 재개
+③ 못 채웠으면 그 iteration 끝        thread.c:522    storage_post_chain_flush()
+```
+
+③ 은 `event_base_loop(EVLOOP_ONCE)` 가 **리턴한 직후** 조건 없이 실행되므로
+요청이 하나뿐이어도 갇히지 않는다 — 잠들기 전에 나간다.
+
+`worker_post()`(`extstore.c:789`)는 owner worker 만 건드리는 자원으로
+READ 를 게시한다.
 
 - `outstanding < ext_worker_window`: worker 전체 미완료 상한.
-- `read_out[qp] < ext_ord_limit`: QP별 RDMA READ/atomic depth 상한.
-- `bounce_free`: NIC이 ciphertext를 쓸 worker-private DMA slot.
-- `rr`: ORD 여유가 있는 QP를 고르는 round-robin cursor.
-- `ext_batch`: 한 `ibv_post_send()` chain에 묶는 최대 WR 수.
+- `read_out[qp] < ext_ord_limit`: QP별 RDMA READ depth 상한 (협상값 16).
+- `bounce_free`: NIC 이 ciphertext 를 쓸 worker-private DMA slot.
+- `rr`: ORD 여유가 있는 QP 를 고르는 round-robin cursor.
+- `ext_submit_batch`: 한 `ibv_post_send()` chain 에 묶는 최대 WR 수.
 
-자리가 없으면 실패시키지 않고 worker의 FIFO wait list에 park한다. CQE가
-capacity를 돌려주면 `extstore_worker_drain()` 말미가 wait list를 다시
-`worker_post()`한다.
+자리가 없으면 실패시키지 않고 worker 의 FIFO wait list 에 park 한다. CQE 가
+capacity 를 돌려주면 `extstore_worker_drain()` 말미가 wait list 를 다시
+`worker_post()` 한다.
 
-실제로 post할 batch가 정해지면 모든 `io->t_start`를 `prof_rdtsc()`로 찍고
-`IBV_WR_RDMA_READ` chain을 한 번에 `ibv_post_send()`한다. 이 timestamp가
-READ span의 시작점이므로 **wait list나 제출 queue에서 기다린 시간은 span
-밖**이다.
+실제로 post 할 batch 가 정해지면 모든 `io->t_start` 를 `prof_rdtsc()` 로
+찍는다(`extstore.c:845`).
 
-### 10~11. CQ 수거 → batched SYNC_FOR_CPU
+> **⚠ 이 timestamp 는 span v2 의 시작이지 v3 의 시작이 아니다.**
+> v3 는 `storage_get_item()` 진입의 `t_enter` 에서 시작하므로 **체인 대기와
+> wait list park 가 전부 span v3 안**이고, 그 구간이 `admit` 이다.
+> v3 이전 판의 이 문단은 "wait list 나 제출 queue 에서 기다린 시간은 span
+> 밖" 이라고 적었는데, **그것은 v2 정의에서만 참**이다. EXP-0 에서 그
+> "밖" 이라던 시간이 `admit 217~285 µs` 였다.
 
-CQ는 별도 IO thread가 아니라 요청을 받은 worker가 직접 거둔다. 지점은 둘이다.
+### 10~11. CQ 수거 — **SYNC 는 이제 없다**
+
+CQ 는 별도 IO thread 가 아니라 요청을 받은 worker 가 직접 거둔다. v4 의
+지점은 셋이다.
 
 | drain 지점 | 위치 | 역할 |
 |---|---|---|
-| (a) batch 직후 | `thread.c`의 worker loop | 최대 `ext_drain_spin`회 bounded poll |
-| (b) 잔여 완료 | `ext_drain_handler()` | 0-timeout self event; outstanding 동안 재무장 |
+| **(a) post 자리** | `storage.c:607` reap 틱 | **v4 에서 추가.** `ext_reap_every` 건마다 |
+| (b) iteration 끝 | `thread.c:531` 블록 | bounded spin (`ext_drain_spin`) |
+| (c) 잔여 완료 | `ext_drain_handler()` | 0-timeout self event; outstanding 동안 재무장 |
 
-`extstore_worker_drain()`은 최대 `ext_batch`개의 CQE를 `ibv_poll_cq()`로
-꺼낸다. 성공한 READ들의 bounce SGE를 모아
-`ibv_advise_mr(...SYNC_FOR_CPU, FLUSH...)`를 **한 번** 호출한다. SEV guest가
-NIC이 쓴 ciphertext를 CPU에서 보도록 만드는 단계이며, batch당 한 번이라
-여러 READ가 비용을 나눠 가진다.
+`extstore_worker_drain()` 은 최대 32 개의 CQE 를 `ibv_poll_cq()` 로 꺼낸다.
 
-sync가 끝난 뒤 각 CQE의 callback을 호출하고 bounce slot, QP별 `read_out`,
-worker `outstanding`을 반환한다. poll 오류나 CQE 실패는 engine을 dead로
-표시하고 남은 parked op도 callback 실패 경로로 보내 무한 대기를 막는다.
+> **`SYNC_FOR_CPU` 는 데이터 경로에 없다.** coherent MR(`~/coherent-mr-v2`)이
+> `dma_alloc_coherent` 메모리를 MR 로 등록해 umem 자체가 없으므로 advise 할
+> 대상이 없다. 코드에 남은 `ibv_advise_mr(...SYNC_FOR_CPU...)` 는
+> `extstore.c:310` **selftest 한 곳뿐**이고, 기동 로그의
+> `SYNC_FOR_CPU advise failed: No such file or directory` 두 줄이 바로 그것이며
+> **정상 신호**다. v3 이전 판의 "batch 당 한 번 호출해 비용을 나눠 가진다"는
+> 서술은 바운스 MR 시절 그림이다.
+
+각 CQE 의 callback 을 호출하고 bounce slot, QP별 `read_out`, worker
+`outstanding` 을 반환한다. poll 오류나 CQE 실패는 engine 을 dead 로 표시하고
+남은 parked op 도 callback 실패 경로로 보내 무한 대기를 막는다.
 
 ### 12. AES-GCM open, 재시도, 응답 값 연결
 
@@ -314,14 +339,22 @@ tag 검증 실패는 검증되지 않은 평문을 응답하지 않고 같은 RE
 iov를 지워 `END` 또는 meta `EN`만 남긴다. remote storage 기동에는
 `EXT_CRYPTO_KEY`가 필수이고 운영 경로는 AES-256-GCM을 항상 사용한다.
 
-### 13~14. drain 밖에서 connection resume
+### 13~14. connection resume — **v4 는 거둔 그 pass 에서 한다**
 
-callback은 connection을 즉시 깨우지 않는다. 아직 drain이 bounce slot과
-outstanding을 정산 중이므로, 재진입을 막기 위해 완료 pending을 worker TLS
-`g_ret_head`에 넣기만 한다.
+callback 은 connection 을 즉시 깨우지 않는다. 아직 drain 이 bounce slot 과
+outstanding 을 정산 중이므로, 재진입을 막기 위해 완료 pending 을 worker TLS
+`g_ret_head` 에 넣기만 한다.
 
-drain 호출자가 루프 밖에서 `storage_flush_returns()`를 실행하면 다음 경로로
-응답이 깨어난다.
+**v4 는 그것을 같은 pass 에서 비운다.** reap 틱(`storage.c:607`)과 iteration
+끝(`thread.c` 블록) 두 곳에서 `storage_flush_returns()` 가 돈다. 제외 대상은
+둘뿐이다 — **지금 파싱 중인 연결**(`g_skip_conn`)과 **`item_trylock` 에
+실패한 버킷**.
+
+> v3 는 이것을 **다음 pass** 로 미뤘고, 정확히는 `thread.c:531` 의 `if (out)`
+> 이 거짓이면 재개 블록을 통째로 건너뛰었다. 그것이 SET `ret` 173.11 µs
+> (혼합) / 2371.84 µs (SET-only) 였다.
+
+`storage_flush_returns()` 가 돌면 다음 경로로 응답이 깨어난다.
 
 ```text
 storage_flush_returns
@@ -357,21 +390,25 @@ worker `io_cache`로 돌려보낸다.
 ```text
 connection pipeline
   → 여러 mc_resp / pending READ
-  → worker IO queue
-  → ext_batch 단위 WR chain
-  → worker당 W개 outstanding
-  → QP별 ORD개 wire READ
-  → CQE 묶음당 SYNC_FOR_CPU 1회
+  → **인라인 체인 (ext_post_chain 8 건)**        ← v4. v3 는 worker IO queue
+  → ext_submit_batch 단위 WR chain
+  → worker당 W(24)개 outstanding
+  → QP별 ORD(16)개 wire READ
 ```
 
-클라이언트 `--pipeline`은 요청 공급 깊이이고, `ext_worker_window`는 worker의
-RDMA outstanding 상한이다. 둘은 같은 값이 아니다. `ext_qp_per_worker=2`는
-worker당 RC QP가 둘이라는 뜻이고, 별도 IO thread 두 개라는 뜻도 아니다.
+> v3 판은 마지막에 `CQE 묶음당 SYNC_FOR_CPU 1회` 가 있었다. **coherent MR
+> 이후 데이터 경로에 SYNC 는 없다.**
+
+클라이언트 `--pipeline`(256)은 요청 공급 깊이이고, `ext_worker_window`(24)는
+worker 의 RDMA outstanding 상한이다. 둘은 같은 값이 아니다.
+`ext_qp_per_worker=4` 는 worker 당 RC QP 가 넷이라는 뜻이고, 별도 IO thread
+넷이라는 뜻이 아니다.
 
 GET 처리량의 구조적 근거는 다음 세 가지다.
 
 1. 특정 GET을 기다리지 않고 connection response만 suspend한다.
-2. 여러 연결의 READ를 한 batch로 post하고 sync 고정비를 상각한다.
+2. 인라인 체인이 post 를 `ext_post_chain` 건씩 묶어 QP 스핀락과 doorbell 을
+   1/N 로 만든다. (v3 는 여기가 "sync 고정비 상각" 이었으나 SYNC 가 없어졌다.)
 3. QP/CQ/bounce/wait list를 owner worker만 다뤄 hot path hand-off와 lock을
    없앤다.
 
@@ -399,8 +436,10 @@ GET-only에서 `badcrc_from_extstore != 0`은 이상이다. 혼합 workload에�
    평문으로 바꾸지 않는다.
 3. **owner-worker**: post, CQ drain, decrypt, resume는 요청을 받은 같은 worker가
    수행한다. 완료를 별도 IO thread로 넘기지 않는다.
-4. **drain 비재진입**: callback은 pending을 park하고, connection resume는 drain
-   loop가 정산을 끝낸 뒤 수행한다.
+4. **drain 비재진입**: callback 은 pending 을 park 하고, connection resume 는
+   drain loop 가 정산을 끝낸 뒤 수행한다. **v4 는 그 재개를 같은 pass 안에서
+   하되**, 파싱 중인 연결(`g_skip_conn`)과 `item_trylock` 실패 버킷은
+   제외한다 — 둘 다 어겼을 때 서버가 죽거나 멈췄다.
 5. **응답 수명**: plaintext buffer는 `sendmsg`가 끝나 response finalize가
    호출될 때까지 살아 있어야 한다.
 6. **유계 자원**: window, ORD, bounce slot이 가득 차면 park하며 로컬 값으로
@@ -410,13 +449,17 @@ GET-only에서 `badcrc_from_extstore != 0`은 이상이다. 혼합 workload에�
 
 ```text
 EXT_RDMA_PROF=1
-  extstore_prof_read_count
-  extstore_prof_read_avg_ns
-  extstore_prof_read_p50_ns
-  extstore_prof_read_p99_ns
-  extstore_prof_read_xfer_avg_ns
-  extstore_prof_read_sync_avg_ns
+  ── span v3 (계약이 쓰는 것) ────────────────────────────
+  extstore_prof_read_e2e_count      진입 → 복호 완료, 표본 수
+  extstore_prof_read_e2e_avg_ns     ★ Gv3.  캠페인 표의 span 은 전부 이것
+  extstore_prof_read_e2e_p99_ns
+  extstore_prof_read_admit_avg_ns   ★ adm.  진입 → post (체인·park 대기)
+  ── span v2 (참고) ─────────────────────────────────────
+  extstore_prof_read_count / _avg_ns / _p50_ns / _p99_ns
+                                    post → 복호 완료. admission 을 빠뜨린다
+  extstore_prof_read_xfer_avg_ns    post → CQE
   extstore_prof_read_crypto_avg_ns
+  extstore_prof_read_sync_avg_ns    coherent MR 에서는 계측 하한. 수천 ns 면 폴백이다
 
 stats
   cmd_get / get_misses / get_extstore
@@ -427,18 +470,24 @@ stats
   ext_slot_acct_leak
 ```
 
+**`_avg_ns` 와 `_e2e_avg_ns` 를 혼동하면 안 된다.** 전자는 v2(post 직전
+시작), 후자가 v3(진입 시작)이고 **계약은 후자**다. `tools/exp0-slice.py` 의
+`Gv3` 열은 `re2ea`(= `_e2e_avg_ns`)를 읽는다.
+
+세 값은 **각각 독립으로 집계된다** — v3 에서 admit 을 빼서 만드는 것이
+아니다(`extstore.c:1244-1248`, 셀렉터 2·1). 그래서 `admit + v2 = v3` 가
+정합성 검사로 성립한다: EXP-0 GET-only pipe=256 에서
+`217.12 + 25.16 = 242.28` 대 실측 `242.29`.
+
 GET-only 정상 완료의 최소 판정은 miss, badcrc, RDMA read/write failure,
-engine dead, slot accounting leak가 모두 0인 것이다. `read_count`는
-`stats reset` 경계와 재시도 때문에 `cmd_get`과 소폭 다를 수 있으므로 raw
-counter와 workload를 함께 보존한다.
+engine dead, slot accounting leak 가 모두 0 인 것이다. `read_count` 는
+`stats reset` 경계와 재시도 때문에 `cmd_get` 과 소폭 다를 수 있으므로 raw
+counter 와 workload 를 함께 보존한다(허용 범위는
+`SPAN_MEASUREMENT_REVIEW.md`).
 
-span 총합은 `post 직전 → decrypt 완료`로 정확하지만, 하위 합에는 batch 안에서
-앞선 CQE callback의 decrypt를 기다리는 시간이 빠진다. 따라서
-`xfer + sync + crypto`가 `read_avg`와 정확히 같지 않은 것은 정상이며,
-클라이언트 end-to-end latency와도 같은 열에서 비교하지 않는다.
-
-
----
+`xfer + sync + crypto` 가 `read_avg`(v2)와 정확히 같지 않은 것은 정상이다 —
+batch 안에서 앞선 CQE callback 의 복호를 기다린 시간이 하위 합에 안 잡힌다.
+클라이언트 end-to-end latency 와도 같은 열에서 비교하지 않는다.
 
 ## 부록. 2026-07-31 연산량 감사에서 GET 경로에 대해 확인된 것
 

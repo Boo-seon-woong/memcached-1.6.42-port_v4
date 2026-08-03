@@ -1,6 +1,6 @@
 # md/ 문서 색인 — 무엇이 현행이고 무엇이 기록인가
 
-작성 2026-08-03. **문서가 21 개라 어느 것을 믿어야 하는지가 문제였다.**
+작성 2026-08-03. **문서가 23 개라 어느 것을 믿어야 하는지가 문제였다.**
 이 파일이 그 답이다.
 
 ## 현행 — 지금 값을 여기서 읽는다
@@ -20,7 +20,7 @@
 | [`GET_WORKFLOW.md`](GET_WORKFLOW.md) | **§v4 를 먼저 읽을 것.** 제출·수거·재개 위치가 바뀌었다 |
 | [`SET_WORKFLOW.md`](SET_WORKFLOW.md) | **§v4 를 먼저 읽을 것.** 반환 경로가 바뀌었다 |
 | [`GET_SET_CONCURRENCY.md`](GET_SET_CONCURRENCY.md) | v3 시점 대조. 구조 비교 목적이면 유효 |
-| [`SPAN_MEASUREMENT_REVIEW.md`](SPAN_MEASUREMENT_REVIEW.md) | span 표본 커버리지 정의. 유효 |
+| [`SPAN_MEASUREMENT_REVIEW.md`](SPAN_MEASUREMENT_REVIEW.md) | **§1~§6 은 span v2 검증이다.** v3 검증은 §7 |
 
 ## 시대 기록 — 그 시점의 기록이지 현행이 아니다
 

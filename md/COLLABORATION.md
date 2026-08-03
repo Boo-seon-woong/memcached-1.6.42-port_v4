@@ -1,4 +1,8 @@
-# ariel–genie 협업 프로토콜 (v2)
+# ariel–genie 협업 프로토콜
+
+> v2 에서 도입해 **v3·v4 를 거쳐 지금도 운용 중**이다. 아래 §"v2 에서의
+> 역할 분담" 의 P0~P3 단계표는 v2 시절 것이고 지금은 해당 단계가 없다 —
+> 채널 규약(§채널·§commit monitor)과 맨 아래 v4 규칙이 현행이다.
 
 v1에서 운용하던 conversation/commit 시스템을 v2에 재도입한다(2026-07-28
 결정). 개발·배포·실측에서 guest(ariel)와 memory node(genie) 양측의 협조가

@@ -207,12 +207,32 @@ drive_machine
 ### 2-0. 단일 요청은 v4 에서도 즉시 안 나간다
 
 **오해하기 쉬운 지점이다.** `ext_post_chain=8` 이므로 요청 하나는
-`g_chain_n = 1 < 8` 이라 체인에 얹히기만 하고, `thread.c:522` 의 pass 끝
+`g_chain_n = 1 < 8` 이라 체인에 얹히기만 하고, `thread.c:522` 의
 `storage_post_chain_flush()` 에서야 나간다. 그 지점은 **stock 의
 `thread.c:528` `thread_io_queue_submit()` 과 같은 자리**다.
 
+**그렇다고 갇히지는 않는다 — 같은 event-loop 반복 안에서 나간다.**
+
+```c
+while (!event_base_got_exit(me->base)) {
+    event_base_loop(me->base, EVLOOP_ONCE);   /* ← 이 안에서 파싱·체인 */
+    thread_io_queue_submit(me);
+    if (me->ext_worker != NULL) {
+        storage_post_chain_flush(me);         /* ← 리턴 직후, 조건 없이 post */
+```
+
+`EVLOOP_ONCE` 는 준비된 이벤트를 처리하면 **리턴**하고, flush 는 그 뒤에
+온다. 체인은 iteration N 에서 쌓여 **같은 iteration N 끝에서** 비워진다.
+**다음 이벤트를 기다리며 잠들기 전에 실행되므로 요청이 하나뿐이어도
+붙잡히지 않는다.** 그래서 지연은 "pass 끝까지"가 아니라 **"그 iteration 의
+남은 처리만큼"** 이고, 요청이 하나면 사실상 즉시다.
+
+이 배치는 의도된 것이다. v3 주석이 그 위험을 명시한다 —
+*"수면 판단보다 반드시 앞서야 한다 — 큐가 남은 채 잠들면 그 연결들은
+영원히 재개되지 않는다."* 순서가 반대였다면 실제로 교착이 났을 것이다.
+
 ```text
-고립된 요청 한 건의 지연   v3 == v4   (둘 다 pass 끝까지 기다린다)
+고립된 요청 한 건의 지연   v3 == v4   (둘 다 그 iteration 끝, 사실상 즉시)
 ```
 
 v4 가 바꾼 것은 **부하가 있을 때의 문턱**이다:

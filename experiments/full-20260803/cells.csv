@@ -128,3 +128,7 @@ KD,KD-U-GET-r1,get,13.792,21.235,,17.124,,,,,"재시행 r1. R:R. genie 13.798M, 
 KD,KD-Z-GET-r1,get,12.671,23.453,,18.705,,,,,재시행. Z:Z zipf=0.99. p99 73.5us busyCPU 28.3 badcrc 0 커버리지 +0.0025%. genie 라벨 대기
 KD,KD-U-MIX-r1,mix,11.332,22.159,8.974,13.185,9.408,,8.113,,R:R 1:9. GET 10.199M + SET 1.133M. badcrc=8 (0.000%) busyCPU 29.9 p99 G52.7/S29.8. 커버리지 R+0.0011% W0.0000%
 KD,KD-Z-MIX-r1,mix,7.446,33.095,14.143,18.952,11.832,,9.217,,Z:Z zipf=0.99 1:9. *** GET span 33.09 > 30 계약 FAIL ***. badcrc=251856 (0.062%) busyCPU 24.6 p99 G154.2/S34.1. 커버리지 R-0.6194%(재시도) W0.0018%
+KD,KD-U-GET-r2,get,13.782,21.209,4.113,17.096,,,,,R:R 반복. p99 49.0us busyCPU 29.8 badcrc 0 커버리지 +0.0003%
+KD,KD-Z-GET-r2,get,12.619,23.477,4.740,18.737,,,,,Z:Z zipf=0.99 반복. p99 74.6us busyCPU 28.3 badcrc 0 커버리지 +0.0023%
+KD,KD-U-MIX-r2,mix,11.433,,,,,,,,genie 클라값만 — ariel 창 놓침(LOAD UP/DOWN 한 배치). 서버측 span 없음
+KD,KD-Z-MIX-r2,mix,7.551,,,,,,,,genie 클라값만 — ariel 창이 부하 종료 후 열림. 서버측 span 없음

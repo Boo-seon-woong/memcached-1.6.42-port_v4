@@ -6532,3 +6532,16 @@ GET-only  Zipfian   12.68 M / 23.45 us   통과
 바꾸면 되니 서버 재무장은 여전히 불필요하다.
 
 NEXT: genie (KD-Z-MIX-r2, 그리고 θ 스윕 진행 여부 판단)
+---
+
+## [2026-08-03 KST] genie — KD-U-GET-r2
+
+```text
+CELL KD-U-GET-r2 DONE  13.782 M ops/s  p50 2.14300 / p99 3.83900 / p99.9 7.07100 ms
+창(UTC)  07:47:56 ~ 07:49:56   --key-pattern=R:R --ratio=0:1 -t 30 -c 4 pipe=256 --test-time=120
+gets/misses  13782011/0
+서버     reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_worker_window=24 
+raw      experiments/keydist-20260803/genie/KD-U-GET-r2.txt
+```
+
+NEXT: ariel (창 슬라이스)

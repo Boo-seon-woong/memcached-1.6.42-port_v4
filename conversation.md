@@ -6332,3 +6332,17 @@ raw      experiments/keydist-20260803/genie/KD-U-GET-r1.txt
 ```
 
 NEXT: ariel (창 슬라이스)
+
+---
+
+## [2026-08-03 KST] genie — KD-Z-GET-r1
+
+```text
+CELL KD-Z-GET-r1 DONE  12.684 M ops/s  p50 2.30300 / p99 4.83100 / p99.9 6.78300 ms
+창(UTC)  07:39:35 ~ 07:41:35   --key-pattern=Z:Z --key-zipf-exp=0.99 --ratio=0:1 -t 30 -c 4 pipe=256 --test-time=120
+gets/misses  12683580/0
+서버     reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_worker_window=24 
+raw      experiments/keydist-20260803/genie/KD-Z-GET-r1.txt
+```
+
+NEXT: ariel (창 슬라이스)

@@ -23,14 +23,47 @@ v3 는 **계약을 span v2 기준으로 달성**했고, 정의를 span v3 로 �
 
 ```text
               혼합 처리량   GET span   SET span
-v3 (span v2)   9.83 M         7.8        7.8      ✓ ✓   같은 서버를
-v3 (span v3)   9.83 M       316.24     188.75     ✗ ✗   다르게 쟀을 뿐
+v3 (span v2)  10.06 M         7.8        7.8      ✓ ✓   같은 서버를
+v3 (span v3)  10.06 M       311.77     188.75     ✗ ✗   다르게 쟀을 뿐
 v4 최종       11.10 M        22.31       9.11     ✓ ✓
 ```
 
 **정의가 성능을 바꾼 것이 아니다.** 증거는 v3 당시 클라이언트가 SET 지연을
 7.45 ms 로 보고하는데 서버는 7.8 µs 라고 답하고 있었다는 것이다. 그 차이가
 전부 계측 밖의 대기였다.
+
+### 그 대기의 91~99.6% 가 **조건문 두 개**였다
+
+v4 의 span 감소는 알고리즘이나 하드웨어에서 온 것이 아니다. **언제 제출하고
+언제 재개하는지를 정하는 조건문 두 줄**이 span 의 거의 전부를 차지하고
+있었다.
+
+```text
+                    span v3    그중 조건문 탓    비중
+혼합 GET            311.77     admit 285.16     91.5%
+혼합 SET            188.75     ret   173.11     91.7%
+SET-only           2380.29     ret  2371.84     99.6%
+```
+
+```c
+/* ① memcached.c:3324 — GET admit.  연결 20 개가 모여야 제출한다 */
+if (t->conns_tosubmit++ >= settings.ext_submit_batch) {
+    thread_io_queue_submit(c->thread);
+}
+
+/* ② thread.c:531 — SET ret.  앞선 flush 가 CQ 를 비우면 out == 0 이라
+   재개 블록이 통째로 건너뛰어진다 */
+unsigned int out = extstore_worker_outstanding(me->ext_worker);
+if (out) {
+    ...  /* 이 안에 storage_flush_returns() 가 있다 */
+}
+```
+
+**두 줄을 우회하자 span 이 14 배(GET) · 21 배(SET) 내려갔고 처리량은 오히려
+늘었다.** 데이터 경로(`v2` 열 = 실제 RDMA 왕복 + 복호)는 처음부터 계약 안에
+있었다 — pipeline 을 32 배 늘려도 15~27 µs 로 거의 안 움직였다.
+
+기전과 증거는 §1, 원 분석은 `experiments/exp0-20260801/FINDINGS.md` §3·§4.
 
 ---
 
@@ -40,11 +73,12 @@ v3 의 GET 경로는 상류 memcached 의 `io_queue` 배칭을 그대로 물려�
 그 배칭이 **한 요청을 세 번 기다리게** 했다.
 
 ```text
-v3   ① 연결의 읽기 버퍼를 끝까지 파싱          ← 제출이 여기까지 기다린다
-     ② pass 끝에 io_queue 를 한 번에 제출
+v3   ① GET 을 파싱해 io_queue 에 쌓는다
+     ② **연결 20 개**가 모여야 제출한다        ← 제출이 여기까지 기다린다
      ③ event loop 로 복귀
      ④ 다음 pass 가 되어야 CQ 를 폴링          ← 완료 관측이 여기까지 기다린다
-     ⑤ 거둬도 재개는 또 다음 pass              ← 재개가 여기까지 기다린다
+     ⑤ 앞선 flush 가 CQ 를 비웠으면 재개
+        블록이 통째로 건너뛰어진다             ← 재개가 다음 pass 로 밀린다
 
 v4   ① GET 하나 파싱 → 그 자리에서 post
      ② N 건마다 CQ 수거 + 재개
@@ -144,9 +178,11 @@ drive_machine
  └ drain point              CQ 폴링 → 복호 → 응답 조립
 ```
 
-**한 연결이 256 개를 파이프라인하면 첫 GET 은 256 번째가 파싱될 때까지
-post 조차 안 된다.** 그것이 EXP-0 의 GET admit **285.16 µs**(혼합) /
-**217.12 µs**(GET-only)다.
+**한 연결의 버퍼를 다 파싱해도 post 되지 않는다 — `ext_submit_batch`(기본
+20) 개의 *연결*이 모여야 나간다.** 그것이 EXP-0 의 GET admit **285.16 µs**
+(혼합) / **217.12 µs**(GET-only)다. pipeline 이 깊을수록 연결 하나의 파싱이
+길어져 같은 20 개를 모으는 데 더 걸리므로 부하와 함께 자란다
+(pipe 8 → 256 에서 16.57 → 217.12).
 
 ### v4
 
@@ -213,8 +249,10 @@ storage_store_item_pac
  └ WRITE 를 큐에 넣고 그 자리에서 flush
  ⇣
  (WRITE CQE)
- └ 거둔다 → **재개는 다음 pass 로 미룬다**   ← ret 173.11 µs (혼합)
-                                                 2371.84 µs (SET-only)
+ └ 거둔다 → 그런데 그 flush 가 CQ 를 비워서
+             `if (out)` 이 거짓이 되고
+             **재개 블록이 통째로 건너뛰어진다**  ← ret 173.11 µs (혼합)
+                                                   2371.84 µs (SET-only)
 ```
 
 ### v4
@@ -325,12 +363,16 @@ reap 12 →  8    혼합 +2.09%,  GET-only span −17%
 
 ## 8. 성능 — v3 대비
 
+EXP-0(v3 코드, pipe=256) 대 v4 최종 게이트. 같은 bed, 같은 부하 형상이다.
+
 ```text
-                    v3 (span v3 기준)   v4 최종      변화
-1:9 혼합 처리량        9.83 M          11.10 M     +12.9%
-GET span             316.24 µs         22.31 µs     14 배 감소
-SET span             188.75 µs          9.11 µs     21 배 감소
-GET-only 처리량            —           13.40 M
+                    v3 (EXP-0)      v4 최종      변화
+1:9 혼합 처리량       10.06 M        11.10 M     +10.4%
+  GET span           311.77 µs       22.31 µs    14.0 배 감소
+  SET span           188.75 µs        9.11 µs    20.7 배 감소
+GET-only 처리량       11.93 M        13.40 M     +12.3%
+  span               242.29 µs       21.90 µs    11.1 배 감소
+SET-only span       2380.29 µs          —        v4 미측정
 ```
 
 **로컬 메모리(stock) 대비** — 원 frontier 실험과 같은 바이너리(`97ceee04…`)

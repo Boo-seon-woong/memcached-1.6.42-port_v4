@@ -38,9 +38,9 @@ v4 의 실제 흐름:
 **이 변경이 없앤 대기**(v3 실측):
 
 ```text
-GET admit  285.16 µs  읽기 버퍼를 다 파싱해야 제출됐다 (GET-only 는 217.12)
+GET admit  285.16 µs  io_queue 를 연결 20 개 모일 때까지 붙들었다 (GET-only 217.12)
 GET v2      26.59 µs  CQE 가 pass 끝까지 폴링조차 안 됐다
-SET ret    173.11 µs  거두고도 재개를 다음 pass 로 미뤘다 (SET-only 는 2371.84)
+SET ret    173.11 µs  CQ 가 이미 비어 재개 블록이 건너뛰어졌다 (SET-only 2371.84)
 ```
 
 ### v4 에서 새로 생긴 위험 셋

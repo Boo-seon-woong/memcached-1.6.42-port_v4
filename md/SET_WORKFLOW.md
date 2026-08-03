@@ -14,7 +14,9 @@ SET 은 v3 에서 이미 pac(publish-at-command)이었고 **admit 은 처음부�
 v4 가 바꾼 것은 **완료 뒤 재개를 언제 하는가** 하나다.
 
 ```text
-v3   WRITE CQE 를 거둔다 → 재개는 다음 pass 로 미룬다
+v3   WRITE CQE 를 거둔다. 그런데 그 flush 가 CQ 를 비우면
+     thread.c:531 의 `if (out)` 이 거짓이 되어
+     **재개 블록이 통째로 건너뛰어진다** — 미룬 게 아니라 건너뛴 것
      ret 173.11 µs (1:9 혼합)  /  2371.84 µs (SET-only)
 v4   거둔 그 pass 에서 재개한다                              ret 0.62 µs
      ├ 큐 상한 flush 안에서 재개 — 잡고 있는 버킷만 보류

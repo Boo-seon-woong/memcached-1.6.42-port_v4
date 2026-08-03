@@ -71,7 +71,7 @@ sudo ip link set ibs3 up
 sudo ip link set ibs3 mtu 4092
 cat /sys/class/net/ibs3/mtu                    # => 4092  (2044면 opensm 확인)
 
-cd memcached-1.6.42_port_v3/genie-server
+cd memcached-1.6.42-port_v4/genie-server
 cc -O2 -o genie_memd genie_memd.c -lrdmacm -libverbs    # 바이너리 없을 때만
 
 # nohup 필수: genie_memd는 SIGHUP을 무시하지 않는다(SigIgn=0). 그냥 `&`로
@@ -181,7 +181,7 @@ LD_LIBRARY_PATH=$HOME/coherent-mr-v2/lib $HOME/coherent-mr-v2/bin/coherent_mr_sm
 
 ```sh
 # ariel 호스트에서
-scp -i ~/.ssh/snp_guest -P 2222 memcached-1.6.42-port_v3/tools/obwatch.sh ubuntu@localhost:/tmp/
+scp -i ~/.ssh/snp_guest -P 2222 ~/2026/memcached-1.6.42-port_v4/tools/obwatch.sh ubuntu@localhost:/tmp/
 ```
 
 ### D-0. **바이너리 확인** — 최적 구성의 전제
@@ -194,23 +194,31 @@ scp -i ~/.ssh/snp_guest -P 2222 memcached-1.6.42-port_v3/tools/obwatch.sh ubuntu
 
 ```sh
 sha256sum ~/coherent-mr-v2/bin/memcached | cut -c1-24
-# => 771ca34068c7609936b2e58a     (pac ⊕ coherent MR ⊕ magazine 스캔 ⊕ GCM 1회 키잉, ce92044)
-#    fdf3850421c09c727872084f = GCM 수정 이전 (memcached.precrypto)
-#    20a016056d6d1f1b57571243 = magazine 스캔 이전 (memcached.premagscan)
-#    d7b8c1f35639d2467c4c9a44 = pac 이전 (memcached.pre-pac)
+# => b4c18e9710cc693c48531181     ★ v4 기록 바이너리 — §F-2 의 모든 수치를 낸 그것
 ```
 
-sha가 다르면 저장소 **`v3-set-pac`** 브랜치에서 빌드해 배포한다. `main`은
-coherent MR만, 옛 `v3-set-pac`은 pac만 갖는다 — **어느 한쪽만 빌드하면
-절반만 들어간다.**
+> **sha 는 재빌드로 재현되지 않는다.** 같은 소스·같은 커밋에서 다시 빌드해도
+> 툴체인이 다르면 다른 sha 가 나온다(실측: 같은 트리를 호스트에서 빌드하면
+> `03554b68574c1b5cd0cdac68`). 그러므로 이 sha 는 **"기록치를 낸 바로 그
+> 바이너리"의 신원**이지 빌드 검증용 체크섬이 아니다. 재배포했다면 새 sha 를
+> 기록하고, 내용 검증은 아래 기능 게이트로 한다.
+
+sha 가 다르고 새로 배포해야 하면 **v4 저장소 `main`** 에서 빌드한다.
+v3 저장소나 옛 `v3-set-pac` 브랜치를 쓰지 말 것 — v4 의 노브
+(`ext_submit_inline`, `ext_reap_every`, `ext_post_chain`)가 없다.
 
 ```sh
 # ariel 호스트에서
-cd ~/2026/memcached-1.6.42-port_v3 && git checkout v3-set-pac && make -j"$(nproc)"
+cd ~/2026/memcached-1.6.42-port_v4 && git checkout main && make -j"$(nproc)"
 scp -i ~/.ssh/snp_guest -P 2222 memcached ubuntu@localhost:/tmp/mc.new
 # guest에서 (서버가 실행 중이면 "Text file busy" — 먼저 내릴 것)
 install -m755 /tmp/mc.new ~/coherent-mr-v2/bin/memcached
+sha256sum ~/coherent-mr-v2/bin/memcached | cut -c1-24   # 새 sha 를 기록해 둘 것
 ```
+
+> v3 시대의 대조군 바이너리(`memcached.pre-pac` / `.precrypto` / `.premagscan`)
+> 는 guest 에 남아 있으면 그대로 두어도 되지만 **v4 기준선이 아니다.**
+> v4 의 유일한 무변수 A/B 는 §F-4 의 `EXT_DISABLE_COHERENT_MR=1` 이다.
 
 기동 후 표지 세 개를 확인한다. **셋 다 통과해야 이 절차서가 유효하다.**
 
@@ -237,7 +245,8 @@ coherent MR에서는 SYNC 자체가 없으므로 배치할 이유도 없다. **1
 
 ### D-1. 서버 기동 (tmux — ssh 세션이 끊겨도 유지)
 
-> ⚠️ **kill 직후 바로 기동하면 안 된다.** `kill -9` 뒤 28워커 + QP 56개 +
+> ⚠️ **kill 직후 바로 기동하면 안 된다.** `kill -9` 뒤 30워커 + QP 120개
+> (`workers × ext_qp_per_worker` = 30 × 4) +
 > MR 해제가 끝나야 포트가 풀리는데, 그 전에 새 서버가 bind하면
 > `failed to listen on TCP port 11411: Address already in use`로 **새 서버가
 > 조용히 죽고**, 이후 측정은 옛 프로세스(또는 아무것도 없는 상태)를 잰다.
@@ -378,7 +387,8 @@ COMMON="-s 10.99.0.3 -p 11411 -P memcache_text -d 64 \
 - SET은 **`STORED` 응답 전에 WRITE CQE를 기다린다** — 내구성 의미를 지키기
   위해서다. 다만 pac 이후 **워커가 블록되지는 않는다**: 스텁은 커맨드 시점에
   게시되고 연결만 suspend됐다가 완료 콜백에서 재개된다. 그래서 SET 비중이
-  높아도 워커 직렬화로 무너지지 않는다(SET-only 0.311 M → 2.348 M).
+  높아도 워커 직렬화로 무너지지 않는다(v3 실측 SET-only 0.311 M → 2.348 M.
+  **v4 에서는 SET-only 를 재지 않았다** — §F-2).
 - 워크로드를 바꿔 연속 측정할 때 **프리로드를 다시 할 필요는 없다**(서버를
   재시작하지 않는 한). 서버를 재시작했다면 D-2부터.
 
@@ -660,6 +670,8 @@ tools/obup.sh     기동 + 프리로드 + 1초 샘플러
 tools/obslice.sh  UTC 창 절단 (genie가 보고한 창을 그대로 입력)
 tools/obsweep.sh  구성 사다리 (mcT:nqp:W 튜플, 부하 감지로 자동 진행)
 tools/obalt.sh    바이너리 교대 A/B
+tools/exp1-arm.sh 셀 하나를 무장 (kill → 대기 → 기동 → 빌드 판별). v4 캠페인 하네스
+tools/ledger.py   셀 원장 add/show/cmp (experiments/full-20260803/cells.csv)
 ```
 
 측정 규율(절대값은 fresh boot, 델타는 교대 A/B, 판정은 60초×3 + 300초 지속)은

@@ -360,12 +360,14 @@ COMMON="-s 10.99.0.3 -p 11411 -P memcache_text -d 64 \
 |---|---|---|---|
 | **W1** | GET only | `memtier_benchmark $COMMON --ratio=0:1 --test-time=100` | 기준 — optimal 운영점 |
 | **W2** | SET only | `memtier_benchmark $COMMON --ratio=1:0 --test-time=100` | remote WRITE 경로. seal→WRITE→CQE→STORED |
-| **W3** | SET:GET **1:10** | `memtier_benchmark $COMMON --ratio=1:10 --test-time=100` | **게이트 대상 혼합** |
+| **W3** | SET:GET **1:9** | `memtier_benchmark $COMMON --ratio=1:9 --test-time=100` | **게이트 대상 혼합 (v4 실측 비율)** |
 | **W4** | SET:GET 1:1 | `memtier_benchmark $COMMON --ratio=1:1 --test-time=100` | 쓰기 비중 상한 확인 (게이트 아님) |
 
-> **W3의 비율이 1:9에서 1:10으로 바뀌었다**(2026-07-30). 게이트 대상은 W1과
-> W3이며, 이전 기록의 1:9 수치와 직접 비교하지 말 것 — 비율 변경만으로
-> +1.4%가 붙는다(8.03 M → 8.14 M).
+> **비율 주의 — 계약 문구는 `1:10`, v4 실측은 전부 `1:9` 다.**
+> `1:9` 는 SET 10%, `1:10` 은 9.09% 라 **`1:9` 가 더 무거운 쪽**이므로 계약을
+> 보수적으로 만족한다(비율 차이 약 1.4%). 위 표를 `1:9` 로 둔 것은 §F-2 의
+> 기록치와 같은 조건에서 재기 위해서다. **1:10 수치를 주장하려면 그 비율로
+> 다시 재고, 두 비율을 섞어 인용하지 말 것.**
 
 워크로드별 유의사항:
 
@@ -405,17 +407,17 @@ extstore watch — window 300s, opened 02:10:14Z
 
      t       get/s       set/s     hit%   span_avg   span_p50   span_p99 wait_enq/s   err
 ------ ----------- ----------- -------- ---------- ---------- ---------- --------- -----
-    1s    10.229M     0.000M   100.00    23.90us    22.10us     54.9us    31.2M     0
-    2s    10.231M     0.000M   100.00    23.90us    22.10us     54.8us    31.1M     0
+    1s    13.40M      0.000M   100.00    21.90us    20.1us      52.0us     0.0M     0
+    2s    13.39M      0.000M   100.00    21.91us    20.1us      52.1us     0.0M     0
     ...
 
 ===== SERVER STATS (300s window) =====
 Type             Ops/sec      Hits/sec     Span Avg     Span p50     Span p99
 ------------------------------------------------------------------------------------
-Gets       10229000.00   10229000.00     23.900us     22.100us     54.900us
-Totals     10229000.00   10229000.00
+Gets       13397000.00   13397000.00     21.900us     20.100us     52.000us
+Totals     13397000.00   13397000.00
 
-gate span avg < 30us         PASS  (23.90us, 여유 6.10us)
+gate span avg < 30us         PASS  (21.90us, 여유 8.10us)
 hit rate                     100.00 %
 
 --- correctness (전부 0이어야 정상) ---
@@ -443,20 +445,23 @@ E-3 출력이 곧 판정 자료다. 아래 기준으로 읽는다.
 ### F-1. 합격 기준
 
 > **2026-07-30 판정 기준 변경 — 이전 기록을 그대로 읽지 말 것.**
-> 1. 게이트는 **GET-only(W1)와 1:10 혼합(W3) 둘 다** 충족해야 한다(각
->    10 M ops/s, span < 30 µs). 예전 문서의 "GET-only 기준이며 W2~W4는 게이트
->    대상이 아니다"는 **폐기**됐다. 혼합 비율도 1:9 → **1:10**으로 바뀌었다.
+> 1. 게이트는 **GET-only(W1)와 혼합(W3) 둘 다** 충족해야 한다(각 10 M ops/s,
+>    span < 30 µs). 예전 문서의 "GET-only 기준이며 W2~W4는 게이트 대상이
+>    아니다"는 **폐기**됐다. 계약 문구의 비율은 `1:10` 이지만 **v4 실측은
+>    전부 `1:9`**(더 무거운 쪽)이다 — §E-1 주석 참조.
 > 2. **SET span도 30 µs 미만이어야 한다.** obwatch의 `gate` 줄은 GET span만
 >    보므로, SET이 있는 워크로드에서는 `Sspan avg` 열을 직접 확인할 것.
-> 3. **span < 30 µs가 10 M ops/s보다 우선한다.** 둘이 상충하면 span을 지킨다
->    (배치 크기 `ext_setq_max`가 그 조절 손잡이다 — 크면 처리량, 작으면 span).
+> 3. **span < 30 µs가 10 M ops/s보다 우선한다.** 둘이 상충하면 span을 지킨다.
+>    **v4 의 조절 손잡이는 `ext_post_chain`(→ admit)과 `ext_reap_every`(→ v2)
+>    다** — 둘 다 낮추면 span 이 내려가고 처리량을 조금 낸다
+>    (`V4_RESULT.md` §14-1). `ext_setq_max` 는 1 고정이고 손잡이가 아니다.
 
 | 항목 | 기준 | 비고 |
 |---|---|---|
 | **coherent MR 풀** | 기동 로그에 `coherent MR` **2줄** | 전제 조건. 0이면 패치 이전을 잰 것이라 **수치 무효** (§D-1) |
 | **`*_sync_avg_ns`** | GET·SET 모두 **< 0.1 µs** | 패치가 실제로 먹었다는 사후 증거 (§F-4) |
 | gate (GET span) | `span avg < 30us` **PASS** | obwatch가 자동 판정 |
-| **SET span** | `Sspan avg < 30 µs` | **obwatch가 판정해 주지 않는다.** 표에서 직접 읽을 것. batch=1에서 ~14 µs, batch=64에서 ~255 µs |
+| **SET span** | `Sspan avg < 30 µs` | **obwatch가 판정해 주지 않는다.** 표에서 직접 읽을 것. v4 운영값에서 **~9.1 µs** |
 | correctness 필수 5종 | 전부 0 | `get_misses`/`read_fail`/`write_fail`/`engine_dead`/`leak`. 하나라도 0이 아니면 **성능 수치 무효** |
 | `badcrc_from_extstore` | GET-only(W1): **0**<br>혼합(W3/W4): **0이 아닐 수 있음** | 아래 근거 참조 |
 | span 표본 커버리지 | `OK` | 아래 근거 참조. 범위 밖이면 계측 이상 |
@@ -469,7 +474,7 @@ E-3 출력이 곧 판정 자료다. 아래 기준으로 읽는다.
 > - **+방향(prof가 작음)**: `stats reset`이 `threadlocal_stats_reset()`(=`cmd_get`)을
 >   먼저, `storage_prof_reset()`을 나중에 호출하므로 그 사이 완료된 op가
 >   `cmd_get`에만 잡힌다. 부하 중 워커 28개를 순회하는 수십 ms에 해당
->   (실측 예: 641,923건 = 9.9M ops/s에서 65 ms).
+>   (실측 예: 641,923건 = 9.9M ops/s에서 65 ms. 당시 워커 28, 현재 30).
 > - **−방향(prof가 큼)**: 혼합 워크로드에서 transient visibility 재시도가
 >   일어나면 시도마다 표본이 남는다(실측 +0.045%).
 >
@@ -506,7 +511,10 @@ E-3 출력이 곧 판정 자료다. 아래 기준으로 읽는다.
 GET-only 10.241 M / 24.49 µs, 1:9 혼합 8.035 M / 24.46 / 19.34 였다.
 v4 는 그 대비 혼합 **+38%**, GET span **−9%** 다.
 
-**coherent MR에 기대하는 것.** 게스트 내 co-located A/B(100 K 키 20초,
+> **아래는 coherent MR 도입 *전* 의 기대치다. 실측으로 답이 나왔으므로
+> 이력으로만 읽을 것** — 위 F-2 표가 현행이다.
+
+**coherent MR에 기대했던 것.** 게스트 내 co-located A/B(100 K 키 20초,
 mtT=4/mcT=28, **절대값 무의미·델타만**)에서:
 
 | | GET span | SET span | GET sync | SET sync |
@@ -520,8 +528,8 @@ span −27~32%, sync는 계측 하한까지. 같은 시험에서 **처리량은 
 없다. **아낀 CPU가 처리량으로 환산되는지는 이 off-box 측정만이 답한다.**
 그것이 이번 측정의 목적이다.
 
-CPU 모델 예측은 SET에서 −1.74 µs/op이고, 이는 1:10을 9.46~10.03 M에 놓는다
-— **경계선이다.** 다만 co-located에서 span 감소분이 sync 감소분보다 컸다
+CPU 모델 예측은 SET에서 −1.74 µs/op이고, 이는 1:10을 9.46~10.03 M에 놓았다
+— **경계선이라고 봤다. 실측은 11.099 M 로 그 위였다.** 다만 co-located에서 span 감소분이 sync 감소분보다 컸다
 (GET −6.25 vs −5.58, SET −3.47 vs −1.98). 바운스가 사라지면 전송 자체도
 짧아지는데 이 몫은 모델에 없다. 실측이 예측을 웃돌 여지가 여기 있다.
 
@@ -561,11 +569,19 @@ printf 'stats\r\nquit\r\n' | nc 127.0.0.1 11411 | tr -d '\r' \
 ```
 
 ```text
+── span v3 (계약이 쓰는 것) ─────────────────────────────
+extstore_prof_read_e2e_avg_ns     ★ Gv3.  진입 → 복호 완료
+extstore_prof_read_admit_avg_ns   ★ adm.  진입 → post
+extstore_prof_write_e2e_avg_ns    ★ Sv3.  진입 → WFLIGHT 해제
+extstore_prof_write_admit_avg_ns  ★ / _ret_avg_ns  ★ ret ← v4 가 고친 구간
+── 전제 조건 사후 검증 ──────────────────────────────────
 extstore_prof_read_sync_avg_ns    < 100      ← coherent면 계측 하한(수십 ns)
 extstore_prof_write_sync_avg_ns   < 100      ← 수천 ns면 폴백 경로다
 extstore_prof_read_xfer_avg_ns               ← 실제 RDMA 왕복
-extstore_prof_write_xfer_avg_ns              ← SET의 GET-비교가능 구간
 extstore_prof_read_crypto_avg_ns             ← AES-GCM, 사실상 하한(~1 µs)
+
+`_avg_ns`(v2, post 시작)와 `_e2e_avg_ns`(v3, 진입 시작)를 혼동하지 말 것.
+게이트는 후자다.
 ```
 
 > **`*_avg_ns`는 기동 이후 누적 평균이다.** 프리로드 구간이 섞여 들어가므로

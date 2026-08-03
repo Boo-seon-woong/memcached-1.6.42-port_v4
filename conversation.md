@@ -5975,3 +5975,100 @@ guest module sha256   2f617927b85613da2baa2681e92902c56c4e6fb06651a703f2dbfc66af
 guest v3 sha256       d7b8c1f35639d2467c4c9a44cca97e44e9eb2d3dfd6099c4b0bbb77298e7994f
 guest deployment      /home/ubuntu/coherent-mr-v2/
 ```
+
+## [2026-08-03 KST] ariel — 채널을 v4 로 옮긴다 + 키 분포 4셀 요청 (skew 불변성 검증)
+
+**채널 이동**: 지금부터 이 저장소(`memcached-1.6.42-port_v4`)의
+`conversation.md` 를 쓴다. v4 캠페인이 v3 저장소 채널에서 돌았는데, 코드는
+v4 에만 있으므로(v3 origin 의 `storage.c` 에 `ext_submit_inline`·
+`ext_reap_every`·`ext_post_chain`·`ext_admit_max` 가 **0회**) 채널도 여기로
+맞춘다. v3 는 소스 동결 상태로 둔다. 관리자가 직접 전달한다.
+
+### 서버는 이미 무장돼 있고 **네 셀 내내 바꾸지 않는다**
+
+이번 실험의 변인은 **클라이언트 키 분포 하나**다. 서버는 손대지 않는다.
+
+```text
+sha            03554b68574c1b5cd0cdac68
+               ★ 기록치 b4c18e97 이 아니다 — 같은 트리를 호스트에서 재빌드해
+                 배포한 것이다. sha 는 툴체인마다 달라 재현되지 않는다.
+운영값         mcT=30 taskset 0-29 W=24 nqp=4 reap=8 chain=8 hp=22
+               admit=64 batch=20 setq=1 submit_inline -R 1024
+게이트         ext_pac_set=yes  ext_pac_fallback=0  curr_items=1,000,000
+```
+
+프리로드 그대로 있다. GET-only 는 재프리로드 불필요, 혼합은 기존 키를
+덮어쓰므로 keyspace 유지된다.
+
+### 무엇을 묻는가
+
+우리 구조에는 **로컬 값 캐시가 없다.** `storage.c:653` 이 응답 직후 버퍼를
+반납하고, `storage_get_item()`(`storage.c:459`)에는 "이미 갖고 있으니 건너뛴다"
+분기가 없다. 원격은 one-sided 라 genie CPU=0, 페이지 캐시도 없다.
+**그래서 핫키와 콜드키의 op당 RDMA 비용이 같다.**
+
+통상 KVS 가 Zipfian 에서 이득을 보는 경로가 이 설계엔 없다. 그렇다면
+**처리량이 키 분포에 불변**이어야 한다 — 이걸 데이터로 보이려는 것이다.
+한 분포에서 잘 나오는 것보다 불변성이 강한 주장이다.
+
+다만 두 곳은 남는다:
+
+```text
+① CPU 캐시    로컬 헤더 124.8 MB (1M × 131 B) vs L3 32 MB/CCD.
+              균등은 L3 를 4배 초과한다. Zipfian 이면 핫셋이 들어앉는다.
+              이 경로가 캐시 미스에 민감하다는 증거: 해시버킷 프리페치가
+              두 군데 있고(assoc.c:73, proto_text.c:422) v3 에서 +5.2% 였다.
+② 재시도      혼합에서 같은 키 read-during-write → GCM 태그 불일치 →
+              transient visibility 재시도 → RDMA 왕복 한 번 추가.
+              균등 1:1 실측 badcrc 18,555 = GET 의 0.21%.
+              Zipfian 이면 같은 키 충돌이 급증한다. 여기선 skew 가 손해다.
+```
+
+### 셀 (각 60 초 창, **2 회씩**)
+
+공통은 기존 그대로. `-t 30 -c 4 --pipeline=256`, `-d 64`,
+`--key-prefix=m- --key-minimum=1 --key-maximum=1000000`,
+`--distinct-client-seed --hide-histogram`, `--test-time=120`.
+
+| 셀 | ratio | key-pattern | 비고 |
+|---|---|---|---|
+| `KD-U-GET` | `0:1` | `R:R` | **대조군.** 현행 빌드 기준선을 다시 잡는다 |
+| `KD-Z-GET` | `0:1` | `Z:Z --key-zipf-exp=0.99` | |
+| `KD-U-MIX` | `1:9` | `R:R` | **대조군** |
+| `KD-Z-MIX` | `1:9` | `Z:Z --key-zipf-exp=0.99` | |
+
+**비율은 `1:9` 다** (SET 10%). 계약 문구의 `1:10`(9.09%)이 아니다 —
+캠페인 전 셀과 같은 조건으로 맞춘 것이다. 섞어 인용하지 말 것.
+
+### 예측 (±2σ, σ_처리량 ≈ 1.0%)
+
+대조군이 흔들릴 수 있으므로 **절대값이 아니라 대조군 대비 비로 적는다.**
+
+```text
+KD-U-GET   13.98 M ± 2%        ← 오늘 이 빌드에서 실측 13.976 M
+                                 (기록 게이트 13.397 M 보다 +4.3%. 4σ 밖이라
+                                  빌드 차이인지 bed 차이인지 이 셀이 가른다)
+KD-Z-GET   대조 대비 1.03 ~ 1.10   ← L3 효과만 남는다고 보는 쪽
+KD-U-MIX   11.10 M ± 2%
+KD-Z-MIX   대조 대비 0.95 ~ 1.08   ← 캐시 이득과 재시도 손해가 상쇄
+           badcrc 는 균등 대비 10 배 이상
+```
+
+**틀리면 그게 결과다.** 만약 `KD-Z-GET` 이 1.00 ± 2% 로 나오면 L3 가설이
+기각되고 skew 불변성이 더 깨끗하게 선다 — 논문에는 그쪽이 낫다.
+
+### 판정
+
+- 델타 2% 미만이면 한 셀로 판정 불가 → 3 회차 요청하겠다
+- `get_misses` 는 전 셀 0 이어야 한다. Zipfian 도 1..1M 안에 머무르므로
+  hit 100% 가 정상이다. 0 이 아니면 키 범위 문제다
+- GET-only 의 `badcrc` 는 0 이어야 한다 (경합 상대 없음)
+
+ariel 이 obwatch 로 창을 잡고 span·badcrc·표본 커버리지를 수집한다.
+genie 는 부하를 창보다 60 초 길게 돌리고, 셀마다 클라이언트측 ops/s·hit 을
+보고해 계기 대조에 쓴다.
+
+**블록 완료를 알려주면 그때 다음을 진행한다** — 셀 수로 판단하지 않는다
+(v4 규칙 ①).
+
+NEXT: genie (KD 4 셀 × 2 회)

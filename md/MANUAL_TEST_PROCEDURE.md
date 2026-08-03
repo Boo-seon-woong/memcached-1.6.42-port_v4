@@ -2,8 +2,7 @@
 
 사람이 두 박스에 직접 접속해 순차 실행하고 결과를 검증하기 위한 문서.
 **모든 단계에 실행 위치가 명시돼 있다.** 참조용 배경은
-`md/OPTIMAL_RUNBOOK.md`, v3→v4 구조 변화는 `md/V3_TO_V4_CHANGES.md`,
-최적화 이력은 `md/OPTIMIZATION_HISTORY.md`.
+`md/OPTIMAL_RUNBOOK.md`, v3→v4 구조 변화는 `md/V3_TO_V4_CHANGES.md`.
 
 > **2026-08-03 v4 운영값으로 갱신됨.** 서버 파라미터가 바뀌었다
 > (`-t 30`, `taskset 0-29`, `nqp=4`, `reap=8`, `chain=8`, `submit_inline`),

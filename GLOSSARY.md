@@ -21,8 +21,7 @@
 
 삭제된 v1 용어: `ext_threads`, `ext_io_depth`, extstore IO thread,
 global staging condvar. v2 명령이나 결과 CSV에 이 축을 다시 넣지 않는다.
-`ext_io_depth`가 왜 `ext_worker_window`로 대체됐는지와 요청이 흐르는 경로는
-[`md/V2_ARCHITECTURE.md`](md/V2_ARCHITECTURE.md)에 있다.
+요청이 흐르는 경로는 [`md/V3_TO_V4_CHANGES.md`](md/V3_TO_V4_CHANGES.md)에 있다.
 
 ## 배치 topology
 

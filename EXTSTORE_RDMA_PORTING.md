@@ -1,14 +1,14 @@
 # extstore → RDMA 원격 메모리 포팅 v1 결정 기록
 
 > **역사 문서:** 아래 worker/IO-thread 구조와 측정값은 v1 기준이다.
-> 현재 v2 구현은 [`md/V2_CODE_SPEC.md`](md/V2_CODE_SPEC.md), 실행 기준은
+> 현재 구현은 [`md/V3_TO_V4_CHANGES.md`](md/V3_TO_V4_CHANGES.md), 실행 기준은
 > [`README.md`](README.md)를 따른다.
 
 상태: v1 기록 보존. 이 문서는 v1에서 **무엇을 채택하고 무엇을 버렸는지와
 그 근거**만 기록한다.
 
 - 변수 정의: [`GLOSSARY.md`](GLOSSARY.md)
-- 현재 함수·자료구조 수준 명세: [`md/V2_CODE_SPEC.md`](md/V2_CODE_SPEC.md)
+- 현재 코드 경로: [`md/GET_WORKFLOW.md`](md/GET_WORKFLOW.md) / [`md/SET_WORKFLOW.md`](md/SET_WORKFLOW.md)
 - 운영점 결정 근거: [`md/FRONTIER_7POINT_20260724.md`](md/FRONTIER_7POINT_20260724.md)
 
 ## 현재 구조

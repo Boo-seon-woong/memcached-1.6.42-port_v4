@@ -56,22 +56,22 @@ genie는 부하 생성기이자 수동 메모리 타깃이다. **데이터 경�
 
 1. [md/OPTIMAL_RUNBOOK.md](md/OPTIMAL_RUNBOOK.md) — 최적 운영점 한 벌(조건·세팅·기대치)
 2. [md/MANUAL_TEST_PROCEDURE.md](md/MANUAL_TEST_PROCEDURE.md) — 사람이 순차 실행하는 단계별 절차
-3. [md/SET_CAMPAIGN_HANDOFF.md](md/SET_CAMPAIGN_HANDOFF.md) — 캠페인 전 기록. **수치의 단일 출처**
-4. [md/OPTIMIZATION_HISTORY.md](md/OPTIMIZATION_HISTORY.md) — 어떤 최적화가 얼마를 벌었나
+3. [md/V4_RESULT.md](md/V4_RESULT.md) — 최종 게이트와 캠페인 전체 결과. **수치의 단일 출처**
 
 **구조**
 
-5. [md/V3_ARCHITECTURE.md](md/V3_ARCHITECTURE.md) — v3 구조
-6. [md/GET_WORKFLOW.md](md/GET_WORKFLOW.md) / [md/SET_WORKFLOW.md](md/SET_WORKFLOW.md) — 경로별 타임라인과 코드 앵커
-7. [GLOSSARY.md](GLOSSARY.md) — 변수, 단위, correctness 계약
+4. [md/V3_TO_V4_CHANGES.md](md/V3_TO_V4_CHANGES.md) — v3→v4 구조 변화 (거시)
+5. [md/GET_WORKFLOW.md](md/GET_WORKFLOW.md) / [md/SET_WORKFLOW.md](md/SET_WORKFLOW.md) — 경로별 타임라인과 코드 앵커
+6. [GLOSSARY.md](GLOSSARY.md) — 변수, 단위, correctness 계약
+7. [md/README_MD_INDEX.md](md/README_MD_INDEX.md) — md/ 색인
 
 **이력 (당시 기록이며 현재 상태가 아니다)**
 
-8. [md/V2_ARCHITECTURE.md](md/V2_ARCHITECTURE.md), [md/V2_THROUGHPUT_MAXIMIZATION.md](md/V2_THROUGHPUT_MAXIMIZATION.md) — v2 캠페인
-9. [SOURCE_CHANGE_SPEC.md](SOURCE_CHANGE_SPEC.md), [EXTSTORE_RDMA_PORTING.md](EXTSTORE_RDMA_PORTING.md) — v1 이력
+8. [SOURCE_CHANGE_SPEC.md](SOURCE_CHANGE_SPEC.md), [EXTSTORE_RDMA_PORTING.md](EXTSTORE_RDMA_PORTING.md) — v1 이력
 
-8~9의 `ext_threads`/`ext_io_depth` 설명은 v1 기록이며 현재 실행 계약이 아니다
-(삭제된 옵션이다).
+8의 `ext_threads`/`ext_io_depth` 설명은 v1 기록이며 현재 실행 계약이 아니다
+(삭제된 옵션이다). v2·v3 시대 문서 14 개는 2026-08-03 에 삭제했다 —
+git 이력에 남아 있다(`git log --diff-filter=D -- md/`).
 
 ## 빌드
 

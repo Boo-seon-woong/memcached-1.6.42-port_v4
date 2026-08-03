@@ -2,8 +2,8 @@
 
 > **역사 문서:** 아래 call path와 `ext_threads`/`ext_io_depth` 설명은
 > 2026-07-27의 v1 구현 기록이다. 현재 v2 구현과 실행 계약은
-> [`md/V2_CODE_SPEC.md`](md/V2_CODE_SPEC.md), 변경 계획과 완료 상태는
-> [`md/V2_REMODIFICATION_SPEC.md`](md/V2_REMODIFICATION_SPEC.md)를 따른다.
+> [`md/V3_TO_V4_CHANGES.md`](md/V3_TO_V4_CHANGES.md), 결과는
+> [`md/V4_RESULT.md`](md/V4_RESULT.md)를 따른다.
 
 기준일: 2026-07-27
 기준 commit: `597fc83`

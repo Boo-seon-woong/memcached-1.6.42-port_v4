@@ -2,10 +2,8 @@
 
 본문 작성 2026-07-30(v3 기준, commit `6428ccd`). **v4 에서 반환 경로가
 바뀌었다** — 아래 §v4 를 먼저 읽을 것. 단계마다 코드 위치·잡는 자원·실측
-비용을 붙인다. 수치 출처는 `md/SET_COST_ATTRIBUTION.md`(프로파일·A/B),
-`md/SET_10M_REQUIREMENTS.md`(예산 산정), `md/GET_SET_CONCURRENCY.md`(구조 대조),
-v3→v4 구조 변화는 `md/V3_TO_V4_CHANGES.md`.
-비동기 SET 두 갈래가 실측 기각된 경위는 `md/V3_REVIEW_FINDINGS.md` 처분 주석 참조.
+비용을 붙인다. v3→v4 구조 변화는 `md/V3_TO_V4_CHANGES.md`,
+현행 수치는 `md/V4_RESULT.md` 를 따른다.
 
 ## §v4. 무엇이 바뀌었나 — 반환 경로 하나
 
@@ -291,7 +289,7 @@ sync (SYNC_FOR_CPU)    0.544 µs   = 지연 5.49 ÷ advise당 10.1건
 나머지                 ~1.58 µs   프로토콜·소켓·해시·iov (7단계 기적용)
 ```
 
-- `ext_drain_empty_max`는 **이미 기각된 가설**(OPTIMIZATION_HISTORY 부록:
+- `ext_drain_empty_max`는 **이미 기각된 가설**(v3 기각 목록:
   "poll 4.4회/op뿐, spin=1로도 무변화"). 지금도 GET당 4.18회로 같다.
 - drain 굵게 = span 초과. **불가**.
 - **sync ioctl 제거만이 CPU와 span을 동시에 낮춘다** — 유일하게 두 게이트와
@@ -350,7 +348,7 @@ GET 쪽 절감이었다(상승분의 105%).
 
 그렇다고 SET 작업이 헛일이었던 것은 아니다 — magazine 수정 없이는 `C_set`이
 7.71에 묶여 9.846 M에서 멈춘다. 상세는
-[`SET_CAMPAIGN_HANDOFF.md`](SET_CAMPAIGN_HANDOFF.md) §16.
+v3 캠페인 인수인계 기록(삭제됨, git 이력에 남아 있다) §16.
 
 ## 1-pac. 타임라인 — **운영 경로 (v4, `ext_pac_set=on` 기본)**
 
@@ -598,7 +596,7 @@ AAD에 hv/page/offset/version이 들어가 위치 위조를 막는다.
 SEV에서 NIC이 읽기 전 staging의 평문 캐시라인을 밀어내는 ioctl로,
 **1.90 µs — SET당 1회, 상각 없음**. 대조: GET은 drain 한 번에 평균 13건의
 READ를 SYNC_FOR_CPU **1회**로 묶어 op당 0.34µs로 상각한다. 이것이
-`SET_10M_REQUIREMENTS.md`가 지목한 최대 단일 레버(브랜치의 756e45c가
+v3 예산 산정이 지목한 최대 단일 레버(브랜치의 756e45c가
 이벤트 루프 pass 단위 배치화를 구현했으나 **비동기 큐 전제 + 미측정**;
 동기 경로는 post 직후 자기 CQE를 기다리므로 배치로 묶을 "이웃 쓰기"가
 같은 워커에 존재하지 않는다 — 동기 구조에서는 이 레버를 당길 자리가 없다).
@@ -666,7 +664,7 @@ step ③′ 시점의 상태:
 slabs_lock, loc magazine miss 시 엔진 뮤텍스)과 스케줄링 이탈인데, 어느
 것도 프로파일로 확정된 바 없다. v2의 GET 캠페인에서 같은 모양의 질문
 ("점유 90µs vs span 5.4µs")을 규명하지 않고는 다음 단계 예측이 전부
-빗나갔다(`GET_SET_CONCURRENCY.md` §4). **여기를 먼저 재는 것이 순서다** —
+빗나갔다(v3 구조 대조 §4). **여기를 먼저 재는 것이 순서다** —
 off-CPU 프로파일(예: sched switch 스택)이 도구다.
 
 > **2026-07-30 갱신 (수치는 무효, 결론은 유효).** 이 간극은 고정 상수가
@@ -729,7 +727,7 @@ off-CPU 프로파일(예: sched switch 스택)이 도구다.
 ## 5. 바꿀 수 없는 계약 (설계 제약)
 
 1. **STORED-after-CQE**: WRITE CQE 확인 전에 STORED를 보내면 내구성 깨짐
-   (`V2_CODE_SPEC.md`). 응답 시점 제약이지 대기 방식 제약이 아니다 —
+   (v2 코드 명세). 응답 시점 제약이지 대기 방식 제약이 아니다 —
    비동기화 자체는 허용된다.
 2. **연결 내 순서**: 같은 연결의 `set k v1; set k v2`, `set k; get k`는
    순서 보장. 연결 파킹 없이 이를 지키려면 게시를 명령 시점에 해야 한다
@@ -772,5 +770,5 @@ stats:
   ext_pac_fail/_fallback   pac 경로 실패·동기 폴백 (브랜치 전용)
 tools/obwatch.sh           get/set rate, span avg/p99, correctness footer
 프로파일                    -fno-omit-frame-pointer 빌드 + "첫 해석 프레임" 귀속
-                           (libc 심볼 없음 주의, SET_COST_ATTRIBUTION.md §1)
+                           (libc 심볼 없음 주의)
 ```

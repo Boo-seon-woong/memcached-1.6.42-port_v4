@@ -5,7 +5,7 @@
 > 기준이다. 이 디렉터리의 `extstore.c` / `storage.c`는 전면 재작성돼 여기 적힌
 > 줄 번호와 맞지 않는다.
 >
-> 현재 v2 port는 [`md/V2_CODE_SPEC.md`](md/V2_CODE_SPEC.md), 변수 정의는
+> 현재 port 는 [`md/V3_TO_V4_CHANGES.md`](md/V3_TO_V4_CHANGES.md), 변수 정의는
 > [`GLOSSARY.md`](GLOSSARY.md)를 본다. `SOURCE_CHANGE_SPEC.md`와
 > `EXTSTORE_RDMA_PORTING.md`는 v1 역사 기록이다.
 >

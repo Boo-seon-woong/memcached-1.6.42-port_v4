@@ -41,7 +41,7 @@ v1에서 운용하던 conversation/commit 시스템을 v2에 재도입한다(202
    배포 시점을 아는 수단이다. 단계 커밋 subject에는 phase를 명시한다
    (예: `[ariel] P2a: worker-inline GET read path`).
 
-## v2에서의 역할 분담 (V2_REMODIFICATION_SPEC §4와 연동)
+## v2에서의 역할 분담
 
 | 시점 | ariel | genie |
 |---|---|---|

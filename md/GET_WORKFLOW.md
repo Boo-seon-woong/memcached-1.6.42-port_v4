@@ -3,9 +3,7 @@
 본문 작성 2026-07-30(v3 기준). **v4 에서 제출·수거·재개의 위치가 바뀌었다** —
 아래 §v4 를 먼저 읽고 본문으로 갈 것.
 
-구조 정본은 `md/V2_ARCHITECTURE.md`, v3→v4 구조 변화는
-`md/V3_TO_V4_CHANGES.md`, 성능 이력은 `md/OPTIMIZATION_HISTORY.md`,
-GET/SET 대조는 `md/GET_SET_CONCURRENCY.md`, 계측 정의는
+구조 정본은 `md/V3_TO_V4_CHANGES.md`, 계측 정의는
 `md/SPAN_MEASUREMENT_REVIEW.md` 를 따른다.
 
 ## §v4. 무엇이 바뀌었나 — 본문보다 이것이 우선한다
@@ -112,7 +110,7 @@ engine dead·slot accounting leak 전부 0.
 
 > **이전 판(10.12~10.25 M, span 25.4 µs)은 폐기됐다.** 그 사이 coherent MR이
 > SWIOTLB 바운스를, GCM 1회 키잉이 op당 재키잉을 걷어냈다. 경위는
-> `OPTIMIZATION_HISTORY.md` ⑨·⑪.
+> `V3_TO_V4_CHANGES.md` §1.
 
 **1:10 혼합에서 GET이 CPU의 78.1%를 쓴다.** SET이 op당 2.8배 비싸도 비중을
 곱하면 같은 1% 절감의 가치가 GET : SET = 3.6 : 1이다 — 추가 최적화의 레버는

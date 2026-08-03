@@ -122,3 +122,7 @@ block,cell,workload,ops_M,span,adm,v2,set_span,set_adm,set_v2,set_ret,note
 8,B8-r8c8,mix,11.083,,,,,,,,reap=8 chain=8 확인셀
 8,GATE2,get,13.397,21.90,4.39,17.51,,,,,최종 게이트 120초 r8c8
 8,GATE2,mix,11.099,22.31,9.17,13.14,9.11,0.52,7.97,,최종 게이트 120초
+KD,PRE-U-GET,get,13.9,21.135,,17.086,,,,,"폐기전 r1(라벨전). genie 13.839M, 차 +0.44%. 창총계 14.79M 은 리셋경계 오염(커버리지 +6.51%) — 초당행 채택"
+KD,PRE-Z-GET,get,12.672,23.406,,18.693,,,,,"라벨전 Zipfian z=0.99. genie 12.715M, 차 -0.34%. p99 73.4us busyCPU 28.2 badcrc 0"
+KD,KD-U-GET-r1,get,13.792,21.235,,17.124,,,,,"재시행 r1. R:R. genie 13.798M, 차 -0.04%. p99 47.7us busyCPU 29.8 커버리지 +0.0015%"
+KD,KD-Z-GET-r1,get,12.671,23.453,,18.705,,,,,재시행. Z:Z zipf=0.99. p99 73.5us busyCPU 28.3 badcrc 0 커버리지 +0.0025%. genie 라벨 대기

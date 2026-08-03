@@ -100,9 +100,73 @@ SET-only      4.133 M   2380.29       0.61     7.84   2371.84
 
 | 대기 | 크기 (혼합 / SET-only) | 원인 | 수정 |
 |---|---:|---|---|
-| **GET admit** | **285.16 µs** | 연결의 읽기 버퍼를 다 파싱해야 io_queue 제출 | 파싱 즉시 post |
-| **SET ret** | **173.11 / 2371.84 µs** | RDMA 는 끝났는데 재개를 다음 pass 로 미룸 | 거둔 pass 에서 재개 |
+| **GET admit** | **285.16 µs** | submit 배칭 + 창 파킹 (아래 1-2) | 파싱 즉시 post |
+| **SET ret** | **173.11 / 2371.84 µs** | CQ 를 미리 비워 재개 블록이 통째로 건너뛰어짐 (1-3) | 거둔 pass 에서 재개 |
 | GET v2 | 26.59 µs | CQE 가 pass 끝까지 폴링조차 안 됨 | post 자리에서 수거 |
+
+**두 원인의 전체 분석은 `experiments/exp0-20260801/FINDINGS.md` §3·§4 에 있고,
+아래 1-2·1-3 이 그 요지다.** 처음에 이 표의 원인 칸을 "읽기 버퍼를 다 파싱해야
+제출" 과 "재개를 다음 pass 로 미룸" 으로 적었는데 **둘 다 실제 기전이 아니다** —
+전자는 버퍼가 아니라 **연결 20 개**가 기준이고, 후자는 미루는 것이 아니라
+**조건문이 블록을 건너뛰는 것**이다.
+
+### 1-2. GET admit 은 큐가 아니다 — 상류의 submit 배칭이다
+
+`memcached.c:3324` 가 io_queue 를 **연결 `ext_submit_batch`(기본 20) 개**가
+쌓일 때까지 붙들고 있다:
+
+```c
+if (t->conns_tosubmit++ >= settings.ext_submit_batch) {
+    thread_io_queue_submit(c->thread);
+}
+```
+
+**큐잉이 아니라는 증거**: pipe=8 의 backend 체류는 `34.02 µs × 3.451 M = 117 건`,
+워커당 3.9 건이다. `W=40` 이라 **파킹이 일어날 수 없는데도 admit 이 16.57 µs**
+다. 기다림의 원인이 창이 아니라 배칭이라는 뜻이다.
+
+**부하와 함께 자라는 이유**: pipeline 이 깊을수록 연결 하나의 파싱이 길어져
+같은 20 개를 모으는 데 더 걸린다(16.57 → 217.12).
+
+고부하에서는 **두 번째 조각**이 붙는다. pipe=256 의 체류는 워커당 96 건이라
+`W=40` 을 넘어 56 건이 wait list 에 눕고, 그 파킹은 `storage_get_item` 뒤라
+span 안이다. **즉 `admit = submit 배칭 + 창 파킹`** 이고, 저부하에서는 앞의
+것만, 고부하에서는 둘 다다.
+
+> 도어벨 상각은 여기서 안 나온다. `ext_batch=32` 라 한 번의 `ibv_post_send`
+> 가 최대 32 개다. 체인 1280 개(20 연결분)는 40 번, 64 개(1 연결분)는 2 번 —
+> **요청당 도어벨 수가 같다.** 연결을 모아서 얻는 것은 지연뿐이다.
+
+### 1-3. SET ret 은 "미룬 것" 이 아니라 "건너뛴 것" 이다
+
+`storage_flush_pending_writes` 가 4 단계에서 앞선 배치의 CQE 를 최대 256 개
+거둔다. **그것이 CQ 를 비우면** 호출부(`thread.c:531`)가 `outstanding == 0` 을
+보고 블록 전체를 건너뛴다:
+
+```c
+unsigned int out = extstore_worker_outstanding(me->ext_worker);
+if (out) {                       /* ← 0 이면 아래가 통째로 안 돈다 */
+    ... drain ...                /*   그 안에 storage_flush_returns() 가 있다 */
+}
+```
+
+완료는 ready 목록에 놓인 채 arm 된 drain 이벤트를 기다리고, **그건 다음
+pass 다.**
+
+flush 자신은 재개할 수 없다 — 큐 상한 경로가 `do_store_item` 의
+`item_lock(hv)` 아래에서 flush 를 부르는데 `return_cb` 가 같은 버킷의
+`item_lock` 을 다시 잡는다. **루프 레벨 호출부는 락이 없으므로 거기서 비운다.**
+
+**SET-only 가 유독 나쁜 이유가 이것으로 설명된다**: GET 이 없으면 워커의
+`outstanding` 이 WRITE 뿐이라 4 단계 drain 이 매번 CQ 를 완전히 비우고,
+**건너뛰기가 항상 일어난다.** 혼합에서는 GET 의 READ 가 CQ 에 남아 `out > 0`
+이 되는 경우가 있어 덜하다.
+
+```text
+             pipe 16      64      256
+SET-only ret   99.21   443.13   2371.84
+혼합 SET ret   16.95    47.26    173.11      ← 14 배 차이
+```
 
 **SET 이 답을 갖고 있었다.** pac 의 admit 은 처음부터 0.5~0.6 µs 였다 —
 큐에 넣자마자 그 자리에서 flush 하기 때문이다. **GET 경로만** 상류 memcached

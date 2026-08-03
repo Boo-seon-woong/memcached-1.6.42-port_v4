@@ -63,9 +63,28 @@ SET-only      4.133 M   2380.29       0.61     7.84   2371.84
 
 | 대기 | 크기 | 원인 | v4 의 처리 |
 |---|---:|---|---|
-| **GET admit** | **285.16 µs** | 읽기 버퍼를 다 파싱해야 제출 | 파싱 즉시 post (`ext_submit_inline`) |
-| **SET ret** | **173.11 µs** (SET-only 2371.84) | 거두고도 재개를 다음 pass 로 | 거둔 그 pass 에서 재개 |
+| **GET admit** | **285.16 µs** | **연결 20 개**가 모일 때까지 io_queue 를 붙든다 + 창 파킹 | 파싱 즉시 post (`ext_submit_inline`) |
+| **SET ret** | **173.11 µs** (SET-only 2371.84) | CQ 를 미리 비워 재개 블록이 **건너뛰어진다** | 거둔 그 pass 에서 재개 |
 | GET v2 | 26.59 µs | CQE 가 pass 끝까지 폴링조차 안 됨 | post 자리에서 수거 (`ext_reap_every`) |
+
+**기전은 조건문 두 개다** — 자세한 것은 `V4_RESULT.md` §1-2·§1-3, 원 분석은
+`experiments/exp0-20260801/FINDINGS.md` §3·§4.
+
+```c
+/* memcached.c:3324 — GET admit 의 원인. 버퍼가 아니라 연결 수가 기준이다 */
+if (t->conns_tosubmit++ >= settings.ext_submit_batch) {   /* 기본 20 */
+    thread_io_queue_submit(c->thread);
+}
+
+/* thread.c:531 — SET ret 의 원인. 앞선 flush 가 CQ 를 비우면 out == 0 이라 */
+unsigned int out = extstore_worker_outstanding(me->ext_worker);
+if (out) {                    /* ← 이 블록 안에 storage_flush_returns() 가 있다 */
+```
+
+`admit` 이 큐가 아니라는 증거: pipe=8 에서 워커당 체류가 3.9 건인데 `W=40`
+이라 **파킹이 불가능한데도** admit 이 16.57 µs 다. `ret` 이 SET-only 에서
+14 배 나쁜 이유: GET 이 없으면 워커의 `outstanding` 이 WRITE 뿐이라 drain 이
+매번 CQ 를 완전히 비워 **건너뛰기가 항상 일어난다.**
 
 **SET-only 가 2380 µs 였다** — 계약선의 79 배다. 원본은
 `experiments/exp0-20260801/FINDINGS.md`.

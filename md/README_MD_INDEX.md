@@ -9,7 +9,7 @@
 |---|---|
 | [`OPTIMAL_RUNBOOK.md`](OPTIMAL_RUNBOOK.md) | **운영값·기동·부하·측정 규율의 정본.** 여기부터 본다 |
 | [`MANUAL_TEST_PROCEDURE.md`](MANUAL_TEST_PROCEDURE.md) | 사람이 손으로 실행하는 단계별 절차 |
-| [`V4_RESULT.md`](V4_RESULT.md) | 최종 게이트 + 캠페인 전체 결과(§14 는 121 셀 전수 sweep) |
+| [`V4_RESULT.md`](V4_RESULT.md) | 최종 게이트 + 캠페인 전체 결과(§14 는 123 셀 전수 sweep) |
 | [`V3_TO_V4_CHANGES.md`](V3_TO_V4_CHANGES.md) | **v3→v4 구조 변화**(아키텍처·GET/SET 워크플로 거시) |
 | [`COLLABORATION.md`](COLLABORATION.md) | genie 와의 측정 조율 규칙 |
 
@@ -50,7 +50,7 @@ flush-락-밖 **세 손잡이가 지형이 바뀌자 부호를 뒤집었다.** �
 ## 원 데이터
 
 ```text
-experiments/full-20260803/cells.csv    전수 sweep 캠페인 121 셀 원장
+experiments/full-20260803/cells.csv    전수 sweep 캠페인 123 셀 원장
 experiments/prof-20260802/             프로파일·창 추적
 tools/ledger.py                        원장 조회 (show / cmp)
 tools/exp0-slice.py                    창 슬라이스

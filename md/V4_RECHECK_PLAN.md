@@ -1,6 +1,6 @@
 # v4 재검 + sweep 재측정 계획
 
-> **[v4 재검 계획 시점 기록]** 이 문서는 그 시점의 기록으로 보존한다. 현재 운영값은
+> **[v4 재검 계획 — 결과는 V4_RESULT]** 이 문서는 그 시점의 기록으로 보존한다. 현재 운영값은
 > [`OPTIMAL_RUNBOOK.md`](OPTIMAL_RUNBOOK.md), 최신 결과는
 > [`V4_RESULT.md`](V4_RESULT.md) 다.  결과는 V4_RESULT.md §7·§10·§14.
 
@@ -127,7 +127,7 @@ plateau    처리량 고원 확인
 
 ```text
 A-1  flush 락 밖 재시도      ✅ 이겼다. SET span 21.68 → 8.62      §7
-A-2  reap × chain 재sweep    ⛔ span 여유가 좁아 기각               §7
+A-2  reap × chain 재sweep    ✅ **뒤집혔다.** §14 에서 실측 → reap 12→8 채택  §14
 A-3  평문 목적지             ⛔ 실제 0.5% — 내가 잘못 읽었다        §7
 A-4  admit_max 재확인        ⛔ 바인딩 안 한다. Little 로 확인      §10
 (추가) MEMSET                ✅ 한 줄. GET 당 1028 B                §7

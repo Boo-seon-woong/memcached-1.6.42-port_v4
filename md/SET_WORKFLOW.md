@@ -352,7 +352,61 @@ GET 쪽 절감이었다(상승분의 105%).
 7.71에 묶여 9.846 M에서 멈춘다. 상세는
 [`SET_CAMPAIGN_HANDOFF.md`](SET_CAMPAIGN_HANDOFF.md) §16.
 
-## 1. 타임라인 한눈에
+## 1-pac. 타임라인 — **운영 경로 (v4, `ext_pac_set=on` 기본)**
+
+아래 §1 은 **동기 경로**다. `ext_pac_set` 기본값이 `true` 이므로
+(`memcached.c:250`) **실제로 도는 것은 이 pac 경로**이고, §1 은
+`ext_pac_set=off` 로 껐을 때의 그림이다.
+
+```text
+ 단계                        코드                                   자원/락
+────────────────────────────────────────────────────────────────────────────
+ 1  소켓 이벤트→읽기         event_handler → try_read_network        워커 전용 rbuf
+ 2  명령 파싱                proto_text.c → process_update_cmd       —
+ 3  값 수신 item 할당        process_update_cmd_start                item magazine
+ 4  값 바이트 수신           conn_nread (c->ritem 으로 직접)          —
+ 5  pac 분기                 memcached.c:1679 / :1750                settings.ext_pac_set
+ 6 ▶★storage_store_item_pac  storage.c:894                           아래 6a~6h
+ 6a   **span v3 시작**       t_enter = extstore_prof_stamp()         storage.c:895
+ 6b   hdr stub 할당          do_item_alloc                           item magazine
+ 6c   원격 슬롯 할당         extstore_alloc                          loc magazine(워커 전용)
+ 6d   AES-GCM 봉인           ext_crypto_seal                         ★
+ 6e   **span v2 시작**       io->t_start = seal 시각                  ← v3 아님
+ 6f   item_lock 아래 publish  stub 을 해시에 올린다                    ◆ item_lock[hv]
+ 6g   ITEM_WFLIGHT 세움      storage_delete 가 loc 을 못 걷게          6f 의 락 아래
+ 6h   WRITE 큐 삽입 + flush   그 자리에서 post                        QP
+ 7  ★응답 suspend            STORED 를 보류한다                       connection 보류
+ ⇣  (워커는 다른 요청을 계속 처리한다)
+ 8  WRITE CQE 수거           reap 틱 / pass 끝 / 0-timeout            worker CQ
+ 9 ▶★재개                    거둔 그 pass 에서 (v4)                   thread.c:531 블록
+       **span v3 종료**       ITEM_WFLIGHT 해제 = 응용 가시            extstore.c:1265
+10  STORED 송신              conn_io_resume → transmit               TCP/IPoIB
+```
+
+```text
+span v2   6e (seal) → 8 (CQE)                 큐잉·재개를 빠뜨린다
+span v3   6a (진입) → 9 (WFLIGHT 해제)         ← 계약이 쓰는 정의
+admit     6a → 6e      ret  8 → 9
+```
+
+**세 값은 각각 독립 집계다** — `prof_w_e2e`(v3), `prof_w`(v2),
+`prof_w_admit`, `prof_w_ret`. 그래서 `adm + v2 + ret = v3` 가 정합성 검사다:
+최종 게이트에서 `0.52 + 7.97 + 0.62 = 9.11` 이다.
+
+**v4 가 바꾼 것은 9 하나다** — v3 는 거두고도 재개를 다음 pass 로 넘겼고
+(정확히는 `if (out)` 이 재개 블록을 건너뛰었다), 그것이 `ret` 173.11 µs
+(혼합) / 2371.84 µs (SET-only) 였다.
+
+**SYNC_FOR_DEVICE 는 이제 없다.** coherent MR 이 umem 을 없애 advise 자체가
+사라졌다 — 아래 §1 의 `7f (★1.90 µs)` 는 그 이전 그림이다.
+
+---
+
+## 1. 타임라인 — **동기 경로** (`ext_pac_set=off` 일 때만)
+
+> **운영 경로가 아니다.** 기본값이 pac 이므로 위 §1-pac 을 볼 것.
+> 아래는 A/B 대조군으로 남아 있는 동기 경로이고, `7f SYNC_FOR_DEVICE` 는
+> coherent MR 이전 그림이라 지금은 돌지 않는다.
 
 워커 스레드 하나가 SET 1건을 처리하는 전 구간. ★는 SET에만 있는 비용,
 ◆는 전역 공유 자원(경합 가능 지점).

@@ -122,44 +122,77 @@ engine dead·slot accounting leak 전부 0.
 CQE, `SYNC_FOR_CPU`, AES-GCM 복호 완료까지**만 잰다. TCP 수신, 파싱, hash
 lookup, 제출 전 큐 대기, 응답 전송은 포함하지 않는다.
 
-## 1. 타임라인 한눈에
+## 1. 타임라인 한눈에 (v4)
 
 워커 하나가 remote hit 한 건을 처리하는 전 구간이다. ◆는 공유 자원,
-★는 GET 비동기 경로의 핵심 지점이다.
+★는 비동기 경로의 핵심 지점, **▶** 는 **span v3 계측 경계**다.
 
 ```text
  단계                         코드                                      자원/상태
 ────────────────────────────────────────────────────────────────────────────────
  1  소켓 이벤트→읽기          event_handler → try_read_network           worker rbuf
- 2  다음 GET prefetch         proto_text.c:392-409                       assoc bucket
+ 2  다음 GET prefetch         proto_text.c:436                           assoc bucket
  3  명령 파싱                 process_command_ascii → process_get_command —
  4  hash lookup               process_get_cmd → limited_get → item_get   ◆item_lock[hv]
  5  응답 머리 구성            VALUE key flags bytes [cas]                mc_resp
- 6  ★READ 등록                storage_get_item                           아래 6a~6e
- 6a   평문 목적지 확보        worker TLS plaintext cache                 worker 전용
- 6b   pending context 확보    t->io_cache                                worker 전용
- 6c   응답 data iov 예약      resp_add_iov(resp, "", len)                아직 빈 포인터
- 6d   remote loc 복사         ITEM_HDR → obj_io                          로컬 stub
- 6e   IO queue 삽입           q->stack                                   worker 전용
+ 6 ▶★READ 등록                storage_get_item  (storage.c:459)          아래 6a~6f
+ 6a   **span v3 시작**        t_enter = extstore_prof_stamp()            storage.c:462
+ 6b   평문 목적지 확보        worker TLS plaintext cache                 worker 전용
+ 6c   pending context 확보    t->io_cache                                worker 전용
+ 6d   응답 data iov 예약      resp_add_iov(resp, "", len)                아직 빈 포인터
+ 6e   remote loc 복사 + p->c  ITEM_HDR → obj_io, eio->t_enter 저장        storage.c:569
+ 6f   **체인에 append**       g_chain_n++                                worker 전용
+      ├ g_chain_n >= chain(8) → pending_chain_flush()  → 9 로 (즉시)
+      └ reap 틱               → 체인 flush + 10~14 (그 자리에서)
  7  ★응답 suspend             conn_resp_suspend                          connection 보류
- 8  batch 제출                thread_io_queue_submit → storage_submit_cb worker 전용
- 9  READ post                 extstore_worker_submit → worker_post       아래 9a~9d
+ 8  pass 끝 체인 flush        thread.c:522 storage_post_chain_flush      체인이 안 찼을 때만
+ 9  READ post                 worker_post (extstore.c:789)               아래 9a~9d
  9a   window/ORD 검사         outstanding<W, read_out[QP]<ORD            worker/QP
  9b   bounce slot 확보        bounce_free bitmap                         worker 전용 DMA
- 9c   span 시작               io->t_start = prof_rdtsc()                 EXT_RDMA_PROF
+ 9c   **span v2 시작**        io->t_start = prof_rdtsc()                 ← v3 아님
  9d   RDMA READ post          ibv_post_send                              worker QP
-10  CQ drain                  batch 직후 spin 또는 0-timeout event       worker CQ
-11  ★CPU visibility          SYNC_FOR_CPU를 완료 READ 묶음에 1회         batch 상각
-12  ★복호·검증                _storage_get_item_cb → ext_crypto_open      transient plaintext
-13  완료 보류                 g_ret_head에 pending 삽입                   worker TLS
+10  CQ drain                  reap 틱마다 / pass 끝 / 0-timeout 이벤트    worker CQ
+11  ★CPU visibility          coherent MR 이라 SYNC 없음                   —
+12 ▶★복호·검증                _storage_get_item_cb → ext_crypto_open      transient plaintext
+       **span v2·v3 동시 종료**  crypto_done                             extstore.c:1244
+13  완료 보류                 g_ret_head 에 pending 삽입                  worker TLS
 14  ★응답 resume              storage_flush_returns → conn_resp_unsuspend connection 재개
 15  응답 송신                 conn_io_resume → conn_mwrite → transmit    TCP/IPoIB
 16  자원 해제                 resp_finish → storage_finalize_cb          plaintext/stub ref
 ```
 
-핵심은 6~14다. `storage_get_item()`은 READ 완료를 기다리지 않고 요청만
-등록한다. 연결의 해당 응답을 suspend한 뒤 워커는 다른 연결과 요청을 계속
-처리한다. 그래서 같은 워커에 최대 `W=24`개의 READ가 동시에 떠 있을 수 있다.
+### 계측 경계 — v2 와 v3 가 어디서 갈리는가
+
+```text
+span v2   9c (post 직전)   →  12 (복호 완료)      admission 을 통째로 빠뜨린다
+span v3   6a (진입)        →  12 (복호 완료)      ← 계약이 쓰는 정의
+admit     6a → 9c                                 그 차이
+```
+
+**세 값은 각각 독립으로 집계된다** — v3 를 admit 에서 빼서 만드는 게 아니다.
+
+```text
+prof_r_e2e   crypto_done − t_enter    extstore.c:1244   → extstore_prof_read_e2e_avg_ns
+prof_r       crypto_done − t_start    (셀렉터 1)         → extstore_prof_read_avg_ns
+prof_r_admit t_start − t_enter        extstore.c:1248   → extstore_prof_read_admit_avg_ns
+```
+
+그래서 `admit + v2 = v3` 가 **정합성 검사**로 성립한다. EXP-0 GET-only
+pipe=256 에서 `217.12 + 25.16 = 242.28` 대 실측 `242.29` 다.
+
+`tools/exp0-slice.py` 의 `Gv3` 열은 `re2ea`(= `..._e2e_avg_ns`)를 읽는다.
+**캠페인 표의 span 은 전부 v3 다.** `..._avg_ns`(v2)도 같이 수집되지만
+`+v2` 열에만 쓴다.
+
+> **이 절은 원래 v3 시대 타임라인 그대로였다.** 9c 를 "span 시작"이라고만
+> 적어 v2 시작점이 span 의 시작처럼 읽혔고, `t_enter` 를 찍는 6a 가 아예
+> 없었다. 측정 자체는 v3 가 맞았지만 **문서만 보면 그렇게 읽히지 않았다** —
+> 관리자가 이 절을 읽고 "실험이 정말 v3 로 측정된 게 맞나"를 물어 발견했다.
+
+핵심은 6~14 다. `storage_get_item()` 은 READ 완료를 기다리지 않고 요청만
+등록한다. 연결의 해당 응답을 suspend 한 뒤 워커는 다른 연결과 요청을 계속
+처리한다. **v4 에서는 6f 의 체인이 차면 그 자리에서 post 되고, reap 틱이면
+수거·재개까지 파싱 루프 안에서 일어난다.**
 
 ## 2. 단계별 상세
 

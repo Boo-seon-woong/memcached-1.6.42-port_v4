@@ -132,3 +132,4 @@ KD,KD-U-GET-r2,get,13.782,21.209,4.113,17.096,,,,,R:R 반복. p99 49.0us busyCPU
 KD,KD-Z-GET-r2,get,12.619,23.477,4.740,18.737,,,,,Z:Z zipf=0.99 반복. p99 74.6us busyCPU 28.3 badcrc 0 커버리지 +0.0023%
 KD,KD-U-MIX-r2,mix,11.433,,,,,,,,genie 클라값만 — ariel 창 놓침(LOAD UP/DOWN 한 배치). 서버측 span 없음
 KD,KD-Z-MIX-r2,mix,7.551,,,,,,,,genie 클라값만 — ariel 창이 부하 종료 후 열림. 서버측 span 없음
+KD,KD-Z-MIX-r3,mix,7.516,32.812,14.015,18.797,11.766,,9.181,,Z:Z zipf=0.99 1:9 재현. *** GET span 32.81 > 30 FAIL 2회째 ***. badcrc=249977 busyCPU 24.7 p99 G151.1

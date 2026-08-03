@@ -6726,3 +6726,16 @@ Zipfian 에서 얻는 캐시 이득 경로가 이 설계엔 존재하지 않는�
 "균등에서 10 M" 보다 방어 가능한 주장이다.** 서버는 계속 안 건드려도 된다.
 
 NEXT: genie (θ 스윕 진행 여부 — admin 판단 대기)
+---
+
+## [2026-08-03 KST] genie — KD-T-MIX-050-r1
+
+```text
+CELL KD-T-MIX-050-r1 DONE  11.393 M ops/s  p50 2.62300 / p99 4.51100 / p99.9 7.55100 ms
+창(UTC)  08:04:33 ~ 08:06:33   --key-pattern=Z:Z --key-zipf-exp=0.50 --ratio=1:9 -t 30 -c 4 pipe=256 --test-time=120
+gets/misses  10254093/0
+서버     reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_worker_window=24 
+raw      experiments/keydist-20260803/genie/KD-T-MIX-050-r1.txt
+```
+
+NEXT: ariel (창 슬라이스)

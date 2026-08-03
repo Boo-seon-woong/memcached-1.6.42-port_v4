@@ -6420,3 +6420,16 @@ badcrc                균등 대비 10 배 이상 (균등 1:9 는 거의 0 이�
 ```
 
 NEXT: genie (KD-U-MIX / KD-Z-MIX)
+---
+
+## [2026-08-03 KST] genie — KD-U-MIX-r1
+
+```text
+CELL KD-U-MIX-r1 DONE  11.342 M ops/s  p50 2.65500 / p99 4.41500 / p99.9 7.42300 ms
+창(UTC)  07:42:20 ~ 07:44:20   --key-pattern=R:R --ratio=1:9 -t 30 -c 4 pipe=256 --test-time=120
+gets/misses  10207384/0
+서버     reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_worker_window=24 
+raw      experiments/keydist-20260803/genie/KD-U-MIX-r1.txt
+```
+
+NEXT: ariel (창 슬라이스)

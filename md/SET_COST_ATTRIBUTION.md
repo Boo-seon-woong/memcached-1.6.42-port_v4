@@ -1,5 +1,9 @@
 # SET 26.9 µs/op 내역 규명 + GET이 받은 최적화 중 SET이 못 받은 것
 
+> **[v3 시점 기록]** 이 문서는 그 시점의 기록으로 보존한다. 현재 운영값은
+> [`OPTIMAL_RUNBOOK.md`](OPTIMAL_RUNBOOK.md), 최신 결과는
+> [`V4_RESULT.md`](V4_RESULT.md) 다.
+
 작성 2026-07-29. 프레임 포인터 빌드(`-fno-omit-frame-pointer`)로 SET-only
 부하를 프로파일해 비용을 귀속시키고, GET 경로와 대조해 걷어낼 대상을 찾는다.
 

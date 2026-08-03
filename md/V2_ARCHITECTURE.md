@@ -1,5 +1,9 @@
 # Port v2 구조 안내
 
+> **[v2 시점 기록]** 이 문서는 그 시점의 기록으로 보존한다. 현재 운영값은
+> [`OPTIMAL_RUNBOOK.md`](OPTIMAL_RUNBOOK.md), 최신 결과는
+> [`V4_RESULT.md`](V4_RESULT.md) 다.  구조 정본은 v2 시점. v3·v4 변화는 V3_ARCHITECTURE.md 와 V3_TO_V4_CHANGES.md.
+
 기준일: 2026-07-28. 기준 commit: `f6cdffd`.
 
 이 문서는 **v2 port가 지금 어떻게 생겼는지**를 설명한다. stock memcached

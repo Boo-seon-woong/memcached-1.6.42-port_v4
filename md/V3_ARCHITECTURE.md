@@ -1,5 +1,9 @@
 # Port v3 구조 안내
 
+> **[v3 시점 기록]** 이 문서는 그 시점의 기록으로 보존한다. 현재 운영값은
+> [`OPTIMAL_RUNBOOK.md`](OPTIMAL_RUNBOOK.md), 최신 결과는
+> [`V4_RESULT.md`](V4_RESULT.md) 다.  v4 변화는 V3_TO_V4_CHANGES.md.
+
 기준일: 2026-07-30. 기준 commit: **`7a09928` (main)**.
 
 > ### ⚠ 2026-07-31 — 이 문서의 SET 서술은 pac 이전 상태다

@@ -1,12 +1,93 @@
 # GET 경로 전체 워크플로 — 요청 도착부터 응답 송신까지
 
-작성 2026-07-30. 대상은 **현재 main의 remote-only GET 경로**다. 코드 위치,
-자원 소유권, 비동기 중단/재개, RDMA READ, 복호·검증, 응답 전송 후 해제까지
-한 요청의 전 구간을 설명한다.
+본문 작성 2026-07-30(v3 기준). **v4 에서 제출·수거·재개의 위치가 바뀌었다** —
+아래 §v4 를 먼저 읽고 본문으로 갈 것.
 
-구조 정본은 `md/V2_ARCHITECTURE.md`, 성능 이력은
-`md/OPTIMIZATION_HISTORY.md`, GET/SET 대조는 `md/GET_SET_CONCURRENCY.md`,
-계측 정의는 `md/SPAN_MEASUREMENT_REVIEW.md`를 따른다.
+구조 정본은 `md/V2_ARCHITECTURE.md`, v3→v4 구조 변화는
+`md/V3_TO_V4_CHANGES.md`, 성능 이력은 `md/OPTIMIZATION_HISTORY.md`,
+GET/SET 대조는 `md/GET_SET_CONCURRENCY.md`, 계측 정의는
+`md/SPAN_MEASUREMENT_REVIEW.md` 를 따른다.
+
+## §v4. 무엇이 바뀌었나 — 본문보다 이것이 우선한다
+
+**v3 는 GET 을 상류 memcached 의 `io_queue` 배칭에 태웠다. v4 는 우회한다.**
+단계 번호는 §1 타임라인과 같다.
+
+| 단계 | v3 (본문) | v4 (현행) |
+|---|---|---|
+| 6e | `q->stack` 에 삽입만 | **체인에 붙이고, `chain` 건 차면 그 자리에서 post** |
+| 8 | pass 끝 `thread_io_queue_submit` 이 일괄 제출 | **없음.** 파싱 루프 안에서 이미 나갔다 |
+| 10 | pass 끝 drain 에서 처음 폴링 | **`reap` 건마다 post 자리에서 수거** |
+| 13·14 | 보류했다가 **다음 pass** 에 재개 | **거둔 그 pass 에서 재개.** 파싱 중인 연결과 자기 자신만 제외 |
+
+v4 의 실제 흐름:
+
+```text
+파싱 루프 (연결 하나의 읽기 버퍼)
+ └ GET 하나 파싱
+    └ storage_get_item
+       ├ p->c = t->cur_conn        ← post 전에 채운다 (아래 위험 ②)
+       ├ 체인에 append
+       ├ 체인 == chain 건  → pending_chain_flush() → 실제 RDMA READ post
+       └ reap 틱          → 체인 flush + CQ drain + 완료 재개
+ ⇣ 버퍼를 다 파싱한 뒤
+ storage_post_chain_flush()   남은 체인을 내보낸다
+ storage_flush_returns()      남은 재개를 처리한다
+```
+
+**이 변경이 없앤 대기**(v3 실측):
+
+```text
+제출        9.91 µs   읽기 버퍼를 다 파싱해야 제출됐다
+완료 관측  31.56 µs   CQE 가 pass 끝까지 폴링조차 안 됐다
+재개       25.48 µs   거두고도 재개를 다음 pass 로 미뤘다
+```
+
+### v4 에서 새로 생긴 위험 셋
+
+인라인 post 는 **완료가 post 직후에 돌아올 수 있게** 만들었다. co-located
+RDMA 는 5 µs 라 파싱 루프 안에서 완료가 난다. 여기서 서버가 두 번 죽었다.
+
+```text
+① 파싱 중인 연결을 재개하면 죽는다
+   drive_machine 이 아직 그 연결을 돌고 있는데 conn_worker_readd 가 걸린다
+   → t->cur_conn 으로 표시하고 그 연결만 제외
+     (proto_text.c: GET 디스패치 스위치 4 자리 + multiget 루프와 그 오류 경로)
+
+② 자기 자신의 pending 을 재개하면 죽는다
+   p->c 가 NULL 인 채 완료가 와서 conn_resp_unsuspend(NULL,…) → segfault at 0xfc
+   → p->c = t->cur_conn 을 post **전에** 채운다
+
+③ 락 보유를 추측하면 멈춘다
+   meta-get 의 limited_get_locked 가 item_lock 을 쥔 채 들어오고
+   storage_set_return_cb 가 같은 락을 다시 잡는다 → 워커가 futex 에서 정지
+   → item_trylock 으로 질의한다
+```
+
+②는 세 번 만에 잡았다. 앞의 두 번은 추측이었고, 세 번째에 `dmesg` 의 폴트
+주소(`0xfc`)를 먼저 본 것이 답이었다.
+
+### 손잡이
+
+| 설정 | 하는 일 | 운영값 |
+|---|---|---:|
+| `ext_submit_inline` | 이 경로 전체를 켠다 | on |
+| `ext_post_chain` | post 를 N 건 묶는다 → `adm` 을 정한다 | 8 |
+| `ext_reap_every` | N 건마다 수거·재개 → `v2` 를 정한다 | 8 |
+
+**유효 체인은 `min(chain, reap)` 이다** — `storage.c:607` 이 reap 틱 안에서
+`pending_chain_flush()` 를 부르므로 `reap` 이 작으면 체인이 차기 전에 비워진다.
+두 값을 따로 조정하면 의도한 값이 안 나온다.
+
+**체인은 건수로만 끊긴다 — 시간 타임아웃이 없다.** 그래서 저부하에서 오히려
+`adm` 이 크다(pipe=8 에서 5.83 µs, pipe=256 에서 3.70 µs).
+
+### 본문 §0 의 기준 수치는 낡았다
+
+본문 §0 은 `mc28 / W24 / nqp2 / hp22` 의 2026-07-31 값이다. 현행은
+`mcT30 / W24 / nqp4 / hp22 / reap8 / chain8` 이고 게이트는
+**GET-only 13.397 M / span 21.90 µs** 다(`OPTIMAL_RUNBOOK.md`).
+아래 본문의 단계별 코드 설명은 위 표의 네 단계를 빼면 그대로 유효하다.
 
 ## 0. 기준 수치 (mc28 / W24 / nqp2 / hp22, **2026-07-31 정본**)
 

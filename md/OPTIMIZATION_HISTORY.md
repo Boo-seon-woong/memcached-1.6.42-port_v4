@@ -1,5 +1,9 @@
 # 최적화 히스토리 — 적용분 (v1 → v3 최종)
 
+> **[v3 시점 기록]** 이 문서는 그 시점의 기록으로 보존한다. 현재 운영값은
+> [`OPTIMAL_RUNBOOK.md`](OPTIMAL_RUNBOOK.md), 최신 결과는
+> [`V4_RESULT.md`](V4_RESULT.md) 다.  v4 캠페인은 V4_RESULT.md §14.
+
 기준일: **2026-07-31**. **실측 검증을 통과해 실제로 적용된** 최적화만 시간순으로
 기록한다. 기각된 가설은 말미의 부록에 한 줄씩만 남긴다
 (전체 근거는 `md/V2_THROUGHPUT_MAXIMIZATION.md`, `md/SET_CAMPAIGN_HANDOFF.md`).

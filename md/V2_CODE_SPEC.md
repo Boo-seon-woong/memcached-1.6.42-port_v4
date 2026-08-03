@@ -1,5 +1,9 @@
 # V2 코드 및 검증 명세
 
+> **[v2 시점 기록]** 이 문서는 그 시점의 기록으로 보존한다. 현재 운영값은
+> [`OPTIMAL_RUNBOOK.md`](OPTIMAL_RUNBOOK.md), 최신 결과는
+> [`V4_RESULT.md`](V4_RESULT.md) 다.
+
 기준일: 2026-07-28
 
 이 문서는 현재 `memcached-1.6.42-port_v2` 구현의 authority다. 이전 단계별

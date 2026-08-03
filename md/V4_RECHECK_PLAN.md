@@ -1,5 +1,9 @@
 # v4 재검 + sweep 재측정 계획
 
+> **[v4 재검 계획 시점 기록]** 이 문서는 그 시점의 기록으로 보존한다. 현재 운영값은
+> [`OPTIMAL_RUNBOOK.md`](OPTIMAL_RUNBOOK.md), 최신 결과는
+> [`V4_RESULT.md`](V4_RESULT.md) 다.  결과는 V4_RESULT.md §7·§10·§14.
+
 작성 2026-08-02. 계약은 달성됐다(`V4_RESULT.md`). 이 문서는 **남은 여유**와
 **v2 시절 실험의 v4 재측정**을 다룬다.
 

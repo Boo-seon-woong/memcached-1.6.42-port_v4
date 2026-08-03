@@ -1,5 +1,9 @@
 # v4 설계 제약 — span v3 avg < 30 µs 를 무엇이 가능하게 하는가
 
+> **[v4 착수 시점 시점 기록]** 이 문서는 그 시점의 기록으로 보존한다. 현재 운영값은
+> [`OPTIMAL_RUNBOOK.md`](OPTIMAL_RUNBOOK.md), 최신 결과는
+> [`V4_RESULT.md`](V4_RESULT.md) 다.  측정 결과는 V4_RESULT.md. 이 문서의 예상치는 착수 전 추정이다.
+
 작성 2026-08-01. v3 최종(`c0c5b4f`) 기준. v3 결과는
 `../memcached-1.6.42-port_v3/` 에 그대로 보존돼 있다.
 

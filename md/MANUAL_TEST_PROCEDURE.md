@@ -239,16 +239,18 @@ coherent MR에서는 SYNC 자체가 없으므로 배치할 이유도 없다. **1
 ```sh
 tmux kill-session -t mc 2>/dev/null
 for p in $(pgrep -x "memcached[.a-z]*"); do kill -9 $p; done
+pkill -f '^/tmp/mc_' 2>/dev/null   # stock 대조 등 스테이징 바이너리도 죽인다
+: > /tmp/mc.log                    # 낡은 로그를 읽고 게이트를 오판한 전례가 있다
 # 포트가 실제로 풀릴 때까지 대기 — 생략 금지
 for i in $(seq 1 30); do ss -ltn | grep -q ':11411 ' || break; sleep 1; done
 ss -ltn | grep -q ':11411 ' && { echo "포트가 아직 잡혀 있다"; ss -ltnp | grep 11411; }
 
-tmux new-session -d -s mc "cd \$HOME/kvs-port && exec taskset -c 0-27 env \
+tmux new-session -d -s mc "cd \$HOME/kvs-port && exec taskset -c 0-29 env \
 LD_LIBRARY_PATH=\$HOME/coherent-mr-v2/lib:\$HOME/kvs-port \
 MLX5_COHERENT_QP=1 MLX5_COHERENT_CQ=1 EXT_RDMA_PROF=1 EXT_SELFTEST=1 \
 EXT_CRYPTO_KEY=\$HOME/kvs-port/ext.key EXT_SLOT_SIZE=256 EXT_READ_SLOTS=64 \
-\$HOME/coherent-mr-v2/bin/memcached -p 11411 -U 0 -t 28 -m 2048 -c 16384 -R 1024 \
--o ext_path=10.99.0.2:11212:4g,ext_worker_window=24,ext_qp_per_worker=2,ext_drain_spin=1024,hashpower=22 \
+\$HOME/coherent-mr-v2/bin/memcached -p 11411 -U 0 -t 30 -m 2048 -c 16384 -R 1024 \
+-o ext_path=10.99.0.2:11212:4g,ext_worker_window=24,ext_qp_per_worker=4,ext_drain_spin=1024,hashpower=22,ext_submit_batch=20,ext_admit_max=64,ext_submit_inline,ext_reap_every=8,ext_post_chain=8,ext_setq_max=1 \
 > /tmp/mc.log 2>&1"
 
 sleep 8
@@ -301,7 +303,7 @@ extstore selftest: OK (256 bytes written and read back)
 ### D-2. 프리로드 (1M × 64 B) — **`--key-prefix=m-` 필수**
 
 ```sh
-LD_LIBRARY_PATH=$HOME/memtier:$HOME/kvs-port taskset -c 0-27 \
+LD_LIBRARY_PATH=$HOME/memtier:$HOME/kvs-port taskset -c 0-29 \
   $HOME/memtier/memtier_benchmark -s 127.0.0.1 -p 11411 -P memcache_text \
   -d 64 --key-prefix=m- --key-minimum=1 --key-maximum=1000000 \
   --threads=8 --clients=16 --pipeline=8 --key-pattern=P:P --ratio=1:0 \
@@ -328,11 +330,11 @@ printf 'stats\r\nquit\r\n' | nc 127.0.0.1 11411 | tr -d '\r' | grep curr_items
 COMMON="-s 10.99.0.3 -p 11411 -P memcache_text -d 64 \
   --key-prefix=m- --key-minimum=1 --key-maximum=1000000 \
   --key-pattern=R:R --distinct-client-seed --hide-histogram \
-  -t 28 -c 4 --pipeline=160"
+  -t 30 -c 4 --pipeline=256"
 ```
 
 > **`--distinct-client-seed`는 지우지 말 것.** memtier 기본값은 클라이언트
-> 전체가 *같은 고정 시드*를 쓰는 것이라, 이 플래그가 없으면 112개 커넥션이
+> 전체가 *같은 고정 시드*를 쓰는 것이라, 이 플래그가 없으면 120개 커넥션이
 > **동일한 키 순열을 같은 속도로 훑는다.** GET은 hot-key 워크로드가 되어
 > 캐시 지역성이 비정상적으로 좋아지고(기록 10.357M과 비교 불가), SET이 섞인
 > W2~W4는 모든 클라이언트가 같은 키를 동시에 쓰면서 item lock 경합이 버킷
@@ -582,6 +584,8 @@ QP 배치가 바뀌어 델타가 오염된다.
 # [ariel-guest] 서버만 내림 (genie 측은 그대로 두는 것이 권장 휴지 상태)
 tmux kill-session -t mc
 for p in $(pgrep -x "memcached[.a-z]*"); do kill -9 $p; done
+pkill -f '^/tmp/mc_' 2>/dev/null   # stock 대조 등 스테이징 바이너리도 죽인다
+: > /tmp/mc.log                    # 낡은 로그를 읽고 게이트를 오판한 전례가 있다
 
 # [ariel-host] guest까지 내리려면
 sudo ~/2026/sev/guestctl.sh down

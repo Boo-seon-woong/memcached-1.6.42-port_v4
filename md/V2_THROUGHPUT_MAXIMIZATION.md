@@ -1,5 +1,9 @@
 # V2 throughput maximization 전체 실험 결과
 
+> **[v2 시점 기록]** 이 문서는 그 시점의 기록으로 보존한다. 현재 운영값은
+> [`OPTIMAL_RUNBOOK.md`](OPTIMAL_RUNBOOK.md), 최신 결과는
+> [`V4_RESULT.md`](V4_RESULT.md) 다.
+
 기준일: 2026-07-28 (최종 갱신: vCPU pinning 도입 후)
 
 > **읽는 순서 주의.** 이 문서는 시간순으로 누적됐고, 중간의 여러 결론이

@@ -1,5 +1,9 @@
 # SET-only 10M ops/s — 요구조건 산정
 
+> **[v3 시점 기록]** 이 문서는 그 시점의 기록으로 보존한다. 현재 운영값은
+> [`OPTIMAL_RUNBOOK.md`](OPTIMAL_RUNBOOK.md), 최신 결과는
+> [`V4_RESULT.md`](V4_RESULT.md) 다.
+
 작성 2026-07-29. 목표를 SET-only 10M ops/s로 둘 때 **op당 CPU 비용과 동시성이
 어디까지 확보돼야 하는지**를 실측 기반으로 역산한다.
 

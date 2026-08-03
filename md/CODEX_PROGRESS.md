@@ -1,5 +1,9 @@
 # Codex 진행 기록 — Coherent Data MR
 
+> **[v3 시점 기록]** 이 문서는 그 시점의 기록으로 보존한다. 현재 운영값은
+> [`OPTIMAL_RUNBOOK.md`](OPTIMAL_RUNBOOK.md), 최신 결과는
+> [`V4_RESULT.md`](V4_RESULT.md) 다.
+
 - 기준 시각: 2026-07-31 KST
 - 범위: Claude가 토큰 제한으로 중단한 시점부터 Codex가 이어서 수행한 작업
 - 대상: SEV-SNP guest의 `mlx5_ib` coherent data MR 및 memcached extstore sync 제거

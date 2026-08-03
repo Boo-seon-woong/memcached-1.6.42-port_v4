@@ -1,5 +1,9 @@
 # v3 SET 경로 코드 리뷰 결함 목록 (2026-07-30)
 
+> **[v3 시점 기록]** 이 문서는 그 시점의 기록으로 보존한다. 현재 운영값은
+> [`OPTIMAL_RUNBOOK.md`](OPTIMAL_RUNBOOK.md), 최신 결과는
+> [`V4_RESULT.md`](V4_RESULT.md) 다.
+
 > **처분 (2026-07-30, 실 호스트 재측정 후).** `v3-set-10m`의 비동기 SET은
 > 실측에서 기각됐다 — SET-only 1.0M(main 동기 1.68M 대비 −40%), 1:9 혼합에서
 > GET 10.7M → 5.1M. 원인은 B-1 수정이 도입한 연결당 직렬화(STORE_PENDING 시

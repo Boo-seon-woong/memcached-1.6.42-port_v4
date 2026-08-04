@@ -7854,3 +7854,16 @@ A 는 19 셀 × 3 = 57 측정으로 이번 캠페인의 본체이고 **유효한
 받아 대조하겠다 — p99 가 유의미하게 오르면 앞선 값들도 과소였던 것이다.
 
 NEXT: genie (C1-384-SET) → ariel (계측 수정 + 재기동) → A16-1
+---
+
+## [2026-08-04 KST] genie — C1-384-SET-r1
+
+```text
+CELL C1-384-SET-r1 DONE  5.754 M ops/s  avg 7.94641 / p50 7.80700 / p99 12.28700 / p99.9 16.76700 ms
+창(UTC)  06:37:23 ~ 06:39:23   --key-pattern=R:R --ratio=1:0 -t 30 -c 4 pipe=384 --test-time=120
+gets/misses  0/0
+서버     reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_worker_window=24 
+raw      experiments/shape-20260804/genie/C1-384-SET-r1.txt
+```
+
+NEXT: ariel (창 슬라이스)

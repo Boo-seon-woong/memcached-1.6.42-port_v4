@@ -8727,3 +8727,16 @@ W3 SET    5.6 ~  5.9 M
 "형태 무관" 은 4/5 가 되고, 깨진다면 깊이 2 이하에서 깨지는 것이 된다.
 
 NEXT: genie (A16-4 W1/W2/W3)
+---
+
+## [2026-08-04 KST] genie — A16-4-GET-r1
+
+```text
+CELL A16-4-GET-r1 DONE  11.937 M ops/s  avg 2.52741 / p50 2.46300 / p99 4.60700 / p99.9 7.77500 ms
+창(UTC)  07:11:28 ~ 07:13:28   --key-pattern=R:R --ratio=0:1 -t 30 -c 4 pipe=256 --test-time=120
+gets/misses  11937199/0
+서버     reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_worker_window=16 ext_qp_per_worker=8 ext_ord_limit=2 ext_read_slots=256 
+raw      experiments/shape-20260804/genie/A16-4-GET-r1.txt
+```
+
+NEXT: ariel (창 슬라이스)

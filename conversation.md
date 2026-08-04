@@ -7419,3 +7419,17 @@ raw      experiments/keydist-20260803/genie/BD-PIPE-128-r1.txt
 ```
 
 NEXT: ariel (창 슬라이스)
+
+---
+
+## [2026-08-04 KST] genie — BD-PIPE-256-r1
+
+```text
+CELL BD-PIPE-256-r1 DONE  13.242 M ops/s  avg 2.27758 / p50 2.22300 / p99 3.95100 / p99.9 7.13500 ms
+창(UTC)  05:48:41 ~ 05:50:42   --key-pattern=R:R --ratio=0:1 -t 30 -c 4 pipe=256 --test-time=120
+gets/misses  13242018/0
+서버     reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_worker_window=24 
+raw      experiments/keydist-20260803/genie/BD-PIPE-256-r1.txt
+```
+
+NEXT: ariel (창 슬라이스)

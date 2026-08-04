@@ -7045,3 +7045,17 @@ raw      experiments/keydist-20260803/genie/BD-PROF-ON-GET-r1.txt
 ```
 
 NEXT: ariel (창 슬라이스)
+
+---
+
+## [2026-08-04 KST] genie — BD-PROF-ON-MIX-r1
+
+```text
+CELL BD-PROF-ON-MIX-r1 DONE  10.926 M ops/s  avg 2.77160 / p50 2.71900 / p99 4.86300 / p99.9 8.09500 ms
+창(UTC)  05:12:52 ~ 05:14:52   --key-pattern=R:R --ratio=1:9 -t 30 -c 4 pipe=256 --test-time=120
+gets/misses  9833792/0
+서버     reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_worker_window=24 
+raw      experiments/keydist-20260803/genie/BD-PROF-ON-MIX-r1.txt
+```
+
+NEXT: ariel (창 슬라이스)

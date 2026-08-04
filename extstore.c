@@ -1154,13 +1154,25 @@ static void prof_summarize(store_engine *e, int read,
     *count = total; *avg = total ? sum / total : 0;
     *p50 = *p99 = 0;
     if (!total) return;
-    uint64_t c = 0, need50 = (total + 1) / 2, need99 = (total * 99 + 99) / 100;
+    /* 히스토그램이 count 보다 적을 수 있다(리셋 경합). 그때 need99 를 count
+     * 기준으로 잡으면 도달하지 못해 p99 가 0 이 된다. 실제로 관측된 값의
+     * 총합으로 잡는다. 또 최상단 버킷에 표본이 있으면 실제 값이 범위
+     * (PROF_BUCKETS × PROF_BUCKET_NS = 3.2768 ms) 밖이라는 뜻이므로
+     * p99 를 UINT64_MAX 로 표시해 호출자가 포화를 구별하게 한다. */
+    uint64_t hsum = 0;
+    for (int b = 0; b < PROF_BUCKETS; b++) hsum += merged[b];
+    if (!hsum) return;
+    uint64_t c = 0, need50 = (hsum + 1) / 2, need99 = (hsum * 99 + 99) / 100;
     int f50 = 0, f99 = 0;
     for (int b = 0; b < PROF_BUCKETS && !(f50 && f99); b++) {
         c += merged[b];
         if (!f50 && c >= need50) { *p50 = (uint64_t)b * PROF_BUCKET_NS; f50 = 1; }
         if (!f99 && c >= need99) { *p99 = (uint64_t)b * PROF_BUCKET_NS; f99 = 1; }
     }
+    /* 최상단 버킷이 p99 를 물었다면 실제 값은 범위 밖이다. 그 자리에
+     * 3276.7 µs 를 적으면 측정값으로 읽힌다 — 포화를 명시한다. */
+    if (merged[PROF_BUCKETS - 1] && *p99 >= (uint64_t)(PROF_BUCKETS - 1) * PROF_BUCKET_NS)
+        *p99 = UINT64_MAX;
 }
 
 void extstore_get_stats(void *ptr, struct extstore_stats *st) {
@@ -1231,23 +1243,32 @@ void extstore_prof_reset(void *ptr) {
         for (unsigned int i = 0; i < e->worker_count; i++) {
             store_worker *w = e->workers[i];
             if (!w) continue;
+            /* 순서가 중요하다: 히스토그램을 먼저 비우고 카운트를 나중에 0 으로
+             * 만든다. prof_record 는 락이 없으므로 리셋 도중 완료가 끼어드는데,
+             * 반대 순서면 그 완료가 count 만 남기고 hist 항목은 memset 에
+             * 지워져 count > Σhist 가 된다. 그러면 prof_summarize 의
+             * need99 (count 기준)에 누적이 도달하지 못해 **p99 가 0 으로
+             * 찍힌다** — 2026-08-04 C1-384-MIX-r1 에서 실제로 그랬다.
+             * 이 순서면 반대로 Σhist > count 가 되어 p99 가 약간 이르게
+             * 잡힐 뿐 무해하다. 락 없이 완전한 race-free 는 불가능하고,
+             * 드레인 경로에 락을 넣는 비용이 훨씬 크다. */
+            memset(w->prof_r_hist, 0, sizeof(w->prof_r_hist));
+            memset(w->prof_w_hist, 0, sizeof(w->prof_w_hist));
+            memset(w->prof_r_e2e_hist, 0, sizeof(w->prof_r_e2e_hist));
+            memset(w->prof_w_e2e_hist, 0, sizeof(w->prof_w_e2e_hist));
+            memset(w->prof_srv_hist, 0, sizeof(w->prof_srv_hist));
+            memset(w->prof_que_hist, 0, sizeof(w->prof_que_hist));
+            memset(w->prof_bk_hist, 0, sizeof(w->prof_bk_hist));
             w->prof_r_count = w->prof_r_sum_ns = 0;
             w->prof_w_count = w->prof_w_sum_ns = 0;
             w->prof_r_crypto_ns = w->prof_r_sync_ns = w->prof_r_xfer_ns = 0;
             w->prof_w_crypto_ns = w->prof_w_sync_ns = w->prof_w_xfer_ns = 0;
-            memset(w->prof_r_hist, 0, sizeof(w->prof_r_hist));
-            memset(w->prof_w_hist, 0, sizeof(w->prof_w_hist));
             w->prof_r_admit_ns = w->prof_w_admit_ns = w->prof_w_ret_ns = 0;
             w->prof_r_e2e_count = w->prof_r_e2e_sum_ns = 0;
             w->prof_w_e2e_count = w->prof_w_e2e_sum_ns = 0;
-            memset(w->prof_r_e2e_hist, 0, sizeof(w->prof_r_e2e_hist));
-            memset(w->prof_w_e2e_hist, 0, sizeof(w->prof_w_e2e_hist));
             w->prof_srv_count = w->prof_srv_sum_ns = 0;
             w->prof_que_count = w->prof_que_sum_ns = 0;
             w->prof_bk_count = w->prof_bk_sum_ns = 0;
-            memset(w->prof_srv_hist, 0, sizeof(w->prof_srv_hist));
-            memset(w->prof_que_hist, 0, sizeof(w->prof_que_hist));
-            memset(w->prof_bk_hist, 0, sizeof(w->prof_bk_hist));
         }
     }
 }

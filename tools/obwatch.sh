@@ -81,10 +81,14 @@ END{
   w5=v["extstore_prof_write_e2e_p50_ns"]+0; w9=v["extstore_prof_write_e2e_p99_ns"]+0
   rc=v["extstore_prof_read_count"]+0;  wc=v["extstore_prof_write_count"]+0
   printf "===== SERVER STATS (%.1fs window) =====\n", t
+  # p99 == UINT64_MAX 는 히스토그램 최상단 버킷 포화다(실제 값이 3.2768ms 밖).
+  # 그 자리에 숫자를 적으면 측정값으로 읽히므로 CLIP 으로 낸다.
   printf "%-10s %13s %13s %12s %12s %12s\n","Type","Ops/sec","Hits/sec","v3 avg","v3 p50","v3 p99"
   printf "%s\n","------------------------------------------------------------------------------------"
-  if (s>0) printf "%-10s %13.2f %13s %10.3fus %10.3fus %10.3fus\n","Sets",s/t,"---",w3/1000,w5/1000,w9/1000
-  if (g>0) printf "%-10s %13.2f %13.2f %10.3fus %10.3fus %10.3fus\n","Gets",g/t,h/t,r3/1000,r5/1000,r9/1000
+  wc9=(w9>=1e18)?"      CLIP":sprintf("%10.3fus",w9/1000)
+  rc9=(r9>=1e18)?"      CLIP":sprintf("%10.3fus",r9/1000)
+  if (s>0) printf "%-10s %13.2f %13s %10.3fus %10.3fus %12s\n","Sets",s/t,"---",w3/1000,w5/1000,wc9
+  if (g>0) printf "%-10s %13.2f %13.2f %10.3fus %10.3fus %12s\n","Gets",g/t,h/t,r3/1000,r5/1000,rc9
   printf "%-10s %13.2f %13.2f\n","Totals",(g+s)/t,h/t
   printf "\n  span v3 = backend 진입→응용 가시 완료 (계약 판정 대상)\n"
 
@@ -97,14 +101,17 @@ END{
     printf "\n--- latency breakdown (avg / p50 / p99, us) ---\n"
     printf "%-30s %8s %8s %8s\n","구간","avg","p50","p99"
     printf "%s\n","---------------------------------------------------------------"
-    printf "%-30s %8.2f %8.2f %8.2f\n","srv  소켓read→sendmsg", sv/1000, s5v/1000, s9v/1000
-    printf "%-30s %8.2f %8.2f %8.2f\n","├ que  read→명령시작", qv/1000, q5v/1000, q9v/1000
+    sc9=(s9v>=1e18)?"    CLIP":sprintf("%8.2f",s9v/1000)
+    qc9=(q9v>=1e18)?"    CLIP":sprintf("%8.2f",q9v/1000)
+    bc9=(b9v>=1e18)?"    CLIP":sprintf("%8.2f",b9v/1000)
+    printf "%-30s %8.2f %8.2f %8s\n","srv  소켓read→sendmsg", sv/1000, s5v/1000, sc9
+    printf "%-30s %8.2f %8.2f %8s\n","├ que  read→명령시작", qv/1000, q5v/1000, qc9
     printf "%-30s %8.2f %8s %8s\n","├ pre  명령→backend진입", (sv-qv-bv)/1000, "-", "-"
-    printf "%-30s %8.2f %8.2f %8.2f\n","└ bk   backend진입→send", bv/1000, b5v/1000, b9v/1000
+    printf "%-30s %8.2f %8.2f %8s\n","└ bk   backend진입→send", bv/1000, b5v/1000, bc9
     if (g>0) {
       ad=v["extstore_prof_read_admit_avg_ns"]+0; xf=v["extstore_prof_read_xfer_avg_ns"]+0
       cr=v["extstore_prof_read_crypto_avg_ns"]+0; sy=v["extstore_prof_read_sync_avg_ns"]+0
-      printf "%-30s %8.2f %8.2f %8.2f\n","  ├ span v3 GET [계약]", r3/1000, r5/1000, r9/1000
+      printf "%-30s %8.2f %8.2f %8s\n","  ├ span v3 GET [계약]", r3/1000, r5/1000, rc9
       printf "%-30s %8.2f %8s %8s\n","  │   ├ admit 진입→post", ad/1000, "-", "-"
       printf "%-30s %8.2f %8s %8s\n","  │   ├ xfer  RDMA 왕복", xf/1000, "-", "-"
       printf "%-30s %8.2f %8s %8s\n","  │   ├ crypto AES-GCM", cr/1000, "-", "-"
@@ -116,7 +123,7 @@ END{
       ad=v["extstore_prof_write_admit_avg_ns"]+0; xf=v["extstore_prof_write_xfer_avg_ns"]+0
       cr=v["extstore_prof_write_crypto_avg_ns"]+0; sy=v["extstore_prof_write_sync_avg_ns"]+0
       rt=v["extstore_prof_write_ret_avg_ns"]+0
-      printf "%-30s %8.2f %8.2f %8.2f\n","  ├ span v3 SET [계약]", w3/1000, w5/1000, w9/1000
+      printf "%-30s %8.2f %8.2f %8s\n","  ├ span v3 SET [계약]", w3/1000, w5/1000, wc9
       printf "%-30s %8.2f %8s %8s\n","  │   ├ admit 진입→seal", ad/1000, "-", "-"
       printf "%-30s %8.2f %8s %8s\n","  │   ├ xfer  RDMA 왕복", xf/1000, "-", "-"
       printf "%-30s %8.2f %8s %8s\n","  │   ├ crypto AES-GCM", cr/1000, "-", "-"

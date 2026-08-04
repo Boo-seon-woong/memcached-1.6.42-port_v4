@@ -7303,3 +7303,16 @@ L₀ - srv(pipe=1) = 순수 네트워크 왕복
 ```
 
 NEXT: genie (BD-PIPE 5 셀, memtier latency 필수)
+---
+
+## [2026-08-04 KST] genie — BD-PIPE-1-r1
+
+```text
+CELL BD-PIPE-1-r1 DONE  0.574 M ops/s  avg 0.20720 / p50 0.18300 / p99 0.55900 / p99.9 0.91100 ms
+창(UTC)  05:38:15 ~ 05:40:15   --key-pattern=R:R --ratio=0:1 -t 30 -c 4 pipe=256 --test-time=120
+gets/misses  573528/0
+서버     reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_worker_window=24 
+raw      experiments/keydist-20260803/genie/BD-PIPE-1-r1.txt
+```
+
+NEXT: ariel (창 슬라이스)

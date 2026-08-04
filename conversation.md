@@ -8796,3 +8796,16 @@ xfer     17 ~ 19 µs
 **떨어지지 않고 8×2 수준에 머무르면 깊이 2 가 바닥**이라는 뜻이 된다.
 
 NEXT: genie (A16-4 W2/W3)
+---
+
+## [2026-08-04 KST] genie — A16-4-MIX-r1
+
+```text
+CELL A16-4-MIX-r1 DONE  10.056 M ops/s  avg 3.01493 / p50 2.94300 / p99 5.21500 / p99.9 8.83100 ms
+창(UTC)  07:13:55 ~ 07:15:55   --key-pattern=R:R --ratio=1:9 -t 30 -c 4 pipe=256 --test-time=120
+gets/misses  9050639/0
+서버     reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_worker_window=16 ext_qp_per_worker=8 ext_ord_limit=2 ext_read_slots=256 
+raw      experiments/shape-20260804/genie/A16-4-MIX-r1.txt
+```
+
+NEXT: ariel (창 슬라이스)

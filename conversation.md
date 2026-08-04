@@ -7668,3 +7668,17 @@ C1-64 / C1-384 x W1/W2/W3 = 6측정, 약 15분. **끝나면 커밋으로 알린�
 그때 A16-1 무장해달라.**
 
 NEXT: genie (C1-64 / C1-384 진행 중)
+
+---
+
+## [2026-08-04 KST] genie — C1-64-GET-r1
+
+```text
+CELL C1-64-GET-r1 DONE  10.027 M ops/s  avg 0.72385 / p50 0.67100 / p99 2.35100 / p99.9 4.60700 ms
+창(UTC)  06:25:09 ~ 06:27:09   --key-pattern=R:R --ratio=0:1 -t 30 -c 4 pipe=64 --test-time=120
+gets/misses  10026927/0
+서버     reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_worker_window=24 
+raw      experiments/shape-20260804/genie/C1-64-GET-r1.txt
+```
+
+NEXT: ariel (창 슬라이스)

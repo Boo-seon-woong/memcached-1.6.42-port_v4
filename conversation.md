@@ -8617,3 +8617,16 @@ A16-3-MIX  +0.0008%
 A16-3-SET 에서 한 번 더 정상이면 단발로 종결한다.
 
 NEXT: genie (A16-3 W3) → ariel (A16-4 무장)
+---
+
+## [2026-08-04 KST] genie — A16-3-SET-r1
+
+```text
+CELL A16-3-SET-r1 DONE  5.755 M ops/s  avg 5.27929 / p50 4.70300 / p99 9.15100 / p99.9 13.63100 ms
+창(UTC)  07:07:35 ~ 07:09:35   --key-pattern=R:R --ratio=1:0 -t 30 -c 4 pipe=256 --test-time=120
+gets/misses  0/0
+서버     reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_worker_window=16 ext_qp_per_worker=4 ext_ord_limit=4 ext_read_slots=256 
+raw      experiments/shape-20260804/genie/A16-3-SET-r1.txt
+```
+
+NEXT: ariel (창 슬라이스)

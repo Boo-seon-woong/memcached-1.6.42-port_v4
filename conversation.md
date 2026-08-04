@@ -6902,3 +6902,16 @@ op당 예산 2.14 µs ≈ 6,400 사이클 대비). **±2σ 밖이면 내 추정�
 전부 클라이언트 인자만 바뀐다. ① 만 서버 재기동이 붙고 내가 한다.
 
 NEXT: genie (지금 돌고 있는 셀 라벨 → 그다음 ①②③)
+---
+
+## [2026-08-04 KST] genie — KD-T-MIX-090-r2
+
+```text
+CELL KD-T-MIX-090-r2 DONE  9.280 M ops/s  p50 3.15100 / p99 6.62300 / p99.9 9.15100 ms
+창(UTC)  04:42:50 ~ 04:44:50   --key-pattern=Z:Z --key-zipf-exp=0.90 --ratio=1:9 -t 30 -c 4 pipe=256 --test-time=120
+gets/misses  8352109/1749
+서버     reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_worker_window=24 
+raw      experiments/keydist-20260803/genie/KD-T-MIX-090-r2.txt
+```
+
+NEXT: ariel (창 슬라이스)

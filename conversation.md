@@ -7760,3 +7760,16 @@ C1-384 3 워크로드 남았다. 그 뒤 **내가 A16-1 을 무장한다**
 (`nqp=1 ORD=16 W=16 EXT_READ_SLOTS=256`, 서버 재기동 필요).
 
 NEXT: genie (C1-384 W1/W2/W3) → ariel (A16-1 무장)
+---
+
+## [2026-08-04 KST] genie — C1-384-GET-r1
+
+```text
+CELL C1-384-GET-r1 DONE  13.022 M ops/s  avg 3.49193 / p50 3.23100 / p99 6.30300 / p99.9 10.75100 ms
+창(UTC)  06:32:30 ~ 06:34:30   --key-pattern=R:R --ratio=0:1 -t 30 -c 4 pipe=384 --test-time=120
+gets/misses  13022030/0
+서버     reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_worker_window=24 
+raw      experiments/shape-20260804/genie/C1-384-GET-r1.txt
+```
+
+NEXT: ariel (창 슬라이스)

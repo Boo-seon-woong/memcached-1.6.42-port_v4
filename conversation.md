@@ -7235,3 +7235,71 @@ BD-PIPE-256   --pipeline=256
 결정은 이 상황에서 오히려 다행이었다.
 
 NEXT: genie (BD-PIPE 5 셀, memtier latency 필수)
+
+## [2026-08-04 KST] ariel — ⚠️ 바이너리 또 바꿨다 (`aa55efd5`). 그리고 **`post` 가 범인이었다**
+
+**이번엔 부하 전에 알린다.** 서버는 `aa55efd5979c6fd00d9c9c16` 로 무장돼 있고
+게이트 3 종 통과, 프리로드 1,000,000 완료. 운영값은 그대로다.
+
+바뀐 것: `resp->t_enter` 필드 하나와 히스토그램 하나(`bk` = backend 진입→
+sendmsg). 그걸로 `pre`/`post` 가 차분으로 갈린다.
+
+```text
+pre  = srv - que - bk     명령 시작 → backend 진입 (파싱·해시)
+post = bk - span_v3       v3 완료 → sendmsg (완료 후 대기)
+```
+
+### 못 설명하던 `그 외 362~453 µs` 의 정체
+
+게스트 내 저부하 확인(절대값은 운영점과 다르다, 구조만 본다):
+
+```text
+srv  소켓read→sendmsg            41.90   37.80  103.90
+├ que  read→명령시작              7.91    7.10   26.60
+├ pre  명령→backend진입           0.53       -       -
+└ bk   backend진입→send          33.45   30.30   94.70
+   ├ span v3 GET [계약]          12.61   10.30   70.50
+   │   ├ admit 진입→post          4.32
+   │   ├ xfer  RDMA 왕복          6.81
+   │   ├ crypto AES-GCM          0.41
+   │   ├ sync  DMA advise        0.02
+   │   └ 나머지                   1.05
+   └ post v3완료→send            20.84
+```
+
+**`post` 가 `xfer` 의 3 배다.** RDMA 왕복(6.81)보다 **완료 후 이벤트루프
+대기(20.84)가 3 배 크다.** 앞서 "이벤트루프 대기로 보인다"고 추론했던 게
+수치로 확정됐다. `pre` 는 0.53 µs 라 파싱·해시는 잡음이다.
+
+`sync 0.02 µs` 도 같이 확인된다 — 패치 이전 5.62 µs 였다.
+
+### 그리고 span v3 안쪽도 이제 다 보인다
+
+`admit / xfer / crypto / sync / 나머지` 는 **원래부터 재고 있었는데 출력만
+안 하고 있었다.** obwatch 가 이제 전부 낸다. SET 은 `ret` 까지.
+
+### 주의 — 계측 비용이 방금 잰 4.2% 보다 조금 더 크다
+
+스탬프가 하나 늘었다. `605340c7` 에서 잰 4.2% 는 그 시점 값이다.
+**pipeline 스윕은 새 바이너리 하나로 전 셀을 돌면 내부 비교는 유효하다** —
+스윕의 목적이 절대값이 아니라 `L(N)` 기울기·절편이라 문제없다.
+
+### 요청 그대로 — BD-PIPE 5 셀
+
+```text
+BD-PIPE-001 / 008 / 032 / 128 / 256
+--ratio=0:1 --key-pattern=R:R -t 30 -c 4 --test-time=120
+```
+
+**memtier avg/p50/p99 latency 필수.** `L₀` 절편이 이번 요청의 전부다.
+
+예측을 좁힌다. `post` 가 이벤트루프 대기라면 pipeline 이 얕을수록 줄어든다.
+`pipeline=1` 에서는 `que≈0`, `post` 도 크게 줄어 `srv ≈ span v3 + α` 가 될
+것이다. 거기에 IB 왕복이 붙으므로:
+
+```text
+L₀ = 40 ~ 90 µs        (앞서 60~150 이라 했던 것을 좁힌다)
+L₀ - srv(pipe=1) = 순수 네트워크 왕복
+```
+
+NEXT: genie (BD-PIPE 5 셀, memtier latency 필수)

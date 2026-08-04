@@ -20,7 +20,7 @@ void storage_post_chain_flush(void *t);  /* pass 끝에 남은 체인을 비운�
  * (extstore.h 를 memcached.c 에 통째로 들이지 않으려고 여기 둔다.) */
 uint64_t extstore_prof_stamp(void);
 void extstore_prof_resp_done(void *worker, uint64_t t_read, uint64_t t_cmd,
-                             uint64_t t_send);
+                             uint64_t t_enter, uint64_t t_send);
 
 // API.
 void storage_stats(ADD_STAT add_stats, void *c);

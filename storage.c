@@ -296,6 +296,10 @@ void storage_stats(ADD_STAT add_stats, void *c) {
          * v2 가 빼는 admission/queue 대기와 완료 관측 지연이 여기 들어온다. */
         APPEND_STAT("extstore_prof_read_e2e_count", "%llu", (unsigned long long)st.prof_read_e2e_count);
         APPEND_STAT("extstore_prof_read_e2e_avg_ns", "%llu", (unsigned long long)st.prof_read_e2e_avg_ns);
+        APPEND_STAT("extstore_prof_bk_count",  "%llu", (unsigned long long)st.prof_bk_count);
+        APPEND_STAT("extstore_prof_bk_avg_ns", "%llu", (unsigned long long)st.prof_bk_avg_ns);
+        APPEND_STAT("extstore_prof_bk_p50_ns", "%llu", (unsigned long long)st.prof_bk_p50_ns);
+        APPEND_STAT("extstore_prof_bk_p99_ns", "%llu", (unsigned long long)st.prof_bk_p99_ns);
         APPEND_STAT("extstore_prof_srv_count",  "%llu", (unsigned long long)st.prof_srv_count);
         APPEND_STAT("extstore_prof_srv_avg_ns", "%llu", (unsigned long long)st.prof_srv_avg_ns);
         APPEND_STAT("extstore_prof_srv_p50_ns", "%llu", (unsigned long long)st.prof_srv_p50_ns);
@@ -468,6 +472,7 @@ int storage_get_item(LIBEVENT_THREAD *t, item *it, mc_resp *resp) {
     /* span v3 시작 — backend 진입. v2 는 실제 post 시점(worker_post)에서
      * 시작해 admission·bounce slot 대기를 통째로 빠뜨린다. */
     uint64_t t_enter_v3 = extstore_prof_stamp();
+    if (resp) resp->t_enter = t_enter_v3;   /* pre/post 분해용 */
 #ifdef NEED_ALIGN
     item_hdr hdr;
     memcpy(&hdr, ITEM_data(it), sizeof(hdr));
@@ -901,6 +906,7 @@ int storage_store_item_pac(void *e, item *it, item **hdr_out, uint32_t hv,
                            LIBEVENT_THREAD *t) {
     /* span v3 시작 — backend 진입 (v2 는 seal 직전에서 시작한다) */
     uint64_t t_enter_v3 = extstore_prof_stamp();
+    if (t->cur_resp) t->cur_resp->t_enter = t_enter_v3;   /* pre/post 분해용 */
     size_t ntotal = ITEM_ntotal(it);
     unsigned int rlen = ntotal + (g_crypto_on ? EXT_CRYPTO_OVERHEAD : 0);
     if (it->it_flags & (ITEM_CHUNKED|ITEM_HDR)) return 0;

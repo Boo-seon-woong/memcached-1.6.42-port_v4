@@ -42,6 +42,8 @@ struct extstore_stats {
     /* v4 클라이언트 가시 구간: srv = 소켓 read→sendmsg, que = read→명령 시작 */
     uint64_t prof_srv_count, prof_srv_avg_ns, prof_srv_p50_ns, prof_srv_p99_ns;
     uint64_t prof_que_count, prof_que_avg_ns, prof_que_p50_ns, prof_que_p99_ns;
+    /* bk = backend 진입 → sendmsg. pre = srv-que-bk, post = bk - span_v3 */
+    uint64_t prof_bk_count, prof_bk_avg_ns, prof_bk_p50_ns, prof_bk_p99_ns;
     uint64_t worker_drain_calls, worker_drain_empty, worker_wait_enq;
     uint64_t slot_acct_leak;
     uint64_t alloc_failures;   /* store full: SET answered NOT_STORED */
@@ -163,7 +165,7 @@ int extstore_check(void *ptr, unsigned int page_id, uint64_t page_version);
 void extstore_get_stats(void *ptr, struct extstore_stats *st);
 uint64_t extstore_prof_stamp(void);
 void extstore_prof_resp_done(void *worker, uint64_t t_read, uint64_t t_cmd,
-                             uint64_t t_send);
+                             uint64_t t_enter, uint64_t t_send);
 void extstore_prof_read_done(void *ptr, obj_io *io,
         uint64_t crypto_start, uint64_t crypto_done);
 /* span v3 WRITE 종료: WFLIGHT 해제 직후(= 응용에서 보이는 완료) 호출한다. */

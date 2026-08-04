@@ -1198,7 +1198,8 @@ mc_resp* resp_finish(conn *c, mc_resp *resp) {
      * span v3 는 backend 진입 이후만이라 파싱·해시·응답조립이 빠져 있다. */
     if (resp->t_cmd && !resp->skip) {
         extstore_prof_resp_done(c->thread->ext_worker, resp->t_read,
-                                resp->t_cmd, extstore_prof_stamp());
+                                resp->t_cmd, resp->t_enter,
+                                extstore_prof_stamp());
         resp->t_cmd = 0;   /* 재사용 전 이중 기록 방지 */
     }
 #endif

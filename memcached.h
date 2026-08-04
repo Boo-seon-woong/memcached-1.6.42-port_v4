@@ -756,6 +756,7 @@ typedef struct _mc_resp {
      * 둘 다 resp_allocate 의 memset(0, offsetof(wbuf)) 범위 안이라 자동 0 이다. */
     uint64_t t_read;
     uint64_t t_cmd;
+    uint64_t t_enter;   /* span v3 진입(backend). pre/post 를 가르는 데 쓴다 */
 
     char wbuf[WRITE_BUFFER_SIZE];
 } mc_resp;

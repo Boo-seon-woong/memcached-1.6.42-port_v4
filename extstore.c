@@ -202,6 +202,8 @@ typedef struct store_worker {
     uint32_t prof_srv_hist[PROF_BUCKETS];
     uint64_t prof_que_count, prof_que_sum_ns;
     uint32_t prof_que_hist[PROF_BUCKETS];
+    uint64_t prof_bk_count, prof_bk_sum_ns;
+    uint32_t prof_bk_hist[PROF_BUCKETS];
 } store_worker;
 
 struct store_engine {
@@ -1135,6 +1137,8 @@ static void prof_summarize(store_engine *e, int read,
                      h = w->prof_r_e2e_hist; break;
             case 3:  total += w->prof_w_e2e_count; sum += w->prof_w_e2e_sum_ns;
                      h = w->prof_w_e2e_hist; break;
+            case 6:  total += w->prof_bk_count; sum += w->prof_bk_sum_ns;
+                     h = w->prof_bk_hist; break;
             case 4:  total += w->prof_srv_count; sum += w->prof_srv_sum_ns;
                      h = w->prof_srv_hist; break;
             case 5:  total += w->prof_que_count; sum += w->prof_que_sum_ns;
@@ -1194,6 +1198,8 @@ void extstore_get_stats(void *ptr, struct extstore_stats *st) {
                        &st->prof_srv_p50_ns, &st->prof_srv_p99_ns);
         prof_summarize(e, 5, &st->prof_que_count, &st->prof_que_avg_ns,
                        &st->prof_que_p50_ns, &st->prof_que_p99_ns);
+        prof_summarize(e, 6, &st->prof_bk_count, &st->prof_bk_avg_ns,
+                       &st->prof_bk_p50_ns, &st->prof_bk_p99_ns);
         uint64_t rc = 0, wc = 0, rs = 0, rx = 0, ws = 0, wx = 0;
         uint64_t ra_ = 0, wa_ = 0, wr_ = 0;
         if (e->workers) {
@@ -1238,8 +1244,10 @@ void extstore_prof_reset(void *ptr) {
             memset(w->prof_w_e2e_hist, 0, sizeof(w->prof_w_e2e_hist));
             w->prof_srv_count = w->prof_srv_sum_ns = 0;
             w->prof_que_count = w->prof_que_sum_ns = 0;
+            w->prof_bk_count = w->prof_bk_sum_ns = 0;
             memset(w->prof_srv_hist, 0, sizeof(w->prof_srv_hist));
             memset(w->prof_que_hist, 0, sizeof(w->prof_que_hist));
+            memset(w->prof_bk_hist, 0, sizeof(w->prof_bk_hist));
         }
     }
 }
@@ -1251,7 +1259,7 @@ uint64_t extstore_prof_stamp(void) {
 /* v4: 응답이 wire 로 나간 시점에 서버 체류를 기록한다. 워커 전용 배열이라
  * 락이 없고, g_prof_on 이 꺼져 있으면 분기 하나로 끝난다. */
 void extstore_prof_resp_done(void *worker, uint64_t t_read, uint64_t t_cmd,
-                             uint64_t t_send) {
+                             uint64_t t_enter, uint64_t t_send) {
     if (!g_prof_on || !worker || !t_cmd || t_send < t_cmd) return;
     store_worker *w = worker;
     int have_read = (t_read != 0 && t_read <= t_cmd);
@@ -1260,6 +1268,10 @@ void extstore_prof_resp_done(void *worker, uint64_t t_read, uint64_t t_cmd,
     if (have_read)
         prof_record(w->prof_que_hist, &w->prof_que_count, &w->prof_que_sum_ns,
                     t_cmd - t_read);
+    /* backend 를 탄 요청만. 안 탄 요청(로컬 히트 등)은 t_enter 가 0 이다. */
+    if (t_enter >= t_cmd && t_send >= t_enter && t_enter != 0)
+        prof_record(w->prof_bk_hist, &w->prof_bk_count, &w->prof_bk_sum_ns,
+                    t_send - t_enter);
 }
 
 void extstore_prof_read_done(void *ptr, obj_io *io,

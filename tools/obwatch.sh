@@ -88,20 +88,45 @@ END{
   printf "%-10s %13.2f %13.2f\n","Totals",(g+s)/t,h/t
   printf "\n  span v3 = backend 진입→응용 가시 완료 (계약 판정 대상)\n"
 
-  # v4 지연 분해. srv = 소켓 read→sendmsg 전체, que = 그중 같은 read 버퍼의
-  # 앞선 명령을 기다린 몫. span v3 는 srv 안에 들어 있다.
+  # v4 지연 분해 전체 트리. srv = 소켓 read→sendmsg.
+  # srv = que + pre + bk,  bk = span_v3 + post
   sv=v["extstore_prof_srv_avg_ns"]+0; s5v=v["extstore_prof_srv_p50_ns"]+0; s9v=v["extstore_prof_srv_p99_ns"]+0
   qv=v["extstore_prof_que_avg_ns"]+0; q5v=v["extstore_prof_que_p50_ns"]+0; q9v=v["extstore_prof_que_p99_ns"]+0
+  bv=v["extstore_prof_bk_avg_ns"]+0;  b5v=v["extstore_prof_bk_p50_ns"]+0;  b9v=v["extstore_prof_bk_p99_ns"]+0
   if (sv>0) {
-    span=(g>0)?r3:w3
     printf "\n--- latency breakdown (avg / p50 / p99, us) ---\n"
-    printf "%-26s %9.2f %9.2f %9.2f\n","서버 체류 srv (read→send)", sv/1000, s5v/1000, s9v/1000
-    printf "%-26s %9.2f %9.2f %9.2f\n","  ├ 버퍼 대기 que", qv/1000, q5v/1000, q9v/1000
-    printf "%-26s %9.2f %9s %9s\n","  └ 처리 (srv-que)", (sv-qv)/1000, "-", "-"
-    printf "%-26s %9.2f %9s %9s\n","      ├ span v3", span/1000, "-", "-"
-    printf "%-26s %9.2f %9s %9s\n","      └ 그 외(파싱·해시·응답)", (sv-qv-span)/1000, "-", "-"
-    printf "\n  e2e(memtier) - srv = 네트워크 + 클라이언트 큐잉. memtier 수치와 대조할 것.\n"
+    printf "%-30s %8s %8s %8s\n","구간","avg","p50","p99"
+    printf "%s\n","---------------------------------------------------------------"
+    printf "%-30s %8.2f %8.2f %8.2f\n","srv  소켓read→sendmsg", sv/1000, s5v/1000, s9v/1000
+    printf "%-30s %8.2f %8.2f %8.2f\n","├ que  read→명령시작", qv/1000, q5v/1000, q9v/1000
+    printf "%-30s %8.2f %8s %8s\n","├ pre  명령→backend진입", (sv-qv-bv)/1000, "-", "-"
+    printf "%-30s %8.2f %8.2f %8.2f\n","└ bk   backend진입→send", bv/1000, b5v/1000, b9v/1000
+    if (g>0) {
+      ad=v["extstore_prof_read_admit_avg_ns"]+0; xf=v["extstore_prof_read_xfer_avg_ns"]+0
+      cr=v["extstore_prof_read_crypto_avg_ns"]+0; sy=v["extstore_prof_read_sync_avg_ns"]+0
+      printf "%-30s %8.2f %8.2f %8.2f\n","  ├ span v3 GET [계약]", r3/1000, r5/1000, r9/1000
+      printf "%-30s %8.2f %8s %8s\n","  │   ├ admit 진입→post", ad/1000, "-", "-"
+      printf "%-30s %8.2f %8s %8s\n","  │   ├ xfer  RDMA 왕복", xf/1000, "-", "-"
+      printf "%-30s %8.2f %8s %8s\n","  │   ├ crypto AES-GCM", cr/1000, "-", "-"
+      printf "%-30s %8.2f %8s %8s\n","  │   ├ sync  DMA advise", sy/1000, "-", "-"
+      printf "%-30s %8.2f %8s %8s\n","  │   └ 나머지", (r3-ad-xf-cr-sy)/1000, "-", "-"
+      printf "%-30s %8.2f %8s %8s\n","  └ post v3완료→send", (bv-r3)/1000, "-", "-"
+    }
+    if (s>0) {
+      ad=v["extstore_prof_write_admit_avg_ns"]+0; xf=v["extstore_prof_write_xfer_avg_ns"]+0
+      cr=v["extstore_prof_write_crypto_avg_ns"]+0; sy=v["extstore_prof_write_sync_avg_ns"]+0
+      rt=v["extstore_prof_write_ret_avg_ns"]+0
+      printf "%-30s %8.2f %8.2f %8.2f\n","  ├ span v3 SET [계약]", w3/1000, w5/1000, w9/1000
+      printf "%-30s %8.2f %8s %8s\n","  │   ├ admit 진입→seal", ad/1000, "-", "-"
+      printf "%-30s %8.2f %8s %8s\n","  │   ├ xfer  RDMA 왕복", xf/1000, "-", "-"
+      printf "%-30s %8.2f %8s %8s\n","  │   ├ crypto AES-GCM", cr/1000, "-", "-"
+      printf "%-30s %8.2f %8s %8s\n","  │   ├ sync  DMA advise", sy/1000, "-", "-"
+      printf "%-30s %8.2f %8s %8s\n","  │   └ ret   CQE→가시", rt/1000, "-", "-"
+    }
+    printf "\n  e2e(memtier) - srv = 네트워크 + 클라이언트 큐잉 (pipeline 스윕으로 분리)\n"
+    printf "  pre 는 차분(srv-que-bk)이라 백분위가 없다. post 도 bk-span 차분이다.\n"
   }
+
   gp=(g>0)?(r3/1000<30):1; sp=(s>0)?(w3/1000<30):1
   printf "\n%-28s %s\n","gate span v3 avg < 30us", \
     (g==0 && s==0)?"n/a":( (gp&&sp)?sprintf("PASS  (GET %.2fus / SET %.2fus)", r3/1000, w3/1000) \

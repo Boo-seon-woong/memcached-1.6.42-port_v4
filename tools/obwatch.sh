@@ -25,11 +25,12 @@ printf 'stats reset\r\nquit\r\n' | timeout 3 nc "$HOST" "$PORT" >/dev/null
 T0=$(date -u +%s.%N)
 echo "extstore watch — window ${DUR}s, opened $(date -u +%H:%M:%SZ)"
 echo
-printf '%6s %10s %10s %7s %9s %9s %9s %9s %8s %6s %5s\n' \
-  t get/s set/s hit% Gspan_v3 Gspan_v2 Sspan_v3 Sspan_v2 wait/s busyCPU err
-printf '%6s %10s %10s %7s %9s %9s %9s %9s %8s %6s %5s\n' \
-  ------ ---------- ---------- ------- --------- --------- --------- --------- -------- ------ -----
-# v3 = backend 진입부터(계약 판정 대상). v2 = 내부 data-path 구간(참고).
+printf '%6s %10s %10s %7s %8s %8s %8s %8s %8s %8s %8s %6s %5s\n' \
+  t get/s set/s hit% Gv3_avg Gv3_p50 Gv3_p99 Sv3_avg Sv3_p50 Sv3_p99 wait/s busyCPU err
+printf '%6s %10s %10s %7s %8s %8s %8s %8s %8s %8s %8s %6s %5s\n' \
+  ------ ---------- ---------- ------- -------- -------- -------- -------- -------- -------- -------- ------ -----
+# span v3 = backend 진입 → 응용 가시 완료. 계약 판정 대상이며 이제 이것만 낸다.
+# v2(post→복호)는 2026-08-04 에 뺐다 — 두 정의가 섞여 인용되는 사고가 반복됐다.
 
 # 기준선 선점: ext_worker_wait_enq 등 일부 카운터는 stats reset 대상이 아니라
 # 누적값이므로, 초기화하지 않으면 첫 행의 델타가 전체 누적치로 튄다.
@@ -44,9 +45,10 @@ while :; do
   EL=$(awk -v a="$NOW" -v b="$T0" 'BEGIN{printf "%.0f", a-b}')
   S=$(st); [ -n "$S" ] || continue
   G=$(f "$S" cmd_get); SE=$(f "$S" cmd_set); H=$(f "$S" get_hits)
-  RA=$(f "$S" extstore_prof_read_avg_ns);  R9=$(f "$S" extstore_prof_read_p99_ns)
-  WA=$(f "$S" extstore_prof_write_avg_ns); W9=$(f "$S" extstore_prof_write_p99_ns)
-  R3=$(f "$S" extstore_prof_read_e2e_avg_ns); W3=$(f "$S" extstore_prof_write_e2e_avg_ns)
+  R3=$(f "$S" extstore_prof_read_e2e_avg_ns)
+  R5=$(f "$S" extstore_prof_read_e2e_p50_ns);  R9=$(f "$S" extstore_prof_read_e2e_p99_ns)
+  W3=$(f "$S" extstore_prof_write_e2e_avg_ns)
+  W5=$(f "$S" extstore_prof_write_e2e_p50_ns); W9=$(f "$S" extstore_prof_write_e2e_p99_ns)
   WE=$(f "$S" ext_worker_wait_enq)
   ERR=$(echo "$S" | awk '$1=="STAT" && ($2=="get_misses"||$2=="badcrc_from_extstore"||$2=="extstore_read_failures"||$2=="extstore_write_failures"||$2=="extstore_engine_dead"||$2=="ext_slot_acct_leak"){s+=$3}END{print s+0}')
   read -r _ ca cb cc cd ce cf cg ch _ < /proc/stat
@@ -55,12 +57,13 @@ while :; do
   PCT=$CT; PCI=$CI
   DT=$(awk -v a="$NOW" -v b="$PT" 'BEGIN{d=a-b; if(d<0.001)d=0.001; printf "%.6f", d}')
   awk -v el="$EL" -v g=$(( ${G:-0} - PG )) -v se=$(( ${SE:-0} - PS )) -v dt="$DT" \
-      -v hit="${H:-0}" -v tg="${G:-0}" -v ra="${R3:-0}" -v r9="${RA:-0}" \
-      -v wa="${W3:-0}" -v w9="${WA:-0}" \
+      -v hit="${H:-0}" -v tg="${G:-0}" \
+      -v ga="${R3:-0}" -v g5="${R5:-0}" -v g9="${R9:-0}" \
+      -v sa="${W3:-0}" -v s5="${W5:-0}" -v s9="${W9:-0}" \
       -v we=$(( ${WE:-0} - PW )) -v err="${ERR:-0}" -v busy="$BUSY" 'BEGIN{
-    printf "%5ds %9.3fM %9.3fM %6.2f%% %7.2fus %7.1fus %7.2fus %7.1fus %7.1fM %6s %5d\n",
+    printf "%5ds %9.3fM %9.3fM %6.2f%% %6.2fus %6.2fus %6.2fus %6.2fus %6.2fus %6.2fus %7.1fM %6s %5d\n",
       el, g/dt/1e6, se/dt/1e6, (tg>0)?hit/tg*100:0,
-      ra/1000, r9/1000, wa/1000, w9/1000, we/dt/1e6, busy, err }'
+      ga/1000, g5/1000, g9/1000, sa/1000, s5/1000, s9/1000, we/dt/1e6, busy, err }'
   PG=${G:-0}; PS=${SE:-0}; PW=${WE:-0}; PT=$NOW
   [ "$EL" -ge "$DUR" ] && break
 done
@@ -74,18 +77,16 @@ END{
   g=v["cmd_get"]+0; s=v["cmd_set"]+0; h=v["get_hits"]+0
   r3=v["extstore_prof_read_e2e_avg_ns"]+0; w3=v["extstore_prof_write_e2e_avg_ns"]+0
   r3c=v["extstore_prof_read_e2e_count"]+0; w3c=v["extstore_prof_write_e2e_count"]+0
-  ra=v["extstore_prof_read_avg_ns"]+0;  r5=v["extstore_prof_read_p50_ns"]+0
-  r9=v["extstore_prof_read_p99_ns"]+0;  rc=v["extstore_prof_read_count"]+0
-  wa=v["extstore_prof_write_avg_ns"]+0; w5=v["extstore_prof_write_p50_ns"]+0
-  w9=v["extstore_prof_write_p99_ns"]+0; wc=v["extstore_prof_write_count"]+0
+  r5=v["extstore_prof_read_e2e_p50_ns"]+0;  r9=v["extstore_prof_read_e2e_p99_ns"]+0
+  w5=v["extstore_prof_write_e2e_p50_ns"]+0; w9=v["extstore_prof_write_e2e_p99_ns"]+0
+  rc=v["extstore_prof_read_count"]+0;  wc=v["extstore_prof_write_count"]+0
   printf "===== SERVER STATS (%.1fs window) =====\n", t
-  printf "%-10s %13s %13s %12s %12s %12s %12s\n","Type","Ops/sec","Hits/sec","span v3","v2 avg","v2 p50","v2 p99"
-  printf "%s\n","-------------------------------------------------------------------------------------------------"
-  if (s>0) printf "%-10s %13.2f %13s %10.3fus %10.3fus %10.3fus %10.3fus\n","Sets",s/t,"---",w3/1000,wa/1000,w5/1000,w9/1000
-  if (g>0) printf "%-10s %13.2f %13.2f %10.3fus %10.3fus %10.3fus %10.3fus\n","Gets",g/t,h/t,r3/1000,ra/1000,r5/1000,r9/1000
+  printf "%-10s %13s %13s %12s %12s %12s\n","Type","Ops/sec","Hits/sec","v3 avg","v3 p50","v3 p99"
+  printf "%s\n","------------------------------------------------------------------------------------"
+  if (s>0) printf "%-10s %13.2f %13s %10.3fus %10.3fus %10.3fus\n","Sets",s/t,"---",w3/1000,w5/1000,w9/1000
+  if (g>0) printf "%-10s %13.2f %13.2f %10.3fus %10.3fus %10.3fus\n","Gets",g/t,h/t,r3/1000,r5/1000,r9/1000
   printf "%-10s %13.2f %13.2f\n","Totals",(g+s)/t,h/t
   printf "\n  span v3 = backend 진입→응용 가시 완료 (계약 판정 대상)\n"
-  printf "  span v2 = 내부 data-path 구간 (GET: post→복호, SET: seal→CQE). 참고용\n"
   gp=(g>0)?(r3/1000<30):1; sp=(s>0)?(w3/1000<30):1
   printf "\n%-28s %s\n","gate span v3 avg < 30us", \
     (g==0 && s==0)?"n/a":( (gp&&sp)?sprintf("PASS  (GET %.2fus / SET %.2fus)", r3/1000, w3/1000) \

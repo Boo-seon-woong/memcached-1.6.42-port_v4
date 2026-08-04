@@ -433,24 +433,26 @@ DUR=60 bash /tmp/obwatch.sh
 ```text
 extstore watch — window 300s, opened 02:10:14Z
 
-     t       get/s       set/s     hit%   span_avg   span_p50   span_p99 wait_enq/s   err
------- ----------- ----------- -------- ---------- ---------- ---------- --------- -----
-    1s    13.40M      0.000M   100.00    21.90us    20.1us      52.0us     0.0M     0
-    2s    13.39M      0.000M   100.00    21.91us    20.1us      52.1us     0.0M     0
+     t      get/s      set/s    hit%  Gv3_avg  Gv3_p50  Gv3_p99  Sv3_avg  Sv3_p50  Sv3_p99   wait/s busyCPU   err
+------ ---------- ---------- ------- -------- -------- -------- -------- -------- -------- -------- ------ -----
+    1s    13.792M    0.000M 100.00%  21.24us  18.90us  49.70us   0.00us   0.00us   0.00us     0.0M   29.8     0
+    2s    13.782M    0.000M 100.00%  21.21us  18.90us  49.00us   0.00us   0.00us   0.00us     0.0M   29.8     0
     ...
 
 ===== SERVER STATS (300s window) =====
-Type             Ops/sec      Hits/sec     Span Avg     Span p50     Span p99
+Type             Ops/sec      Hits/sec       v3 avg       v3 p50       v3 p99
 ------------------------------------------------------------------------------------
-Gets       13397000.00   13397000.00     21.900us     20.100us     52.000us
-Totals     13397000.00   13397000.00
+Gets         13792529.75   13792529.70     21.235us     18.900us     49.000us
+Totals       13792529.75   13792529.70
 
-gate span avg < 30us         PASS  (21.90us, 여유 8.10us)
+  span v3 = backend 진입→응용 가시 완료 (계약 판정 대상)
+
+gate span v3 avg < 30us      PASS  (GET 21.24us / SET 0.00us)
 hit rate                     100.00 %
 
 --- correctness (전부 0이어야 정상) ---
 get_misses=0 badcrc=0 read_fail=0 write_fail=0 engine_dead=0 leak=0
-read span 표본 커버리지 : +0.0007%  OK
+read span 표본 커버리지 : +0.0015%  OK
    (양수=리셋 경계 누락, 음수=재시도로 표본 증가 — 혼합 워크로드에서 정상)
 ```
 
@@ -489,7 +491,7 @@ E-3 출력이 곧 판정 자료다. 아래 기준으로 읽는다.
 | **coherent MR 풀** | 기동 로그에 `coherent MR` **2줄** | 전제 조건. 0이면 패치 이전을 잰 것이라 **수치 무효** (§D-1) |
 | **`*_sync_avg_ns`** | GET·SET 모두 **< 0.1 µs** | 패치가 실제로 먹었다는 사후 증거 (§F-4) |
 | gate (GET span) | `span avg < 30us` **PASS** | obwatch가 자동 판정 |
-| **SET span** | `Sspan avg < 30 µs` | **obwatch가 판정해 주지 않는다.** 표에서 직접 읽을 것. v4 운영값에서 **~9.1 µs** |
+| **SET span** | `Sv3_avg < 30 µs` | obwatch 의 gate 줄이 GET·SET 을 함께 판정한다. v4 운영값에서 **~9.4 µs** |
 | correctness 필수 5종 | 전부 0 | `get_misses`/`read_fail`/`write_fail`/`engine_dead`/`leak`. 하나라도 0이 아니면 **성능 수치 무효** |
 | `badcrc_from_extstore` | GET-only(W1): **0**<br>혼합(W3/W4): **0이 아닐 수 있음** | 아래 근거 참조 |
 | span 표본 커버리지 | `OK` | 아래 근거 참조. 범위 밖이면 계측 이상 |

@@ -242,6 +242,12 @@ void storage_stats(ADD_STAT add_stats, void *c) {
                 (unsigned long long)atomic_load(&g_plaintext_slab_fallback));
         APPEND_STAT("ext_worker_window", "%llu",
                 (unsigned long long)st.worker_window);
+        APPEND_STAT("ext_qp_per_worker", "%llu",
+                (unsigned long long)st.qp_per_worker);
+        APPEND_STAT("ext_ord_limit", "%llu",
+                (unsigned long long)st.ord_limit);
+        APPEND_STAT("ext_read_slots", "%llu",
+                (unsigned long long)st.read_slots);
         APPEND_STAT("ext_loc_mag_depth", "%llu",
                 (unsigned long long)g_loc_mag_depth);
         APPEND_STAT("ext_worker_drain_calls", "%llu",

@@ -1183,6 +1183,10 @@ void extstore_get_stats(void *ptr, struct extstore_stats *st) {
     st->page_data = pd;
     STAT_UL(e);
     st->worker_window = e->w_window;
+    st->qp_per_worker = e->w_nqp;
+    st->read_slots = e->read_slots;
+    st->ord_limit = (e->workers && e->workers[0]) ? e->workers[0]->ord_limit
+                                                  : e->ord_limit;
     st->worker_drain_calls = 0;
     st->worker_drain_empty = 0;
     st->worker_wait_enq = 0;

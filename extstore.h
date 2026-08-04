@@ -48,6 +48,10 @@ struct extstore_stats {
     uint64_t slot_acct_leak;
     uint64_t alloc_failures;   /* store full: SET answered NOT_STORED */
     uint64_t worker_window;
+    /* 형태 실험(shape-20260804)이 이 셋으로만 셀을 가른다. 노출하지 않으면
+     * 양측 다 어느 셀을 돌렸는지 증명할 수 없다. ord_limit 은 실효값이다
+     * (0 을 넣으면 CM 협상값이 들어오므로 워커가 실제로 쓰는 값을 낸다). */
+    uint64_t qp_per_worker, ord_limit, read_slots;
     struct extstore_page_data *page_data;
 };
 

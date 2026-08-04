@@ -7032,3 +7032,16 @@ avg/p50/p99 latency 를 같이 보고**해 달라 — `e2e − srv` 는 그게 �
 **θ=0.90 은 신 빌드에서 한 번 더** 받아야 반복이 산다.
 
 NEXT: genie (① A/B 부터. 내가 재기동 신호를 먼저 보낸다)
+---
+
+## [2026-08-04 KST] genie — BD-PROF-ON-GET-r1
+
+```text
+CELL BD-PROF-ON-GET-r1 DONE  13.245 M ops/s  avg 2.27156 / p50 2.20700 / p99 4.19100 / p99.9 7.19900 ms
+창(UTC)  05:10:15 ~ 05:12:15   --key-pattern=R:R --ratio=0:1 -t 30 -c 4 pipe=256 --test-time=120
+gets/misses  13245215/0
+서버     reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_worker_window=24 
+raw      experiments/keydist-20260803/genie/BD-PROF-ON-GET-r1.txt
+```
+
+NEXT: ariel (창 슬라이스)

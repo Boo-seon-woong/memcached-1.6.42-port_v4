@@ -7124,3 +7124,16 @@ BD-PROF-OFF-MIX   11.26 ~ 11.47 M
 같은 현상이 나오는지 보면 빌드 탓인지 갈린다.
 
 NEXT: genie (BD-PROF-OFF-GET-r1, BD-PROF-OFF-MIX-r1)
+---
+
+## [2026-08-04 KST] genie — BD-PROF-OFF-GET-r1
+
+```text
+CELL BD-PROF-OFF-GET-r1 DONE  13.840 M ops/s  avg 2.17062 / p50 2.12700 / p99 3.79100 / p99.9 7.03900 ms
+창(UTC)  05:18:04 ~ 05:20:04   --key-pattern=R:R --ratio=0:1 -t 30 -c 4 pipe=256 --test-time=120
+gets/misses  13840367/0
+서버     reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_worker_window=24 
+raw      experiments/keydist-20260803/genie/BD-PROF-OFF-GET-r1.txt
+```
+
+NEXT: ariel (창 슬라이스)

@@ -87,6 +87,21 @@ END{
   if (g>0) printf "%-10s %13.2f %13.2f %10.3fus %10.3fus %10.3fus\n","Gets",g/t,h/t,r3/1000,r5/1000,r9/1000
   printf "%-10s %13.2f %13.2f\n","Totals",(g+s)/t,h/t
   printf "\n  span v3 = backend 진입→응용 가시 완료 (계약 판정 대상)\n"
+
+  # v4 지연 분해. srv = 소켓 read→sendmsg 전체, que = 그중 같은 read 버퍼의
+  # 앞선 명령을 기다린 몫. span v3 는 srv 안에 들어 있다.
+  sv=v["extstore_prof_srv_avg_ns"]+0; s5v=v["extstore_prof_srv_p50_ns"]+0; s9v=v["extstore_prof_srv_p99_ns"]+0
+  qv=v["extstore_prof_que_avg_ns"]+0; q5v=v["extstore_prof_que_p50_ns"]+0; q9v=v["extstore_prof_que_p99_ns"]+0
+  if (sv>0) {
+    span=(g>0)?r3:w3
+    printf "\n--- latency breakdown (avg / p50 / p99, us) ---\n"
+    printf "%-26s %9.2f %9.2f %9.2f\n","서버 체류 srv (read→send)", sv/1000, s5v/1000, s9v/1000
+    printf "%-26s %9.2f %9.2f %9.2f\n","  ├ 버퍼 대기 que", qv/1000, q5v/1000, q9v/1000
+    printf "%-26s %9.2f %9s %9s\n","  └ 처리 (srv-que)", (sv-qv)/1000, "-", "-"
+    printf "%-26s %9.2f %9s %9s\n","      ├ span v3", span/1000, "-", "-"
+    printf "%-26s %9.2f %9s %9s\n","      └ 그 외(파싱·해시·응답)", (sv-qv-span)/1000, "-", "-"
+    printf "\n  e2e(memtier) - srv = 네트워크 + 클라이언트 큐잉. memtier 수치와 대조할 것.\n"
+  }
   gp=(g>0)?(r3/1000<30):1; sp=(s>0)?(w3/1000<30):1
   printf "\n%-28s %s\n","gate span v3 avg < 30us", \
     (g==0 && s==0)?"n/a":( (gp&&sp)?sprintf("PASS  (GET %.2fus / SET %.2fus)", r3/1000, w3/1000) \
@@ -101,8 +116,16 @@ END{
   if (s>0) printf "badcrc=%d (%.3f%% of GET) — 혼합 워크로드에서는 read-during-write 경합으로 발생 가능. get_misses=0이면 재시도로 복구된 것이며 미검증 데이터는 전달되지 않는다\n", bc, (g>0)?bc/g*100:0
   else     printf "badcrc=%d  %s (GET-only에서는 0이어야 한다)\n", bc, (bc==0)?"OK":"*** FAIL ***"
   if (g>0) { d=(g-rc)/g*100
-    printf "read span 표본 커버리지 : %+.4f%%  %s\n", d, (d>=-1.0&&d<0.2)?"OK":"*** 확인 필요 ***"
-    printf "   (양수=리셋 경계 누락, 음수=재시도로 표본 증가 — 혼합 워크로드에서 정상)\n" }
+    ok=(d>=-1.0&&d<0.2)
+    printf "read span 표본 커버리지 : %+.4f%%  %s\n", d, ok?"OK":"*** 확인 필요 ***"
+    printf "   (양수=리셋 경계 누락, 음수=재시도로 표본 증가 — 혼합 워크로드에서 정상)\n"
+    if (!ok) {
+      printf "\n*** 이 창의 Ops/sec 총계를 쓰지 말 것 ***\n"
+      printf "    커버리지가 밴드 밖이면 총계가 그 크기만큼 부풀어 있다. 실측 확인:\n"
+      printf "    BD-PROF-ON-MIX-r1 총계 11.865M / 커버리지 +8.45%% / 안정구간 행 10.961M\n"
+      printf "    (클라이언트 10.926M 과 맞은 쪽은 행이다)\n"
+      printf "    → 위 초당 행에서 10s 이후 구간의 평균을 채택하라.\n"
+    } }
   if (s>0) { d=(s-wc)/s*100
     printf "write span 표본 커버리지: %.4f%% 누락  %s\n", d, (d>=-0.05&&d<0.2)?"OK":"*** 확인 필요 ***" }
 }'

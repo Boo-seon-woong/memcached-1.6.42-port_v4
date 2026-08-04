@@ -1077,6 +1077,12 @@ static mc_resp* resp_allocate(conn *c) {
         }
     }
 
+#ifdef EXTSTORE
+    if (resp) {
+        resp->t_cmd = extstore_prof_stamp();
+        resp->t_read = c->t_read;
+    }
+#endif
     return resp;
 }
 
@@ -1187,6 +1193,15 @@ mc_resp *resp_start_unlinked(conn *c) {
 // returns next response in chain.
 mc_resp* resp_finish(conn *c, mc_resp *resp) {
     mc_resp *next = resp->next;
+#ifdef EXTSTORE
+    /* 응답이 실제로 나간 지점. 여기서 재야 서버 체류 전체가 잡힌다 —
+     * span v3 는 backend 진입 이후만이라 파싱·해시·응답조립이 빠져 있다. */
+    if (resp->t_cmd && !resp->skip) {
+        extstore_prof_resp_done(c->thread->ext_worker, resp->t_read,
+                                resp->t_cmd, extstore_prof_stamp());
+        resp->t_cmd = 0;   /* 재사용 전 이중 기록 방지 */
+    }
+#endif
     if (resp->item) {
         // TODO: cache hash value in resp obj?
         item_remove(resp->item);
@@ -2504,6 +2519,11 @@ static enum try_read_result try_read_network(conn *c) {
         int avail = c->rsize - c->rbytes;
         res = c->read(c, c->rbuf + c->rbytes, avail);
         if (res > 0) {
+#ifdef EXTSTORE
+            /* 이 read 로 들어온 파이프라인 명령 전부가 이 시각을 공유한다.
+             * 뒤쪽 명령이 앞선 명령을 기다린 시간이 여기서 나온다. */
+            c->t_read = extstore_prof_stamp();
+#endif
             pthread_mutex_lock(&c->thread->stats.mutex);
             c->thread->stats.bytes_read += res;
             pthread_mutex_unlock(&c->thread->stats.mutex);

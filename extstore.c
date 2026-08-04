@@ -195,6 +195,13 @@ typedef struct store_worker {
     uint64_t prof_w_count, prof_w_sum_ns;
     uint64_t prof_w_crypto_ns, prof_w_sync_ns, prof_w_xfer_ns;
     uint32_t prof_w_hist[PROF_BUCKETS];
+    /* v4 클라이언트 가시 구간. srv = 소켓 read → sendmsg 직전(서버 체류 전체),
+     * que = read → 이 명령의 처리 시작(같은 버퍼의 앞선 파이프라인 대기).
+     * span v3 는 srv 안에 들어 있다: srv = que + (pre + span_v3 + post). */
+    uint64_t prof_srv_count, prof_srv_sum_ns;
+    uint32_t prof_srv_hist[PROF_BUCKETS];
+    uint64_t prof_que_count, prof_que_sum_ns;
+    uint32_t prof_que_hist[PROF_BUCKETS];
 } store_worker;
 
 struct store_engine {
@@ -1128,6 +1135,10 @@ static void prof_summarize(store_engine *e, int read,
                      h = w->prof_r_e2e_hist; break;
             case 3:  total += w->prof_w_e2e_count; sum += w->prof_w_e2e_sum_ns;
                      h = w->prof_w_e2e_hist; break;
+            case 4:  total += w->prof_srv_count; sum += w->prof_srv_sum_ns;
+                     h = w->prof_srv_hist; break;
+            case 5:  total += w->prof_que_count; sum += w->prof_que_sum_ns;
+                     h = w->prof_que_hist; break;
             case 1:  total += w->prof_r_count; sum += w->prof_r_sum_ns;
                      h = w->prof_r_hist; break;
             default: total += w->prof_w_count; sum += w->prof_w_sum_ns;
@@ -1179,6 +1190,10 @@ void extstore_get_stats(void *ptr, struct extstore_stats *st) {
                        &st->prof_read_e2e_p50_ns, &st->prof_read_e2e_p99_ns);
         prof_summarize(e, 3, &st->prof_write_e2e_count, &st->prof_write_e2e_avg_ns,
                        &st->prof_write_e2e_p50_ns, &st->prof_write_e2e_p99_ns);
+        prof_summarize(e, 4, &st->prof_srv_count, &st->prof_srv_avg_ns,
+                       &st->prof_srv_p50_ns, &st->prof_srv_p99_ns);
+        prof_summarize(e, 5, &st->prof_que_count, &st->prof_que_avg_ns,
+                       &st->prof_que_p50_ns, &st->prof_que_p99_ns);
         uint64_t rc = 0, wc = 0, rs = 0, rx = 0, ws = 0, wx = 0;
         uint64_t ra_ = 0, wa_ = 0, wr_ = 0;
         if (e->workers) {
@@ -1221,12 +1236,30 @@ void extstore_prof_reset(void *ptr) {
             w->prof_w_e2e_count = w->prof_w_e2e_sum_ns = 0;
             memset(w->prof_r_e2e_hist, 0, sizeof(w->prof_r_e2e_hist));
             memset(w->prof_w_e2e_hist, 0, sizeof(w->prof_w_e2e_hist));
+            w->prof_srv_count = w->prof_srv_sum_ns = 0;
+            w->prof_que_count = w->prof_que_sum_ns = 0;
+            memset(w->prof_srv_hist, 0, sizeof(w->prof_srv_hist));
+            memset(w->prof_que_hist, 0, sizeof(w->prof_que_hist));
         }
     }
 }
 
 uint64_t extstore_prof_stamp(void) {
     return g_prof_on ? prof_rdtsc() : 0;
+}
+
+/* v4: 응답이 wire 로 나간 시점에 서버 체류를 기록한다. 워커 전용 배열이라
+ * 락이 없고, g_prof_on 이 꺼져 있으면 분기 하나로 끝난다. */
+void extstore_prof_resp_done(void *worker, uint64_t t_read, uint64_t t_cmd,
+                             uint64_t t_send) {
+    if (!g_prof_on || !worker || !t_cmd || t_send < t_cmd) return;
+    store_worker *w = worker;
+    int have_read = (t_read != 0 && t_read <= t_cmd);
+    prof_record(w->prof_srv_hist, &w->prof_srv_count, &w->prof_srv_sum_ns,
+                t_send - (have_read ? t_read : t_cmd));
+    if (have_read)
+        prof_record(w->prof_que_hist, &w->prof_que_count, &w->prof_que_sum_ns,
+                    t_cmd - t_read);
 }
 
 void extstore_prof_read_done(void *ptr, obj_io *io,

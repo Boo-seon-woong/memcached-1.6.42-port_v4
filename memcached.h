@@ -751,6 +751,12 @@ typedef struct _mc_resp {
     struct sockaddr_in6 request_addr; /* udp: Who sent this request */
     socklen_t request_addr_size;
 
+    /* EXT_RDMA_PROF: 클라이언트 가시 지연 분해용. t_read 는 이 명령을 실어온
+     * 바이트가 소켓에서 읽힌 시각, t_cmd 는 이 명령 자신의 처리 시작 시각이다.
+     * 둘 다 resp_allocate 의 memset(0, offsetof(wbuf)) 범위 안이라 자동 0 이다. */
+    uint64_t t_read;
+    uint64_t t_cmd;
+
     char wbuf[WRITE_BUFFER_SIZE];
 } mc_resp;
 
@@ -784,6 +790,9 @@ struct _io_pending_t {
  */
 struct conn {
     sasl_conn_t *sasl_conn;
+    /* EXT_RDMA_PROF: 가장 최근 소켓 read 시각. 그 read 로 들어온 모든
+     * 파이프라인 명령이 이 값을 공유한다(뒤쪽 명령의 대기가 여기서 나온다). */
+    uint64_t t_read;
     int    sfd;
     bool sasl_started;
     bool authenticated;

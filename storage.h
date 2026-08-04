@@ -15,6 +15,13 @@ void storage_post_chain_flush(void *t);  /* pass 끝에 남은 체인을 비운�
  * 그 슬롯이 다음 SET 에 재할당돼, 읽는 중인 원격 메모리를 덮어쓴다. */
 #define STORAGE_delete(e, it)   do { (void)(e); (void)(it); } while (0)
 
+/* EXT_RDMA_PROF: 클라이언트 가시 지연 분해. memcached.c 의 소켓 read /
+ * 응답 완료 지점에서 부른다. 꺼져 있으면 분기 하나로 끝난다.
+ * (extstore.h 를 memcached.c 에 통째로 들이지 않으려고 여기 둔다.) */
+uint64_t extstore_prof_stamp(void);
+void extstore_prof_resp_done(void *worker, uint64_t t_read, uint64_t t_cmd,
+                             uint64_t t_send);
+
 // API.
 void storage_stats(ADD_STAT add_stats, void *c);
 void process_extstore_stats(ADD_STAT add_stats, void *c);

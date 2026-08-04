@@ -296,6 +296,14 @@ void storage_stats(ADD_STAT add_stats, void *c) {
          * v2 가 빼는 admission/queue 대기와 완료 관측 지연이 여기 들어온다. */
         APPEND_STAT("extstore_prof_read_e2e_count", "%llu", (unsigned long long)st.prof_read_e2e_count);
         APPEND_STAT("extstore_prof_read_e2e_avg_ns", "%llu", (unsigned long long)st.prof_read_e2e_avg_ns);
+        APPEND_STAT("extstore_prof_srv_count",  "%llu", (unsigned long long)st.prof_srv_count);
+        APPEND_STAT("extstore_prof_srv_avg_ns", "%llu", (unsigned long long)st.prof_srv_avg_ns);
+        APPEND_STAT("extstore_prof_srv_p50_ns", "%llu", (unsigned long long)st.prof_srv_p50_ns);
+        APPEND_STAT("extstore_prof_srv_p99_ns", "%llu", (unsigned long long)st.prof_srv_p99_ns);
+        APPEND_STAT("extstore_prof_que_count",  "%llu", (unsigned long long)st.prof_que_count);
+        APPEND_STAT("extstore_prof_que_avg_ns", "%llu", (unsigned long long)st.prof_que_avg_ns);
+        APPEND_STAT("extstore_prof_que_p50_ns", "%llu", (unsigned long long)st.prof_que_p50_ns);
+        APPEND_STAT("extstore_prof_que_p99_ns", "%llu", (unsigned long long)st.prof_que_p99_ns);
         APPEND_STAT("extstore_prof_read_e2e_p50_ns", "%llu", (unsigned long long)st.prof_read_e2e_p50_ns);
         APPEND_STAT("extstore_prof_read_e2e_p99_ns", "%llu", (unsigned long long)st.prof_read_e2e_p99_ns);
         APPEND_STAT("extstore_prof_write_e2e_count", "%llu", (unsigned long long)st.prof_write_e2e_count);

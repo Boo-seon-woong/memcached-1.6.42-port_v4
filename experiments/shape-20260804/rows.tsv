@@ -1,1 +1,4 @@
 cell	workload	window_s	get_s	set_s	total_Mops	Gspan_avg	Gspan_p50	Gspan_p99	Sspan_avg	Sspan_p50	Sspan_p99	client_avg	client_p50	client_p99	srv	que	pre	post	admit	xfer	crypto	sync	ret	busyCPU	err5	badcrc	hit_pct	coverage
+C1-64-GET-r1	W1	59.8	10.051	0	10.051	23.758	18.8	69.3							146.68	31.23	0.7	91.0	5.25	15.11	0.67	0.04		29.9	0	0		+1.4031 오염→행채택
+C1-64-MIX-r1	W2	60.6	7.688	0.854	8.542	25.332	20.8	78.8	10.477	8.0	38.5				186.47	46.43	0.84	113.88	10.06	11.73	0.73	0.04			0			+0.0047 OK
+C1-64-SET-r1	W3	60.0	0	5.611	5.611				8.032	6.500	37.300				514.73	153.25	1.19	352.26	0.59	5.55	1.08	0.02	0.10		0			+0.0049 OK

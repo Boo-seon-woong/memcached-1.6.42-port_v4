@@ -1,6 +1,6 @@
 # md/ 문서 색인
 
-2026-08-03 정리. **시대 기록 14 개를 삭제하고 8 개만 남겼다**(9,126 → 4,228 행).
+2026-08-04 갱신. **시대 기록 14 개를 삭제하고 9 개만 남겼다**(9,126 → 4,228 행).
 지운 것은 최종본에 기여하지 않는 v2·v3 과정 기록과 v4 착수 전 계획이다.
 전부 git 이력에 남아 있으므로 필요하면 `git log --diff-filter=D -- md/` 로 찾는다.
 
@@ -15,11 +15,14 @@
 | [`GET_WORKFLOW.md`](GET_WORKFLOW.md) | GET 코드 경로. **§v4 를 먼저 읽을 것** — 본문은 v3 기준 |
 | [`SET_WORKFLOW.md`](SET_WORKFLOW.md) | SET 코드 경로. **§v4 와 §1-pac 을 먼저** — 본문 §1 은 동기 대조군 |
 | [`SPAN_MEASUREMENT_REVIEW.md`](SPAN_MEASUREMENT_REVIEW.md) | 계측 검증. **§1~§6 은 span v2, v3 검증은 §7** |
+| [`LATENCY_BREAKDOWN.md`](LATENCY_BREAKDOWN.md) | **클라이언트 지연 전체 분해.** 계약은 그 0.9% 만 잰다 |
 | [`COLLABORATION.md`](COLLABORATION.md) | genie 와의 측정 조율 규칙 |
 
 ## 원 데이터
 
 ```text
+experiments/shape-20260804/            형태 캠페인 v4 — 설계·결과·해석·raw
+                                       (2026-08-04 genie 중단으로 미완. RESULTS §6 참조)
 experiments/full-20260803/cells.csv    전수 sweep 캠페인 123 셀 원장
 experiments/exp0-20260801/FINDINGS.md  span v3 폭증 원인 규명 (두 조건문)
 experiments/prof-20260802/             프로파일·창 추적

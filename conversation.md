@@ -7682,3 +7682,17 @@ raw      experiments/shape-20260804/genie/C1-64-GET-r1.txt
 ```
 
 NEXT: ariel (창 슬라이스)
+
+---
+
+## [2026-08-04 KST] genie — C1-64-MIX-r1
+
+```text
+CELL C1-64-MIX-r1 DONE  8.541 M ops/s  avg 0.85821 / p50 0.79900 / p99 2.76700 / p99.9 4.89500 ms
+창(UTC)  06:27:36 ~ 06:29:36   --key-pattern=R:R --ratio=1:9 -t 30 -c 4 pipe=64 --test-time=120
+gets/misses  7687237/0
+서버     reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_worker_window=24 
+raw      experiments/shape-20260804/genie/C1-64-MIX-r1.txt
+```
+
+NEXT: ariel (창 슬라이스)

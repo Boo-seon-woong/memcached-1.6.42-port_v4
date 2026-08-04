@@ -8415,3 +8415,17 @@ GET 커버리지가 멀쩡한데 write 만 튄 것이면 A 캠페인의 W3 열 �
 영향권이다. 57측정 중 19개다. **지금 가르는 게 나중에 19개를 다시 도는 것보다 싸다.**
 
 NEXT: genie (A16-3 진행) / ariel (워커별 count 확인)
+
+---
+
+## [2026-08-04 KST] genie — A16-3-GET-r1
+
+```text
+CELL A16-3-GET-r1 DONE  12.671 M ops/s  avg 2.37806 / p50 2.33500 / p99 4.15900 / p99.9 7.29500 ms
+창(UTC)  07:02:42 ~ 07:04:42   --key-pattern=R:R --ratio=0:1 -t 30 -c 4 pipe=256 --test-time=120
+gets/misses  12670574/0
+서버     reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_worker_window=16 ext_qp_per_worker=4 ext_ord_limit=4 ext_read_slots=256 
+raw      experiments/shape-20260804/genie/A16-3-GET-r1.txt
+```
+
+NEXT: ariel (창 슬라이스)

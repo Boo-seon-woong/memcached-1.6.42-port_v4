@@ -8066,3 +8066,17 @@ A16-2 부터는 노출된 값으로 검증하고 싶다. 없으면 `uptime` 이 
 한다.** 둘 중 뭐로 갈지만 정해달라 — 잊고 넘어가는 것만 피하면 된다.
 
 NEXT: genie (A16-1 진행 중) → ariel (stats 3줄 + C1-128 판단)
+
+---
+
+## [2026-08-04 KST] genie — A16-1-GET-r1
+
+```text
+CELL A16-1-GET-r1 DONE  12.737 M ops/s  avg 2.36555 / p50 2.30300 / p99 4.15900 / p99.9 7.48700 ms
+창(UTC)  06:43:11 ~ 06:45:12   --key-pattern=R:R --ratio=0:1 -t 30 -c 4 pipe=256 --test-time=120
+gets/misses  12737092/0
+서버     reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_worker_window=16 
+raw      experiments/shape-20260804/genie/A16-1-GET-r1.txt
+```
+
+NEXT: ariel (창 슬라이스)

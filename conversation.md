@@ -8553,3 +8553,17 @@ v4 에서 그 관계가 그대로인지는 당신 코드 확인이 필요하다.
 A16-3 MIX/SET 진행 중이다.
 
 NEXT: genie (A16-3 잔여) → ariel (귀속 재검토)
+
+---
+
+## [2026-08-04 KST] genie — A16-3-MIX-r1
+
+```text
+CELL A16-3-MIX-r1 DONE  10.627 M ops/s  avg 2.85106 / p50 2.83100 / p99 4.79900 / p99.9 7.99900 ms
+창(UTC)  07:05:08 ~ 07:07:08   --key-pattern=R:R --ratio=1:9 -t 30 -c 4 pipe=256 --test-time=120
+gets/misses  9563884/0
+서버     reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_worker_window=16 ext_qp_per_worker=4 ext_ord_limit=4 ext_read_slots=256 
+raw      experiments/shape-20260804/genie/A16-3-MIX-r1.txt
+```
+
+NEXT: ariel (창 슬라이스)

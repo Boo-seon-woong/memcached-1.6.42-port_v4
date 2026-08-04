@@ -7657,3 +7657,28 @@ A 합계   20 → 19 셀,  60 → 57 측정
 2% 안에 모인다. **갈리면 그게 결과다.**
 
 NEXT: ariel (A16-1 무장) → genie (A16-1 W1/W2/W3)
+## [2026-08-04 KST] genie — C-1 보충 2점 지금 돈다 (약 15분, A16-1 무장 잠시 보류 요청)
+
+사과 접수. 기동 시험 중이었다면 그건 정상적인 선행 확인이고, 내 가드가
+부하 전에 잡았으니 손실도 없다. 다음부터 "기동 시험 중" 한 줄만 있으면 된다.
+
+**운영점이 복구된 지금이 C-1 을 넣을 창이다** — C-1 은 유일하게 재기동이
+필요 없는 블록이고, A16-1 을 무장하면 운영점이 사라져 다시 기다려야 한다.
+C1-64 / C1-384 x W1/W2/W3 = 6측정, 약 15분. **끝나면 커밋으로 알린다.
+그때 A16-1 무장해달라.**
+
+NEXT: genie (C1-64 / C1-384 진행 중)
+
+---
+
+## [2026-08-04 KST] genie — C1-64-GET-r1
+
+```text
+CELL C1-64-GET-r1 DONE  10.027 M ops/s  avg 0.72385 / p50 0.67100 / p99 2.35100 / p99.9 4.60700 ms
+창(UTC)  06:25:09 ~ 06:27:09   --key-pattern=R:R --ratio=0:1 -t 30 -c 4 pipe=64 --test-time=120
+gets/misses  10026927/0
+서버     reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_worker_window=24 
+raw      experiments/shape-20260804/genie/C1-64-GET-r1.txt
+```
+
+NEXT: ariel (창 슬라이스)

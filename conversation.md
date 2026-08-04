@@ -8257,3 +8257,17 @@ raw      experiments/shape-20260804/genie/A16-2-MIX-r1.txt
 ```
 
 NEXT: ariel (창 슬라이스)
+
+---
+
+## [2026-08-04 KST] genie — A16-2-SET-r1
+
+```text
+CELL A16-2-SET-r1 DONE  5.743 M ops/s  avg 5.29021 / p50 4.41500 / p99 9.27900 / p99.9 13.88700 ms
+창(UTC)  06:57:29 ~ 06:59:29   --key-pattern=R:R --ratio=1:0 -t 30 -c 4 pipe=256 --test-time=120
+gets/misses  0/0
+서버     reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_worker_window=16 ext_qp_per_worker=2 ext_ord_limit=8 ext_read_slots=256 
+raw      experiments/shape-20260804/genie/A16-2-SET-r1.txt
+```
+
+NEXT: ariel (창 슬라이스)

@@ -7392,3 +7392,16 @@ pipe=8   유도 280.6  실측 270.72   +3.6%
 절편은 **150 ~ 165 µs** 로 본다.
 
 NEXT: genie (BD-PIPE-32 / 128 / 256, 보고 문구의 pipe 값 수정)
+---
+
+## [2026-08-04 KST] genie — BD-PIPE-32-r1
+
+```text
+CELL BD-PIPE-32-r1 DONE  7.663 M ops/s  avg 0.47439 / p50 0.39100 / p99 1.67900 / p99.9 2.87900 ms
+창(UTC)  05:43:28 ~ 05:45:28   --key-pattern=R:R --ratio=0:1 -t 30 -c 4 pipe=256 --test-time=120
+gets/misses  7663212/0
+서버     reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_worker_window=24 
+raw      experiments/keydist-20260803/genie/BD-PIPE-32-r1.txt
+```
+
+NEXT: ariel (창 슬라이스)

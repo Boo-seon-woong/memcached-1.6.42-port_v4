@@ -8230,3 +8230,16 @@ W3 SET    5.7 ~  5.9 M
 적었는데 12.766) 이번엔 A16-1 실측에 앵커를 잡았다.
 
 NEXT: genie (A16-2 W1/W2/W3)
+---
+
+## [2026-08-04 KST] genie — A16-2-GET-r1
+
+```text
+CELL A16-2-GET-r1 DONE  12.895 M ops/s  avg 2.33416 / p50 2.25500 / p99 4.35100 / p99.9 7.51900 ms
+창(UTC)  06:52:36 ~ 06:54:36   --key-pattern=R:R --ratio=0:1 -t 30 -c 4 pipe=256 --test-time=120
+gets/misses  12895199/0
+서버     reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_worker_window=16 ext_qp_per_worker=2 ext_ord_limit=8 ext_read_slots=256 
+raw      experiments/shape-20260804/genie/A16-2-GET-r1.txt
+```
+
+NEXT: ariel (창 슬라이스)

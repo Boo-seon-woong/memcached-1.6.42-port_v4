@@ -75,7 +75,7 @@ $G 'tmux kill-session -t mc 2>/dev/null; for p in $(pgrep -x "memcached[.a-z]*")
     pkill -f "^/tmp/mc_" 2>/dev/null; sleep 3
     for i in $(seq 1 30); do ss -ltn | grep -q ":11411 " || break; sleep 1; done
     cp -f /tmp/mc-stock /tmp/mc_stock_run && chmod +x /tmp/mc_stock_run
-    tmux new-session -d -s mc "taskset -c 0-29 /tmp/mc_stock_run -p 11411 -U 0 -t 30 -m 1024 -c 16384 -R 1024 > /tmp/mc.log 2>&1"
+    tmux new-session -d -s mc "LD_LIBRARY_PATH=$HOME/memtier taskset -c 0-29 /tmp/mc_stock_run -p 11411 -U 0 -t 30 -m 1024 -c 16384 -R 1024 > /tmp/mc.log 2>&1"
     sleep 5
     printf "stats settings\r\nquit\r\n" | nc -q1 127.0.0.1 11411 | tr -d "\r" | grep -c ext_submit_inline' > /tmp/stock-arm.txt 2>&1
 if [ "$(tail -1 /tmp/stock-arm.txt)" = "0" ]; then
@@ -96,7 +96,7 @@ bash tools/night-save.sh || true
 # ── 블록 9: v3 기준선 + 계층 3. 블록 5 와 같은 격자
 say "블록 9 시작"
 $G 'cp -f /tmp/mc.v3l3 ~/coherent-mr-v2/bin/memcached.v3l3 2>/dev/null; chmod +x ~/coherent-mr-v2/bin/memcached.v3l3; sha256sum ~/coherent-mr-v2/bin/memcached.v3l3|cut -c1-24'
-BIN='\\$HOME/coherent-mr-v2/bin/memcached.v3l3' BUILD=v3 bash tools/night-block5.sh || say "블록 9 실패"
+BIN='$HOME/coherent-mr-v2/bin/memcached.v3l3' BUILD=v3 bash tools/night-block5.sh || say "블록 9 실패"
 bash tools/night-save.sh || true
 
 say "야간 잔여 블록 종료"

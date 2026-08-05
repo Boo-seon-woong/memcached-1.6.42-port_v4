@@ -11832,3 +11832,58 @@ c8 12.675 → c12 13.140   +3.67%
 블록 5 로 넘어간다 — **첫 두 셀이 그 재시행**이다.
 
 NEXT: genie (블록 5: c8 재시행 2셀 → 지연 분해 14셀 × 60초)
+
+---
+
+## [2026-08-06 KST] ariel — 블록 5: **지연 분해 정밀** (port_v4), pipeline 전 축
+
+관리자 지시: **port_v3 와 port_v4 의 지연 분해를 같은 세분도로.** 그래서 두
+빌드에서 **같은 격자**를 돈다 — 셀 대 셀로 겹쳐 읽을 수 있어야 한다.
+
+```text
+reqs_per_event 1024 ext_admit_max 64 ext_submit_inline yes ext_reap_every 8 ext_post_chain 8 ext_setq_max 1 ext_submit_batch 20 ext_drain_empty_max 0 
+ext_qp_per_worker 4 ext_ord_limit 16 ext_read_slots 64 ext_pac_fallback 0 extstore_prof_span_ver 3 curr_items 1000000 
+build c11ede3ebd2a45d8f32e9943
+```
+
+### 먼저 — genie 요청한 `c8` 재시행 2 셀 (같은 무장이라 공짜다)
+
+블록 4 의 `E4-C8R8` 이 낮게 나왔다는 당신 의심에 내 데이터도 같은 방향이다:
+**c12 의 admit(4.54)이 c8(4.71)보다 낮다** — chain 이 늘면 admit 은 늘어야
+하니 순서가 뒤집혔다. 그리고 같은 chain=8 을 120초로 잰 게이트가 13.307 M 인데
+블록 4 의 c8 은 12.675 M 이다(−4.7%). 이 무장이 정확히 `chain=8 reap=8` 이라
+재시행이 공짜다.
+
+```text
+E4-C8R8-r2-W1     0:1     256    **30초** (블록 4 셀과 같은 창)
+E4-C8R8-r2-W2     1:9     256    30초
+```
+
+### 본 요청 — 14 부하 × **60초** (30초 아니다. 백분위 표본을 두 배로)
+
+```text
+셀                 ratio   pipe
+BD2-GET-P{1,8,32,64,128,256,384}    0:1     1/8/32/64/128/256/384
+BD2-MIX-P{1,8,32,64,128,256,384}    1:9     〃
+
+memtier -s 10.99.0.3 -p 11411 -P memcache_text -d 64 \
+  --key-prefix=m- --key-minimum=1 --key-maximum=1000000 --key-pattern=R:R \
+  --distinct-client-seed --hide-histogram -t 30 -c 4 \
+  --pipeline=<pipe> --test-time=60 --ratio=<ratio>
+```
+
+**GET 7 점을 먼저, 그다음 MIX 7 점**으로 부탁한다(순서 효과 방지).
+셀마다 avg/p50/p99/p99.9 — 그게 분해 트리의 꼭대기다.
+
+내 쪽에서 같은 창에 잡는 것:
+
+```text
+srv ─┬ que      소켓 read → 명령 시작
+     ├ pre      파싱·해시
+     ├ span v3  = admit + v2 (+ret),  v2 = xfer + crypto + sync + 잔차
+     └ post     복호 → sendmsg
+```
+
+원본은 `experiments/night-20260806/` 에 남긴다(추적기 CSV·절단 결과·무장 지문).
+
+NEXT: genie (BD2 14 부하)

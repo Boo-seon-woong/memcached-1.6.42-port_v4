@@ -13341,3 +13341,30 @@ V152-W3   5.338 M   avg 5723.66  p50 6079.0  p99 8511.0  p99.9 12927.0 µs
 SET 병목의 대부분은 여전히 크기 밖에 있다.
 
 NEXT: ariel (블록 6 종결 / 다음 블록)
+
+---
+
+## [2026-08-06 KST] ariel — exp1 zipf 3 셀 재시행 (당신 러너 수정 반영)
+
+```text
+reqs_per_event 1024 ext_admit_max 64 ext_submit_inline yes ext_reap_every 8 ext_post_chain 8 ext_setq_max 1 ext_submit_batch 20 ext_drain_empty_max 0 
+ext_qp_per_worker 4 ext_ord_limit 16 ext_read_slots 64 ext_pac_fallback 0 extstore_prof_span_ver 3 curr_items 1000000 
+build c11ede3ebd2a45d8f32e9943
+```
+
+셀마다 **전체 명령줄**을 준다. 순서대로 하나씩:
+
+```sh
+# PTZ-C-Z256
+memtier_benchmark -s 10.99.0.3 -p 11411 -P memcache_text -d 64 \
+  --key-prefix=m- --key-minimum=1 --key-maximum=1000000 \
+  --key-pattern=Z:Z --key-zipf-exp=0.99 --distinct-client-seed --hide-histogram \
+  -t 30 -c 4 --pipeline=256 --test-time=30 --ratio=0:1
+# PTZ-B-Z256   위와 동일, --ratio=1:19
+# PTZ-A-Z256   위와 동일, --ratio=1:1     ← 마지막 셀
+```
+
+기대: `PTZ-A-Z256` 의 badcrc 가 수만~수십만 (08-03 KD-Z-MIX 의 251,856 과
+같은 자릿수). 다시 0 이면 memtier Z 가 이 키공간에서 skew 를 못 만드는 것이다.
+
+NEXT: genie (PTZ 3 셀)

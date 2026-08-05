@@ -24,12 +24,12 @@ genie 복귀 시 **이 문서 순서대로** 실행한다. 실행 명세(셀 표
 | 4 | **osdi exp4 batching** | 10구성×3부하 + 저부하 4부하 | ~45분 | 〃, 재기동 10 | [exp4 PLAN](osdi-0804/exp4/PLAN.md) — c1 span 실측 포함 |
 | 5 | **osdi exp2 (b)(c)** | 1 + 6부하 | ~10분 | 〃 | [exp2 PLAN](osdi-0804/exp2/PLAN.md) — E0 값 반영 저부하 분해, conn↔depth |
 | 6 | **osdi exp3 값 크기** | 탐침 ≤2 + 15부하 | ~25분 | 〃, 크기별 프리로드 | [exp3 PLAN](osdi-0804/exp3/PLAN.md) |
-| 7 | **osdi exp1 port 측** | 13부하 + genie CPU 2회 | ~15분 | v4 **PROF=0** 재기동 1 | [exp1 PLAN](osdi-0804/exp1/PLAN.md) |
-| 8 | **osdi exp1 stock 측** | 13부하 | ~15분 | **stock 97ceee04** 교체 | 〃 off-box 재측정 (co-located −31.7% 보정 검증) |
+| 7 | **osdi exp1 port 측** | 24부하 (곡선 21 + zipf 3) + genie CPU 2회 | ~25분 | v4 **PROF=0** 재기동 1 | [exp1 PLAN](osdi-0804/exp1/PLAN.md) |
+| 8 | **osdi exp1 stock 측** | 24부하 | ~25분 | **stock 97ceee04** 교체 | 〃 off-box 재측정 (co-located −31.7% 보정 검증) |
 | 9 | **v3 소급 블록** | 3×100s + 15×30s | ~35분 | **v3 c8aeae5b** 교체 | KTC §5-①(새 운영점 GET·혼합 span v2) + §5-②(EXP-0 재실행, 수집열 sync/xfer/crypto 추가) |
 | 10 | **검증 소셀** | 2부하×30s | ~5분 | v4, inline off | 원인 A 소급 검증: `ext_submit_inline=off ext_submit_batch=3` (스레드당 4연결에서 3은 발화 가능) vs `batch=20` — admit 붕괴 여부. `EXP1_FINDINGS` no-op 시험 주석 근거 |
 
-총 ~6 h. 블록 2 이후는 순서 조정 가능하나 **1(E0)이 항상 먼저**고,
+총 ~6.5 h. 블록 2 이후는 순서 조정 가능하나 **1(E0)이 항상 먼저**고,
 서버 교체가 필요한 7~9 는 뒤로 묶는다.
 
 **블록 4~8(osdi)은 경향성 라운드 — 측정당 30초** (관리자 결정 2026-08-05).

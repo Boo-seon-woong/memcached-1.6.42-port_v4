@@ -34,23 +34,32 @@ real-world dataset  이번 라운드 제외 — 자산 없음 (PENDING 차단 �
   가 read 와 update 에 같은 분포를 쓰기 때문 (memtier 소스 확인: `Z` 는
   양측 유효, exp 범위 (0,5)).
 
-## 셀 — 26 개 (co-located 13셀의 off-box 미러 × 서버 2종)
+## 셀 — 곡선 42 + zipf 보조 6 = 48 부하
 
-블록 ST (stock, 먼저 아님 — PENDING 순서상 PT 뒤):
+Fig.15 는 **워크로드별** latency-throughput 곡선이고 원문이 uniform 측정이다.
+따라서 곡선은 세 워크로드 각각 pipeline 스윕으로 그린다 (GET-only 하나만
+스윕하고 나머지를 단일점으로 두는 절약안은 곡선이 안 나온다 — 폐기):
+
+```text
+곡선 (uniform)     {A,B,C} × P{1,8,32,64,128,256,384} × {ST,PT}    42
+보조 (zipf 0.99)   {A,B,C} × pipe=256 × {ST,PT}                     6
+셀 id              <ST|PT>-<A|B|C>-P<n>,  zipf 는 <..>-<A|B|C>-Z256
+```
+
+블록 ST (stock):
 
 ```text
 서버  ./memcached(97ceee04) -p 11411 -U 0 -t 30 -m 1024 -c 16384 -R 1024, taskset 0-29
-셀    ST-P{1,8,32,64,128,256,384}   GET-only uniform, pipeline 스윕     7
-      ST-{A,B,C}-{uni,zipf}         pipe=256                          6
 ```
 
 블록 PT (port, PROF=0):
 
 ```text
 서버  v4 운영값 (공통 규약), EXT_RDMA_PROF=0, 1M 프리로드
-셀    PT-P{1,8,32,64,128,256,384}   GET-only uniform, pipeline 스윕     7
-      PT-{A,B,C}-{uni,zipf}         pipe=256                          6
 ```
+
+C 의 uniform 스윕 = 기존 GET-only 스윕과 동일 정의 (co-located 미러) —
+A/B 스윕이 신규 축이다.
 
 genie CPU 증거 (XSTORE 의 CPU 주장 대응): PT-C-uni 와 PT-A-uni 전후로
 `awk '{print $14, $15}' /proc/$(pgrep genie_memd)/stat` 2회 — **0 이 그림 재료다.**

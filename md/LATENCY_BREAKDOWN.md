@@ -60,7 +60,7 @@ SET  span v3 = admit + xfer + crypto + sync + ret
 | 성분 | 뜻 |
 |---|---|
 | `admit` | 진입 → 실제 post. 제출 배치(`ext_submit_batch=20`) 대기 |
-| `xfer` | RDMA 왕복 |
+| `xfer` | post → **거둠**(`t_poll - io->t_start`, `extstore.c:1057`). RDMA 왕복 + 수거 대기 — §xfer 주 참조 |
 | `crypto` | AES-256-GCM |
 | `sync` | DMA advise. **coherent MR 이후 계측 하한**(0.02~0.05 µs, 이전 5.62) |
 | `ret` | CQE → `ITEM_WFLIGHT` 해제 (SET 만) |
@@ -130,8 +130,26 @@ C-1 재시행에서 채운다. 위 두 행의 서버 수치는 §0 에서 구 �
 > **계약이 재는 지표가 부하에 둔감하고, 안 재는 구간이 부하를 다 받는다.**
 > 이것이 이 분해의 가장 실질적인 결과다.
 
-`xfer` 는 8.13 → 15.06 에서 포화한다 — RDMA 자체는 견딘다.
+`xfer` 는 8.13 → 15.06 에서 포화한다.
 `pre` 는 0.7~2.5 µs 라 파싱·해시는 잡음이다.
+
+> ### ⚠️ `xfer` 를 "RDMA 왕복"으로 읽지 말 것 (2026-08-06 정정)
+>
+> `xfer = t_poll − t_start` 는 post 부터 **완료를 거둔 시각**까지다. 거둠은
+> `ext_reap_every` 가 정하므로 **수거 정책이 이 값에 들어 있다.** 같은 부하에서
+> reap 만 바꿔 재면 갈린다:
+>
+> ```text
+> chain=1 reap=8    xfer 10.98 µs     span v3 14.08
+> chain=8 reap=1    xfer  4.67 µs     span v3  5.69     (admit 은 0.11 vs 0.12 로 동일)
+> ```
+>
+> **차이 6.31 µs 는 wire 가 아니라 내 수거 대기다.** 왕복 자체는 `≤ 4.67 µs`
+> 라고만 말할 수 있다(reap=1 도 폴링이라 상한이 아니다). 위 표의 `xfer` 는
+> 전부 `reap=8` 운영값에서 잰 값이므로 같은 성분을 포함한다.
+>
+> 따라서 "`post` 가 `xfer` 의 2.9 배" 같은 비율도 **수거 정책 위에서만** 참이다.
+> 근거: `experiments/night-20260806/rows.tsv` 의 `E4-C1R8` / `E4-C8R1`.
 
 ---
 

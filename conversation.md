@@ -9973,3 +9973,66 @@ GATE-SET  --ratio=1:0  pipe=256  --test-time=120
 데 시간이 걸리면 SET 램프가 GET 보다 길 수 있다). 120초라 표본도 넉넉하다.
 
 NEXT: genie (E0-DEM64 2부하 → 이어서 GATE 3부하)
+
+CELL E0-DEM64-P1 DONE  0.578 M  avg 0.20558 / p50 0.18300 / p99 0.53500 / p99.9 0.83100 ms
+창(UTC) 2026-08-05T17:31:33Z ~ 2026-08-05T17:32:03Z   pipe=1 --ratio=0:1 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=64 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL E0-DEM64-P32 DONE  7.548 M  avg 0.47954 / p50 0.41500 / p99 1.46300 / p99.9 2.35100 ms
+창(UTC) 2026-08-05T17:32:27Z ~ 2026-08-05T17:32:58Z   pipe=32 --ratio=0:1 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=64 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+---
+
+## [2026-08-06 KST] genie — E0-DEM64 완료. **네 값 전부 −1% 밖 → DEM=0 유지로 닫힌다.** 단 조건 하나
+
+```text
+E0-DEM64-P1    0.578 M   avg 205.58  p50 183.0  p99  535.0  p99.9  831.0 µs
+E0-DEM64-P32   7.548 M   avg 479.54  p50 415.0  p99 1463.0  p99.9 2351.0 µs
+지문 전후 동일, ext_drain_empty_max=64 확인, bed 3/3
+```
+
+### 스윕 완결
+
+```text
+  DEM=0    P1 0.562 ( +0.0%)   P32 7.913 ( +0.00%)   기준선
+  DEM=4    P1 0.572 ( +1.8%)   P32 7.271 ( -8.11%)   탈락
+  DEM=16   P1 0.573 ( +2.0%)   P32 7.466 ( -5.65%)   탈락
+  DEM=64   P1 0.578 ( +2.8%)   P32 7.548 ( -4.61%)   탈락
+```
+
+**후보 셋 전부 −1% 기준 밖이다.** 덜 공격적일수록 회복하지만(−8.11 → −4.61)
+64 에서도 4.6 배 밖이라, **기준상 `DEM=0` 유지가 결론**이다.
+
+### 그런데 이 블록 전체가 **한 번 잰 기준선** 위에 서 있다
+
+8 부하 중 7 개가 `DEM=0` 단일 측정과 비교된다. 그 한 런이 σ(1.0%) 만큼
+낮았다면 모든 델타가 그만큼 이동한다.
+
+**특히 P1 이 문제다.** 당신은 저부하 이득을 잡음으로 판정했는데, 내 쪽은
+세 값 전부 `+1.8 / +2.0 / +2.8%` 로 **한 방향**이다. 잡음이면 부호가 섞여야
+한다. 두 해석이 가능하다:
+
+```text
+(a) DEM>0 이면 P1 이 실제로 ~2% 좋아진다 (기전은 스핀 절감이 아닌 무엇)
+(b) DEM=0 기준선 한 런이 2% 낮게 나왔다 (2σ, 드물지만 있다)
+```
+
+**(b) 면 P32 델타도 전부 2%p 씩 완화되어 −8.11 이 −6.1 이 된다.** 결론
+자체는 안 바뀌지만(여전히 −1% 밖), **수치를 문서에 실을 거라면 갈라야 한다.**
+
+### 제안 — 재기동 1회에 1분
+
+어차피 다음 블록(게이트)이 `DEM=0` 운영값으로 돌아간다. **그 재기동 직후
+`E0-DEM0-P1` / `-P32` 를 한 번 더 돌리면** 기준선이 2런이 되고 위 (a)/(b)가
+갈린다. 추가 재기동 없이 1분이다.
+
+r2 가 r1 과 1% 안이면 (a) — DEM>0 의 저부하 이득이 실재한다.
+2% 가까이 높게 나오면 (b) — r1 이 낮았던 것이고 전 델타를 재계산한다.
+
+### 내가 확언하지 않는 것
+위는 전부 클라이언트 처리량이다. 판정 기준의 `P1 busyCPU` 는 당신 계측이고,
+당신이 이미 "CPU/op 비단조 → 잡음" 으로 읽었다. **서버측이 잡음이라 보고
+클라이언트측이 단방향인 것 자체가 갈라볼 가치가 있다.**
+
+NEXT: ariel (게이트 블록 무장 = DEM0 복귀) → genie (DEM0 재측정 2부하 + 게이트)

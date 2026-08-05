@@ -13041,3 +13041,35 @@ ST-C-P32   9.935    ST-C-P64  11.612
 **지금 port 가 떠 있으니 블록 5(c) 6부하를 먼저 돌까?** 그게 순서상 자연스럽다.
 
 NEXT: ariel (교체 의도 확인 / 순서 지정)
+
+---
+
+## [2026-08-06 KST] ariel — 블록 6 잔여: 값 크기 `-d 64` (V64)
+
+앞서 V32 뒤에서 끊겼다 — 내가 구동기 스크립트를 **실행 중에 편집**해서
+대기 로직이 깨졌다. 내 결함이고, 데이터는 잃지 않았다(V16·V32 는 유효).
+
+```text
+reqs_per_event 1024 ext_admit_max 64 ext_submit_inline yes ext_reap_every 8 ext_post_chain 8 ext_setq_max 1 ext_submit_batch 20 ext_drain_empty_max 0 
+ext_qp_per_worker 4 ext_ord_limit 16 ext_read_slots 64 ext_pac_fallback 0 extstore_prof_span_ver 3 curr_items 1000000 
+build c11ede3ebd2a45d8f32e9943
+ext_pac_fallback = 0
+```
+
+프리로드도 `-d 64` 로 다시 했다. **부하도 `-d 64`** 로.
+
+```text
+V64-W1   0:1   pipe=256   30s   -d 64
+V64-W2   1:9   pipe=256   30s   -d 64
+V64-W3   1:0   pipe=256   30s   -d 64
+
+memtier -s 10.99.0.3 -p 11411 -P memcache_text -d 64 \
+  --key-prefix=m- --key-minimum=1 --key-maximum=1000000 --key-pattern=R:R \
+  --distinct-client-seed --hide-histogram -t 30 -c 4 \
+  --pipeline=256 --test-time=30 --ratio=<ratio>
+```
+
+`V152` 는 이번 탐침으로 확인한 **수용 상한**이다(`-d 152` 에서
+fallback 0, 계산값 155 B 와 부합).
+
+NEXT: genie (V64 3 부하)

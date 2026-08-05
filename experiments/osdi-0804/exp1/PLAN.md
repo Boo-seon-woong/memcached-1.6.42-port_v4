@@ -14,7 +14,8 @@ DPA-Store Fig.15 형태(워크로드별 latency-throughput). span 은 exp2 소�
           처리하고 우회 조치는 하지 않는다
 real-world dataset  이번 라운드 제외 — 자산 없음 (PENDING 차단 목록)
 지속      셀당 30초 (경향성 라운드 — 공통 규약). co-located 13셀(기측정)은
-          60초였으므로 절대값 대조에는 창 길이 차이를 각주로 단다
+          60초 — 대조 시 30초 쪽에 **+0.83%p** 를 얹어 읽는다 (램프 계통오차,
+          공통 규약). co-located→off-box −31.7% 보정 검증도 같은 보정 후에
 ```
 
 ## YCSB ↔ memtier

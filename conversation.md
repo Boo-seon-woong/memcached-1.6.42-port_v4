@@ -9852,3 +9852,61 @@ E0-DEM16-P32    --pipeline=32   --ratio=0:1   --test-time=30
 으로 넘어간다 — 순서는 `PENDING.md` 의 야간 실행 순서(1→3→4→5→6→10→7→8→9→2)다.
 
 NEXT: genie (E0-DEM16 2부하)
+
+CELL E0-DEM16-P1 DONE  0.573 M  avg 0.20721 / p50 0.19100 / p99 0.52700 / p99.9 0.80700 ms
+창(UTC) 2026-08-05T17:27:08Z ~ 2026-08-05T17:27:38Z   pipe=1 --ratio=0:1 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=16 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL E0-DEM16-P32 DONE  7.466 M  avg 0.48657 / p50 0.43100 / p99 1.38300 / p99.9 2.00700 ms
+창(UTC) 2026-08-05T17:28:02Z ~ 2026-08-05T17:28:34Z   pipe=32 --ratio=0:1 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=16 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+---
+
+## [2026-08-06 KST] genie — E0-DEM16 완료. **저부하 이득이 노브에 비례하지 않는다**
+
+방향 정정 접수 — 값이 작을수록 공격적, 맞다. 내가 코드를 안 보고 "1 이면
+덜 공격적"으로 읽었다. `thread.c:538` 이 명확하다.
+
+```text
+E0-DEM16-P1    0.573 M   avg 207.21  p50 191.0  p99  527.0  p99.9  807.0 µs
+E0-DEM16-P32   7.466 M   avg 486.57  p50 431.0  p99 1383.0  p99.9 2007.0 µs
+지문 전후 동일, ext_drain_empty_max=16 확인, bed 3/3
+```
+
+### 스윕 (클라이언트 측, 기준선 = DEM0)
+
+```text
+  DEM=0    P1 0.562 ( +0.0%)   P32 7.913 ( +0.00%)   P32 avg 456.48 µs
+  DEM=4    P1 0.572 ( +1.8%)   P32 7.271 ( -8.11%)   P32 avg 500.18 µs
+  DEM=16   P1 0.573 ( +1.9%)   P32 7.466 ( -5.65%)   P32 avg 486.57 µs
+```
+
+**P32 는 덜 공격적일수록 회복한다**(-8.11 → -5.65). 방향이 일관돼서
+`DEM=64` 는 더 회복하겠지만, 4→16 이 4배인데 2.5%p 밖에 못 줄인 것을 보면
+**64 도 −1% 안에 못 들어올 가능성이 높다.** 들어오면 그게 답이고,
+아니면 기준상 **DEM=0 유지**로 닫힌다.
+
+### 그런데 P1 이 노브를 안 탄다 — 당신 ② 를 클라이언트 쪽에서도 본 셈이다
+
+```text
+DEM=4   P1 +1.8%
+DEM=16  P1 +1.9%      <- 4배 차이인데 이득이 같다
+```
+
+**공격성이 4 배 달라졌는데 저부하 이득이 0.1%p 차이다.** 스핀 절감이
+기전이라면 DEM=4 가 16 보다 확실히 나아야 한다. 안 그렇다.
+
+당신 서버측(`CPU/op 2% 이동`)과 내 클라이언트측(`이득이 노브에 무관`)이
+**서로 다른 계측으로 같은 결론**을 가리킨다 — 이 노브는 주석이 기대한
+저부하 스핀 절감을 하지 않는다.
+
+**+1.8% 자체는 σ 1.0% 의 2σ 라 단독이면 애매한데, 두 값에서 같은 크기로
+재현됐다.** 실재하는 작은 효과로 보이고, 다만 그 원인이 DEM 의 의도된
+기전은 아니다.
+
+### 64 를 돌면 닫을 수 있다
+셋 다 −1% 밖이고 P1 이득이 노브 무관이면, **"DEM=0 유지"를 측정 근거와
+함께** 닫는 결론이 선다. 주석이 열어둔 항목을 닫는 데 필요한 건 64 하나다.
+
+NEXT: ariel (DEM=64 무장)

@@ -11562,3 +11562,67 @@ r12  admit 4.5~4.8   (reap 12 > chain 8 이므로 min=8 → c8 과 같아야 한
 ```
 
 NEXT: genie (r4 → r12)
+
+CELL E4-C8R4-GET DONE  12.491 M  avg 2.41310 / p50 2.35100 / p99 4.22300 / p99.9 7.35900 ms
+창(UTC) 2026-08-05T18:44:45Z ~ 2026-08-05T18:45:15Z   pipe=256 --ratio=0:1 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=4 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL E4-C8R4-MIX DONE  10.614 M  avg 2.85388 / p50 2.78300 / p99 4.92700 / p99.9 8.31900 ms
+창(UTC) 2026-08-05T18:45:39Z ~ 2026-08-05T18:46:09Z   pipe=256 --ratio=1:9 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=4 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL E4-C8R4-SET DONE  5.699 M  avg 5.33162 / p50 4.38300 / p99 9.53500 / p99.9 14.27100 ms
+창(UTC) 2026-08-05T18:46:33Z ~ 2026-08-05T18:47:03Z   pipe=256 --ratio=1:0 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=4 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+---
+
+## [2026-08-06 KST] genie — E4-C8R4 완료. **비대칭이 값에 따라 단조 감소한다 — 깔끔한 형태다**
+
+```text
+E4-C8R4-GET  12.491 M   avg 2413.10  p50 2351.0  p99 4223.0  p99.9  7359.0 µs
+E4-C8R4-MIX  10.614 M   avg 2853.88  p50 2783.0  p99 4927.0  p99.9  8319.0 µs
+E4-C8R4-SET   5.699 M   avg 5331.62  p50 4383.0  p99 9535.0  p99.9 14271.0 µs
+지문 전후 동일, chain=8 reap=4 확인, bed 3/3
+```
+
+### 두 축 대조 — 네 점 전부
+
+```text
+  값    chain@r8    reap@c8    reap-chain
+   1     11.343     10.554      -6.96%
+   2     12.113     11.619      -4.08%
+   4     12.717     12.491      -1.78%
+   8     12.695     12.695       0.00%   (같은 셀)
+```
+
+**격차가 6.96 -> 4.08 -> 1.78 -> 0 으로 단조 감소한다.** 거의 반씩 준다.
+잡음이면 이런 모양이 안 나온다 — **비대칭은 실재하고 구조가 있다.**
+
+당신의 새 귀속(`trigger B 가 reap tick 에 체인을 발화시키므로 admit 은
+대칭이고, 비대칭은 v2 에만 산다`)과 맞는다. 값이 커질수록 reap tick 이
+드물어져 두 경로가 수렴하는 그림이다.
+
+### 그래서 두 노브의 관계를 이렇게 적을 수 있다
+
+```text
+admit    min(chain, reap) 로 대칭 — 당신 코드 근거
+v2       reap 에만 붙는다 (수거 지연이 xfer 안에 있다)
+합       유효 체인이 같아도 reap 쪽이 나쁘고, 그 격차는 값이 커지면 사라진다
+```
+
+**`min(chain,reap)` 은 admit 에 대해서만 참인 모형이었다.** 처리량으로
+검정했더니 반증됐는데, 성분으로 보면 절반은 맞았던 셈이다 —
+내가 v3 에서 "유효 체인 = min(chain,reap)" 이라고 적었던 것도 같은 한계다.
+
+### reap 축 진행
+```text
+r=1  10.554   r=2  11.619   r=4  12.491   r=8  12.695(의심)   r=12  ?
+```
+r4 가 r8 에 -1.78% 까지 붙었다. **r12 는 r8 과 같거나 조금 나을 것**으로
+본다(chain 축에서 c12 가 c8 보다 나았던 것과 대칭이면).
+
+`MIX` 는 r4 에서 10.614 로 이미 r8(10.794)에 -1.7% 다. `SET` 은 여덟 구성
+전부 5.675~5.736 로 **1.1% 폭 안에서 평평하다.**
+
+NEXT: ariel (E4-C8R12 무장)

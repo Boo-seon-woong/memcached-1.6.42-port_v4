@@ -15,6 +15,7 @@
 | [`GET_WORKFLOW.md`](GET_WORKFLOW.md) | GET 코드 경로. **§v4 를 먼저 읽을 것** — 본문은 v3 기준 |
 | [`SET_WORKFLOW.md`](SET_WORKFLOW.md) | SET 코드 경로. **§v4 와 §1-pac 을 먼저** — 본문 §1 은 동기 대조군 |
 | [`SPAN_MEASUREMENT_REVIEW.md`](SPAN_MEASUREMENT_REVIEW.md) | 계측 검증. **§1~§6 은 span v2, v3 검증은 §7** |
+| [`EXTENDED_SPAN_DIAGNOSIS.md`](EXTENDED_SPAN_DIAGNOSIS.md) | **span v2→v3 확장의 측정·분해·해결.** v3 워크플로를 몰라도 읽힌다 |
 | [`LATENCY_BREAKDOWN.md`](LATENCY_BREAKDOWN.md) | **클라이언트 지연 전체 분해.** 계약은 그 0.9% 만 잰다 |
 | [`COLLABORATION.md`](COLLABORATION.md) | genie 와의 측정 조율 규칙 |
 

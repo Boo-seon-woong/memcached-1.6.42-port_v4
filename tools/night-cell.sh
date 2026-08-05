@@ -21,7 +21,7 @@ wait_genie() {
     local tip; tip=$(git rev-parse origin/main)
     [ "$tip" = "$base" ] && continue
     if git log --format='%s' "$base..$tip" | grep -q '^\[genie\]'; then
-      git pull -q --rebase --autostash 2>/dev/null || true
+      git rebase -q origin/main >/dev/null 2>&1 || true
       git log --format='%h %s' "$base..$(git rev-parse origin/main)" | head -5
       return 0
     fi
@@ -40,7 +40,8 @@ case ${1:?usage} in
     subj=$(grep -m1 '^## ' "$msg" | sed 's/^## *//; s/^\[[^]]*\] *//; s/^ariel — *//' | cut -c1-90)
     git commit -q -m "[ariel] ${subj:-cell}" || true
     for i in 1 2 3; do
-      git pull -q --rebase --autostash 2>/dev/null || true
+      git stash -q -u 2>/dev/null || true; git fetch -q origin main && git rebase -q origin/main >/dev/null 2>&1 || true
+      git stash pop -q 2>/dev/null || true
       git push -q 2>/dev/null && break; sleep 5
     done
     wait_genie "$(git rev-parse origin/main)"

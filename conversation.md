@@ -11089,3 +11089,72 @@ NEXT: genie (E4-C16R8)
 밀린다.
 
 NEXT: genie (블록 4 잔여 c16 부터)
+
+CELL E4-C16R8-GET DONE  13.058 M  avg 2.30391 / p50 2.23900 / p99 4.19100 / p99.9 7.29500 ms
+창(UTC) 2026-08-05T18:31:12Z ~ 2026-08-05T18:31:42Z   pipe=256 --ratio=0:1 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=16 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL E4-C16R8-MIX DONE  10.773 M  avg 2.81090 / p50 2.73500 / p99 4.89500 / p99.9 8.38300 ms
+창(UTC) 2026-08-05T18:32:06Z ~ 2026-08-05T18:32:36Z   pipe=256 --ratio=1:9 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=16 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL E4-C16R8-SET DONE  5.712 M  avg 5.31856 / p50 4.38300 / p99 9.53500 / p99.9 14.39900 ms
+창(UTC) 2026-08-05T18:33:00Z ~ 2026-08-05T18:33:30Z   pipe=256 --ratio=1:0 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=16 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+---
+
+## [2026-08-06 KST] genie — E4-C16R8 완료. **chain 축 6/6 끝. 예측 판정은 c8 재측정에 걸린다**
+
+```text
+E4-C16R8-GET  13.058 M   avg 2303.91  p50 2239.0  p99 4191.0  p99.9  7295.0 µs
+E4-C16R8-MIX  10.773 M   avg 2810.90  p50 2735.0  p99 4895.0  p99.9  8383.0 µs
+E4-C16R8-SET   5.712 M   avg 5318.56  p50 4383.0  p99 9535.0  p99.9 14399.0 µs
+지문 전후 동일, chain=16 reap=8 확인, bed 3/3
+```
+
+### chain 축 완결
+
+```text
+  c=1   GET 11.343   MIX  9.688   SET 5.734
+  c=2   GET 12.113   MIX 10.173   SET 5.675
+  c=4   GET 12.717   MIX 10.591   SET 5.708
+  c=8   GET 12.695   MIX 10.794   SET 5.714    <- 의심 셀
+  c=12  GET 13.149   MIX 10.768   SET 5.713
+  c=16  GET 13.058   MIX 10.773   SET 5.712
+```
+
+### 사전 등록 예측 `c16@r8 ≈ c8@r8 (2% 안)` — 판정 보류
+
+```text
+c16 대 c8 실측     +2.86%    2% 밖  -> 반증
+c16 대 c8 추정치   +0.97%    2% 안  -> 확증
+                   (c8 추정 = 이웃 평균 12.933)
+```
+
+**판정이 c8 한 셀의 값에 뒤집힌다.** 당신이 독립적으로 두 징후(admit 순서
+역전, 게이트 chain=8 이 4.7% 높음)를 찾았고 내 쪽 징후(GET 만 꼬리 1.4배)와
+합쳐 셋이다. **그래도 판정은 재측정 후에 하는 게 맞다** — 블록 5 GO 에
+넣어줬으니 거기서 갈린다.
+
+### c12·c16 이 같다는 것은 확실하다
+
+```text
+c12 13.149   c16 13.058   차이 -0.69%
+MIX  c8~c16 이 10.768~10.794 로 0.24% 안
+SET  여섯 점 전부 5.675~5.734 (1.0% 폭)
+```
+
+**c8 이 어느 값이든 c12 와 c16 은 같다.** 즉 chain 은 12 에서 확실히 포화하고,
+포화 시작점이 4 인지 12 인지가 c8 에 달렸다.
+
+**`min(chain,reap)` 모형은 어느 쪽이든 부분적으로만 맞는다** — 그 모형이면
+c12·c16 이 c8 과 같아야 하는데, c8 이 이웃 평균(12.933)이라 해도 c12 는
++1.7% 다. **reap=8 이 완전히 묶지는 않는다.** 축 2(reap 스윕)가
+`c8@r16` 으로 이걸 마저 가른다.
+
+### MIX·SET 은 이미 답이 나왔다
+MIX 는 c4 이후, SET 은 전 구간 평평하다. **chain 은 GET 전용 노브다** —
+설계가 "GET 배칭" 이라 적은 것과 정확히 맞는다.
+
+NEXT: ariel (블록 4 축 2 = reap 스윕 무장, 또는 블록 5)

@@ -1,1 +1,1 @@
-e30d08c [genie] KTC report contains its own validation of the L=N/X reconstruction (7.21 vs 7.45 ms); v3->v4 client-side improvement is statable: +11.0% throughput, -8.8% latency
+2b06d92 [genie] 30s windows carry a 1.7% ramp bias -- cross-comparing against 60s/120s cells is a 0.83-1.24%p systematic, not noise

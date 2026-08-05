@@ -386,3 +386,9 @@ a437264 [ariel] Pin down the span definition: fix the version the server reports
 2026-08-05 07:10:19 UTC
 e30d08c [genie] KTC report contains its own validation of the L=N/X reconstruction (7.21 vs 7.45 ms); v3->v4 client-side improvement is statable: +11.0% throughput, -8.8% latency
 
+2026-08-05 07:24:39 UTC
+273bb81 md remodified
+
+2026-08-05 10:02:05 UTC
+2b06d92 [genie] 30s windows carry a 1.7% ramp bias -- cross-comparing against 60s/120s cells is a 0.83-1.24%p systematic, not noise
+

@@ -13815,3 +13815,179 @@ RDMA 를 안 쓰므로 HCA 점유가 없어야 정상이다. co-located 13셀(60
 셀마다 avg/p50/p99/p99.9. raw `experiments/night-20260806/genie/<cell>.txt`.
 
 NEXT: genie (exp1 ST 24셀)
+
+CELL ST-C-P1 DONE  0.611 M  avg 0.19418 / p50 0.17500 / p99 0.48700 / p99.9 0.78300 ms
+창(UTC) 2026-08-05T22:22:01Z ~ 2026-08-05T22:22:31Z   pipe=1 --ratio=0:1 --test-time=30
+지문    maxconns=16384 num_threads=30 reqs_per_event=1024 ext_item_age=4294967295 ext_wbuf_size=4194304 
+
+CELL ST-C-P8 DONE  4.020 M  avg 0.22775 / p50 0.19100 / p99 0.68700 / p99.9 1.15100 ms
+창(UTC) 2026-08-05T22:22:53Z ~ 2026-08-05T22:23:23Z   pipe=8 --ratio=0:1 --test-time=30
+지문    maxconns=16384 num_threads=30 reqs_per_event=1024 ext_item_age=4294967295 ext_wbuf_size=4194304 
+
+CELL ST-C-P32 DONE  9.874 M  avg 0.35445 / p50 0.27900 / p99 1.18300 / p99.9 1.93500 ms
+창(UTC) 2026-08-05T22:23:45Z ~ 2026-08-05T22:24:15Z   pipe=32 --ratio=0:1 --test-time=30
+지문    maxconns=16384 num_threads=30 reqs_per_event=1024 ext_item_age=4294967295 ext_wbuf_size=4194304 
+
+CELL ST-C-P64 DONE  11.497 M  avg 0.62211 / p50 0.51900 / p99 2.23900 / p99.9 3.71100 ms
+창(UTC) 2026-08-05T22:24:37Z ~ 2026-08-05T22:25:07Z   pipe=64 --ratio=0:1 --test-time=30
+지문    maxconns=16384 num_threads=30 reqs_per_event=1024 ext_item_age=4294967295 ext_wbuf_size=4194304 
+
+CELL ST-C-P128 DONE  14.001 M  avg 1.04397 / p50 0.94300 / p99 3.19900 / p99.9 4.83100 ms
+창(UTC) 2026-08-05T22:25:29Z ~ 2026-08-05T22:25:59Z   pipe=128 --ratio=0:1 --test-time=30
+지문    maxconns=16384 num_threads=30 reqs_per_event=1024 ext_item_age=4294967295 ext_wbuf_size=4194304 
+
+CELL ST-C-P256 DONE  15.372 M  avg 1.94599 / p50 1.88700 / p99 4.83100 / p99.9 6.65500 ms
+창(UTC) 2026-08-05T22:26:24Z ~ 2026-08-05T22:26:54Z   pipe=256 --ratio=0:1 --test-time=30
+지문    maxconns=16384 num_threads=30 reqs_per_event=1024 ext_item_age=4294967295 ext_wbuf_size=4194304 
+
+CELL ST-C-P384 DONE  15.918 M  avg 2.84367 / p50 2.83100 / p99 6.55900 / p99.9 9.15100 ms
+창(UTC) 2026-08-05T22:27:19Z ~ 2026-08-05T22:27:50Z   pipe=384 --ratio=0:1 --test-time=30
+지문    maxconns=16384 num_threads=30 reqs_per_event=1024 ext_item_age=4294967295 ext_wbuf_size=4194304 
+
+CELL ST-B-P1 DONE  0.607 M  avg 0.19543 / p50 0.18300 / p99 0.48700 / p99.9 0.73500 ms
+창(UTC) 2026-08-05T22:28:12Z ~ 2026-08-05T22:28:42Z   pipe=1 --ratio=1:19 --test-time=30
+지문    maxconns=16384 num_threads=30 reqs_per_event=1024 ext_item_age=4294967295 ext_wbuf_size=4194304 
+
+CELL ST-B-P8 DONE  3.597 M  avg 0.25671 / p50 0.21500 / p99 0.77500 / p99.9 1.12700 ms
+창(UTC) 2026-08-05T22:29:04Z ~ 2026-08-05T22:29:34Z   pipe=8 --ratio=1:19 --test-time=30
+지문    maxconns=16384 num_threads=30 reqs_per_event=1024 ext_item_age=4294967295 ext_wbuf_size=4194304 
+
+CELL ST-B-P32 DONE  7.434 M  avg 0.48938 / p50 0.44700 / p99 1.26300 / p99.9 1.72700 ms
+창(UTC) 2026-08-05T22:29:56Z ~ 2026-08-05T22:30:26Z   pipe=32 --ratio=1:19 --test-time=30
+지문    maxconns=16384 num_threads=30 reqs_per_event=1024 ext_item_age=4294967295 ext_wbuf_size=4194304 
+
+CELL ST-B-P64 DONE  7.907 M  avg 0.93742 / p50 0.85500 / p99 2.22300 / p99.9 2.89500 ms
+창(UTC) 2026-08-05T22:30:48Z ~ 2026-08-05T22:31:18Z   pipe=64 --ratio=1:19 --test-time=30
+지문    maxconns=16384 num_threads=30 reqs_per_event=1024 ext_item_age=4294967295 ext_wbuf_size=4194304 
+
+CELL ST-B-P128 DONE  9.242 M  avg 1.62373 / p50 1.43900 / p99 3.56700 / p99.9 4.54300 ms
+창(UTC) 2026-08-05T22:31:40Z ~ 2026-08-05T22:32:10Z   pipe=128 --ratio=1:19 --test-time=30
+지문    maxconns=16384 num_threads=30 reqs_per_event=1024 ext_item_age=4294967295 ext_wbuf_size=4194304 
+
+CELL ST-B-P256 DONE  9.471 M  avg 3.20480 / p50 2.73500 / p99 6.52700 / p99.9 7.99900 ms
+창(UTC) 2026-08-05T22:32:32Z ~ 2026-08-05T22:33:02Z   pipe=256 --ratio=1:19 --test-time=30
+지문    maxconns=16384 num_threads=30 reqs_per_event=1024 ext_item_age=4294967295 ext_wbuf_size=4194304 
+
+CELL ST-B-P384 DONE  9.744 M  avg 4.68846 / p50 4.07900 / p99 9.98300 / p99.9 12.54300 ms
+창(UTC) 2026-08-05T22:33:24Z ~ 2026-08-05T22:33:54Z   pipe=384 --ratio=1:19 --test-time=30
+지문    maxconns=16384 num_threads=30 reqs_per_event=1024 ext_item_age=4294967295 ext_wbuf_size=4194304 
+
+CELL ST-A-P1 DONE  0.467 M  avg 0.25540 / p50 0.21500 / p99 0.76700 / p99.9 1.07900 ms
+창(UTC) 2026-08-05T22:34:16Z ~ 2026-08-05T22:34:46Z   pipe=1 --ratio=1:1 --test-time=30
+지문    maxconns=16384 num_threads=30 reqs_per_event=1024 ext_item_age=4294967295 ext_wbuf_size=4194304 
+
+CELL ST-A-P8 DONE  1.000 M  avg 0.95012 / p50 0.88700 / p99 2.03100 / p99.9 2.51100 ms
+창(UTC) 2026-08-05T22:35:08Z ~ 2026-08-05T22:35:38Z   pipe=8 --ratio=1:1 --test-time=30
+지문    maxconns=16384 num_threads=30 reqs_per_event=1024 ext_item_age=4294967295 ext_wbuf_size=4194304 
+
+CELL ST-A-P32 DONE  1.148 M  avg 3.31210 / p50 2.78300 / p99 6.62300 / p99.9 7.67900 ms
+창(UTC) 2026-08-05T22:36:00Z ~ 2026-08-05T22:36:30Z   pipe=32 --ratio=1:1 --test-time=30
+지문    maxconns=16384 num_threads=30 reqs_per_event=1024 ext_item_age=4294967295 ext_wbuf_size=4194304 
+
+CELL ST-A-P64 DONE  1.174 M  avg 6.47845 / p50 5.43900 / p99 12.79900 / p99.9 14.59100 ms
+창(UTC) 2026-08-05T22:36:52Z ~ 2026-08-05T22:37:22Z   pipe=64 --ratio=1:1 --test-time=30
+지문    maxconns=16384 num_threads=30 reqs_per_event=1024 ext_item_age=4294967295 ext_wbuf_size=4194304 
+
+CELL ST-A-P128 DONE  1.161 M  avg 13.15998 / p50 11.19900 / p99 26.23900 / p99.9 30.20700 ms
+창(UTC) 2026-08-05T22:37:44Z ~ 2026-08-05T22:38:15Z   pipe=128 --ratio=1:1 --test-time=30
+지문    maxconns=16384 num_threads=30 reqs_per_event=1024 ext_item_age=4294967295 ext_wbuf_size=4194304 
+
+CELL ST-A-P256 DONE  1.198 M  avg 26.22572 / p50 24.31900 / p99 54.78300 / p99.9 60.67100 ms
+창(UTC) 2026-08-05T22:38:40Z ~ 2026-08-05T22:39:12Z   pipe=256 --ratio=1:1 --test-time=30
+지문    maxconns=16384 num_threads=30 reqs_per_event=1024 ext_item_age=4294967295 ext_wbuf_size=4194304 
+
+CELL ST-A-P384 DONE  1.168 M  avg 39.34486 / p50 35.32700 / p99 79.87100 / p99.9 92.67100 ms
+창(UTC) 2026-08-05T22:39:37Z ~ 2026-08-05T22:40:08Z   pipe=384 --ratio=1:1 --test-time=30
+지문    maxconns=16384 num_threads=30 reqs_per_event=1024 ext_item_age=4294967295 ext_wbuf_size=4194304 
+
+CELL ST-C-Z256 DONE  13.125 M  avg 2.29091 / p50 2.15900 / p99 4.67100 / p99.9 6.14300 ms
+창(UTC) 2026-08-05T22:40:30Z ~ 2026-08-05T22:41:00Z   pipe=256 --ratio=0:1 --test-time=30
+지문    maxconns=16384 num_threads=30 reqs_per_event=1024 ext_item_age=4294967295 ext_wbuf_size=4194304 
+
+CELL ST-B-Z256 DONE  6.540 M  avg 4.65347 / p50 4.47900 / p99 8.57500 / p99.9 10.23900 ms
+창(UTC) 2026-08-05T22:41:22Z ~ 2026-08-05T22:41:52Z   pipe=256 --ratio=1:19 --test-time=30
+지문    maxconns=16384 num_threads=30 reqs_per_event=1024 ext_item_age=4294967295 ext_wbuf_size=4194304 
+
+CELL ST-A-Z256 DONE  1.100 M  avg 27.84184 / p50 25.47100 / p99 55.80700 / p99.9 62.97500 ms
+창(UTC) 2026-08-05T22:42:14Z ~ 2026-08-05T22:42:45Z   pipe=256 --ratio=1:1 --test-time=30
+지문    maxconns=16384 num_threads=30 reqs_per_event=1024 ext_item_age=4294967295 ext_wbuf_size=4194304 
+
+---
+
+## [2026-08-06 KST] genie — **exp1 완결. 쓰기가 섞이면 원격 메모리가 로컬을 이긴다**
+
+`SERVER: stock` 검증 통과(port/v3 전용 필드 0, `ext_wbuf_size` 존재,
+`VERSION 1.6.42`). 지문 24셀 전후 동일 + 블록 기준선 일치, bed 3/3, 각 30초.
+**stock·port 둘 다 off-box, 같은 부하 생성기, 같은 창 길이다.**
+
+### YCSB C (읽기 100%) — 로컬이 이긴다
+
+```text
+pipe    stock     port   port/stock
+   1    0.611    0.571     -6.5%
+  32    9.874    7.522    -23.8%
+ 128   14.001   12.932     -7.6%
+ 256   15.372   13.827    -10.1%
+ 384   15.918   14.014    -12.0%
+```
+**정점에서 원격이 로컬의 90.0% 다** (13.827 / 15.372).
+이게 "원격 메모리 비용" 의 정직한 수치다 — 둘 다 PROF off, 둘 다 off-box.
+
+### YCSB B (쓰기 5%) — 32 를 넘으면 뒤집힌다
+
+```text
+  32    7.434    7.459     +0.3%
+  64    7.907    9.430    +19.3%
+ 256    9.471   12.357    +30.5%
+```
+**깊이를 주면 원격이 30% 앞선다.** stock 은 64 이후 거의 안 오르고(7.9 -> 9.7)
+port 는 계속 오른다.
+
+### YCSB A (쓰기 50%) — 5~6 배 차이다
+
+```text
+   1    0.467    0.572     +22.5%
+   8    1.000    3.042    +204%
+  64    1.174    7.014    +497%
+ 256    1.198    7.247    +505%
+```
+
+**stock 이 1.2 M 에서 완전히 멈춘다.** pipeline 8 이후 전혀 안 오른다.
+port 는 7.2 M 까지 간다. **원격 메모리 쪽이 6 배 빠르다.**
+
+당신이 co-located 예비측정에서 본 `A 1.188 M` 이 off-box 에서 `1.198 M` 로
+재현됐다 — **stock 의 쓰기 천장은 부하 생성기 위치와 무관한 stock 자체의
+성질**이다(`item_lock` 배타 + LRU 갱신 직렬화).
+
+### zipf θ=0.99 에서는 격차가 줄지만 방향은 같다
+
+```text
+       stock     port
+C     13.125   12.775    -2.7%
+B      6.540    9.381   +43.4%
+A      1.100    1.734   +57.6%
+```
+
+**skew 아래서도 쓰기가 섞이면 원격이 앞선다.** 다만 A 에서 port 가 7.247 ->
+1.734 (-76%) 로 크게 잃고 stock 은 1.198 -> 1.100 (-8%) 만 잃는다 —
+**stock 은 이미 락에 묶여 있어 더 잃을 것이 없었다.**
+
+### 이 표가 exp1 에 주는 것
+
+DPA-Store Fig.15 형태로 그리면 **워크로드마다 승자가 다른 그림**이 된다:
+
+```text
+읽기 전용    로컬 우세 (원격이 90%)
+쓰기 5%      원격 우세 (+30%)
+쓰기 50%     원격 압도 (+505%)
+```
+
+**"원격 메모리는 느리다" 가 아니라 "원격화하면서 쓰기 경로를 비동기로
+바꾼 것이 stock 의 직렬화를 우회한다" 가 이 데이터의 진술이다.**
+읽기 전용에서 잃는 10% 가 그 대가다.
+
+**단, 이건 경향성 라운드(30초 단발)다.** 절대값을 논문에 실으려면
+60초x3런 본측정이 필요하다 — 특히 `A` 의 5배 차이는 크기가 커서 경향은
+안 바뀌겠지만, `C` 의 10% 는 재현 오차와 같은 자릿수다.
+
+NEXT: ariel (ST zipf 는 위에 포함됨 / 블록 5(c) 또는 마감)

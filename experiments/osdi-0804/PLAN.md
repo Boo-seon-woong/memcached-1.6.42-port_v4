@@ -3,16 +3,12 @@
 실험별 계획은 각 디렉터리의 PLAN.md 다. **이 문서는 공통 규약만 갖는다.**
 실행 순서 정본은 [`../PENDING.md`](../PENDING.md).
 
-그림 명세는 [`FIGURES.md`](FIGURES.md) 한 곳에 모았다 — 축·계열·출처 셀·
-그 그림이 하는 주장까지. 생성기는 `tools/plot-osdi.py`(의존성 없음, SVG 직출력),
-산출물은 `img/osdi-20260806/`.
-
-| 실험 | 계획 | 그림 | 그림 원형 |
-|---|---|---|---|
-| exp1 local vs remote | [`exp1/PLAN.md`](exp1/PLAN.md) | F1, F1b | DPA-Store Fig.15 |
-| exp2 성능 축 + 지연 분해 | [`exp2/PLAN.md`](exp2/PLAN.md) | F2a, **F2b**, F2c | XSTORE Fig.12a / **12b(저부하)** / SMART **Fig.13** |
-| exp3 값 크기 | [`exp3/PLAN.md`](exp3/PLAN.md) | F3 | XSTORE Fig.16a / SMART Fig.14 |
-| exp4 batching 축 | [`exp4/PLAN.md`](exp4/PLAN.md) | F4a, F4b, F4c | (자체) span·client 반대 부호 |
+| 실험 | 계획 | 그림 원형 |
+|---|---|---|
+| exp1 local vs remote | [`exp1/PLAN.md`](exp1/PLAN.md) | DPA-Store Fig.15 |
+| exp2 성능 축 + 지연 분해 | [`exp2/PLAN.md`](exp2/PLAN.md) | XSTORE Fig.12a / **12b(저부하)** / SMART **Fig.13**(스레드) |
+| exp3 값 크기 | [`exp3/PLAN.md`](exp3/PLAN.md) | XSTORE Fig.16a / SMART Fig.14 |
+| exp4 batching 축 | [`exp4/PLAN.md`](exp4/PLAN.md) | (자체) span·client 반대 부호 |
 
 > 관리자 원칙 (2026-08-04): **"결과를 보려고 실험한다. 목표 미달도 데이터로
 > 남기고 종결형 서술 금지."** 이전 판의 "확인 사항"이던 그림 번호는 원문

@@ -12164,3 +12164,81 @@ memtier -s 10.99.0.3 -p 11411 -P memcache_text -d 16 \
 셀마다 avg/p50/p99/p99.9. raw `experiments/night-20260806/genie/<cell>.txt`.
 
 NEXT: genie (V16 3부하)
+
+CELL V16-W1 DONE  14.503 M  avg 2.03292 / p50 1.97500 / p99 3.63100 / p99.9 6.81500 ms
+창(UTC) 2026-08-05T20:08:06Z ~ 2026-08-05T20:08:36Z   pipe=256 --ratio=0:1 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL V16-W2 DONE  11.616 M  avg 2.56907 / p50 2.51100 / p99 4.41500 / p99.9 7.64700 ms
+창(UTC) 2026-08-05T20:09:00Z ~ 2026-08-05T20:09:30Z   pipe=256 --ratio=1:9 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL V16-W3 DONE  6.132 M  avg 4.92965 / p50 4.92700 / p99 7.64700 / p99.9 11.71100 ms
+창(UTC) 2026-08-05T20:09:54Z ~ 2026-08-05T20:10:24Z   pipe=256 --ratio=1:0 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+---
+
+## [2026-08-06 KST] genie — V16 완료. **값 크기가 SET 을 움직인 첫 축이다**
+
+```text
+V16-W1  14.503 M   avg 2032.92  p50 1975.0  p99 3631.0  p99.9  6815.0 µs
+V16-W2  11.616 M   avg 2569.07  p50 2511.0  p99 4415.0  p99.9  7647.0 µs
+V16-W3   6.132 M   avg 4929.65  p50 4927.0  p99 7647.0  p99.9 11711.0 µs
+지문 전후 동일, bed 3/3, pipe=256, 30초
+```
+
+### 크기 적용 검증 — 전송량으로 확인했다
+
+memtier 가 `-d` 를 출력에 안 남기므로 바이트/op 로 갈랐다:
+
+```text
+        -d64        -d16      차이
+GET   105.8 B/op   57.8 B/op   -48.0    <- 정확히 64-16
+SET    94.9 B/op   46.9 B/op   -48.0
+```
+**프리로드와 부하가 같은 크기다.** 당신이 경고한 어긋남은 없다.
+
+### 대조 (같은 무장, 같은 pipe·창)
+
+```text
+        -d 64      -d 16      차이
+GET    13.159    14.503    +10.21%
+MIX    10.931    11.616     +6.27%
+SET     5.714     6.132     +7.32%
+```
+
+**SET 이 움직였다.** SET 은 지금까지 여섯 축(pipeline, W, nqp, ORD, chain,
+reap) 전부에서 5.6~5.8 M 을 안 벗어났는데, **값 크기에서 처음 +7.3% 다.**
+
+이건 SET 병목의 성격을 좁힌다:
+
+```text
+동시성·배칭 축      전부 무반응   -> 큐잉·스케줄링이 아니다
+값 크기             +7.3%        -> 전송 시간에 실린다
+```
+
+**당신의 "SET 은 WRITE CQE 를 기다린다" 와 맞는다** — 페이로드가 작으면
+wire 시간이 줄어 그 대기가 짧아진다. 동시성을 아무리 만져도 안 줄던 것이
+바이트를 줄이니 준다.
+
+### 다만 대역폭 한계는 아니다
+
+```text
+데이터 4배 감소 -> 처리량 1.07배
+SET 전송량       520 MB/s (-d64)  ->  274 MB/s (-d16)
+```
+
+**4배 줄여 7% 얻는다.** 대역폭이 묶고 있었다면 훨씬 컸어야 한다.
+즉 **고정비가 지배하고 값 크기는 그 위에 얹히는 작은 항**이다.
+`d=16` 에서도 op 당 46.9 B 를 보내는데, 그중 값은 16 B 뿐이라
+**키·프로토콜 오버헤드가 값보다 크다.**
+
+### GET 이 SET 보다 크게 반응한 것도 같은 방향
+```text
+GET +10.21%   SET +7.32%
+```
+GET 은 읽어온 값을 복호·태그검증까지 하므로 바이트 감소가 더 여러 구간에
+걸친다. 당신 분해에서 `crypto` 가 얼마나 줄었는지 보면 갈릴 것이다.
+
+NEXT: ariel (다음 값 크기 무장)

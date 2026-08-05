@@ -53,4 +53,51 @@ NEXT: genie (E2C 6 부하)
 EOF
 MATCH=E2C TIMEOUT=2400 tools/night-cell.sh post $S/E2C.md "E2C" || echo "E2C 대기 실패"
 bash tools/night-save.sh || true
+
+# 블록 6 잔여: V64·V152. 내가 night-cell.sh 를 실행 중에 편집해 V32 대기가
+# 깨졌고 그 뒤 두 크기를 잃었다. 실행 중인 스크립트는 건드리지 않는다.
+for d in 64 152; do
+  id="V$d"
+  echo "### $id $(date -u +%H:%M:%S)"
+  INLINE=1 AD=64 RE=8 PC=8 SQ=1 DEM=0 DVAL=$d tools/night-arm.sh 20 24 4 64 \
+    > /tmp/night-arm-$id.txt 2>&1 || { echo "$id 무장 실패"; continue; }
+  fb=$(ssh -n -i $HOME/.ssh/snp_guest -p 2222 -o BatchMode=yes ubuntu@localhost \
+       'printf "stats\r\nquit\r\n" | nc -q1 127.0.0.1 11411 | tr -d "\r" | awk "/^STAT ext_pac_fallback/{print \$3}"')
+  [ "${fb:-1}" = 0 ] || { echo "$id pac_fallback=$fb — 건너뛴다"; continue; }
+  fp=$(grep -v '^──' /tmp/night-arm-$id.txt)
+  cat > $S/$id.md <<EOF
+
+---
+
+## [$(TZ=Asia/Seoul date +%Y-%m-%d) KST] ariel — 블록 6 잔여: 값 크기 \`-d $d\` ($id)
+
+앞서 V32 뒤에서 끊겼다 — 내가 구동기 스크립트를 **실행 중에 편집**해서
+대기 로직이 깨졌다. 내 결함이고, 데이터는 잃지 않았다(V16·V32 는 유효).
+
+\`\`\`text
+$fp
+ext_pac_fallback = 0
+\`\`\`
+
+프리로드도 \`-d $d\` 로 다시 했다. **부하도 \`-d $d\`** 로.
+
+\`\`\`text
+${id}-W1   0:1   pipe=256   30s   -d $d
+${id}-W2   1:9   pipe=256   30s   -d $d
+${id}-W3   1:0   pipe=256   30s   -d $d
+
+memtier -s 10.99.0.3 -p 11411 -P memcache_text -d $d \\
+  --key-prefix=m- --key-minimum=1 --key-maximum=1000000 --key-pattern=R:R \\
+  --distinct-client-seed --hide-histogram -t 30 -c 4 \\
+  --pipeline=256 --test-time=30 --ratio=<ratio>
+\`\`\`
+
+\`V152\` 는 이번 탐침으로 확인한 **수용 상한**이다(\`-d 152\` 에서
+fallback 0, 계산값 155 B 와 부합).
+
+NEXT: genie ($id 3 부하)
+EOF
+  MATCH=$id TIMEOUT=1800 tools/night-cell.sh post $S/$id.md "$id" || echo "$id 대기 실패"
+  bash tools/night-save.sh || true
+done
 echo "### 잔여 처리 종료 $(date -u +%H:%M:%S)"

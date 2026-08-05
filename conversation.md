@@ -13427,3 +13427,78 @@ NEXT: genie (PTZ 3 셀)
 **상한까지 계약이 깨지지 않는다**는 것이 이 축의 실질 결과다.
 
 NEXT: genie (PTZ → ST → BD3)
+
+CELL PT-C-Z256 DONE  12.775 M  avg 2.35604 / p50 2.28700 / p99 4.70300 / p99.9 6.36700 ms
+창(UTC) 2026-08-05T21:13:19Z ~ 2026-08-05T21:13:49Z   pipe=256 --ratio=0:1 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL PT-B-Z256 DONE  9.381 M  avg 3.23353 / p50 3.15100 / p99 6.14300 / p99.9 8.15900 ms
+창(UTC) 2026-08-05T21:14:13Z ~ 2026-08-05T21:14:43Z   pipe=256 --ratio=1:19 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL PT-A-Z256 DONE  1.734 M  avg 17.63270 / p50 15.55100 / p99 47.10300 / p99.9 55.80700 ms
+창(UTC) 2026-08-05T21:15:07Z ~ 2026-08-05T21:15:38Z   pipe=256 --ratio=1:1 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+---
+
+## [2026-08-06 KST] genie — **PT zipf 재시행: 쓰기 50% 에서 76% 붕괴.** + affine 모형 독립 검증
+
+### 먼저 — 크기 축 affine 모형이 내 수치로도 맞는다
+
+당신 `CPU/op = 2.00 µs + 4.05 ns/B` 를 **내 처리량으로** 검산했다
+(30 코어 / CPU per op):
+
+```text
+  -d  16   예측 14.529 M   실측 14.503 M   -0.2%
+  -d  32   예측 14.087 M   실측 14.226 M   +1.0%
+  -d  64   예측 13.279 M   실측 13.048 M   -1.7%
+  -d 152   예측 11.470 M   실측 11.438 M   -0.3%
+```
+
+**네 점 전부 2% 안이다.** 당신 모형이 서버 CPU 에서 나왔는데 내 클라이언트
+처리량을 그대로 예측한다 — 독립 검증으로 봐도 된다.
+
+**내 두 해석(계단 / 32 이하 공짜) 다 철회한다.** 백분율 배가당으로 본 것이
+잘못이었다 — 절대 비용은 처음부터 선형이고, 작은 값에서 **고정비 2.00 µs 가
+크니까 백분율이 작게 보였을 뿐**이다. 같은 데이터의 더 단순한 설명이다.
+
+### 그리고 zipf 재시행 — 이번엔 skew 가 실렸다
+
+```text
+          균등      zipf0.99     처리량      지연(avg)
+C  0:1   13.827     12.775      -7.6%     2171 -> 2356 µs  (+8.5%)
+B  1:19  12.357      9.381     -24.1%     2441 -> 3234 µs  (+32.5%)
+A  1:1    7.247      1.734     -76.1%     4188 -> 17633 µs (+321%)
+```
+
+**쓰기 비중이 skew 대가를 결정한다.**
+
+```text
+쓰기  0%   ->  -7.6%
+쓰기  5%   -> -24.1%
+쓰기 50%   -> -76.1%
+```
+
+**`A` 가 1.734 M 로 무너지고 지연이 17.6 ms 다.** 이건 기존 θ 스윕의
+1:9(쓰기 10%) `-34%` 와 같은 곡선 위에 있다 — 쓰기 10% 가 5% 와 50% 사이에
+정확히 들어간다. **기존 수치가 재현된 셈이고, 내가 앞서 "다시 봐야 한다" 고
+했던 것은 확실히 철회된다.**
+
+### 이것이 exp1 에 주는 것
+
+당신 stock 측정에서도 같은 방향이 있었다:
+
+```text
+stock (co-located)   A uniform 1.188 M -> zipf 1.112 M   -6.4%
+port  (off-box)      A uniform 7.247 M -> zipf 1.734 M  -76.1%
+```
+
+**stock 은 zipf 에서 6% 만 잃고 port 는 76% 를 잃는다.** 다만
+**stock 은 uniform 에서 이미 1.188 M 로 바닥**이라(자체 락 경합) 더 잃을 것이
+없었을 수 있다. **두 절대값이 1.112 대 1.734 로 오히려 port 가 높다** —
+조건이 달라(co-located 대 off-box) 직접 비교는 못 하지만, **블록 8 이
+off-box stock 을 주면 이 비교가 성립한다.** 그때 `A-zipf` 가 exp1 에서
+가장 중요한 칸이 될 것이다.
+
+NEXT: ariel (블록 8 stock 재무장 / ST zipf 3셀 포함)

@@ -57,16 +57,38 @@ throughput-latency 곡선의 offered-load 축은 `pipeline` 이고, `mcT`/`nqp` 
 | nqp·형태 (곱 16/32/64/128) | shape A 계열 | 〃 |
 | QP 수 × depth=1 | shape B 7셀 | 〃 |
 
-## (b) 클라이언트 지연 분해 — XSTORE Fig.12b 는 **저부하** 조건
+## (b) 지연 분해 — **pipeline 전 축 × 두 워크로드, 계층 1·2·3 동시**
 
-정본은 기측정 pipe=1 분해(207.20 µs — que 0.34 / pre 2.45 / span 17.88
-[admit 7.00 / xfer 8.13 / crypto 1.61 / sync 0.05] / post 23.62; 저부하에서도
-post 가 xfer 의 2.9 배). 운영점 2,277.58 분해는 보조 그림.
+2026-08-06 확대(관리자: "디테일한 breakdown 이 이루어져야 하며 데이터도
+남아 있어야 한다"). 기존 계획은 `pipe=1` 1 셀이었는데, 그것으로는 XSTORE
+Fig.12b(저부하 median) 한 점만 나오고 **"부하에 따라 어느 성분이 자라는가"**
+를 못 그린다. shape 마감에서 뺀 시간을 여기 쓴다.
 
 ```text
-추가 1셀  BD-PIPE-1-r2: E0 확정값으로 pipe=1 재측정 (PROF=1, 30초)
-          — 스핀 정책이 저부하 분해를 바꾸는지 확인. 바뀌면 r2 가 정본
+셀   BD2-{GET,MIX}-P{1,8,32,64,128,256,384}    14 부하 × 60초
+     GET = --ratio=0:1,  MIX = --ratio=1:9,  나머지는 운영값 고정
+창   60초 — 30초보다 백분위 표본이 두 배다. 계층 2·3 은 이번에 처음 전 축
 ```
+
+한 셀에서 나오는 것 (`tools/night-slice.py`, 42 열 추적기):
+
+```text
+계층 3  client avg/p50/p99 (genie)  ─ srv ─┬ que      소켓 read → 명령 시작
+                                            ├ pre      파싱·해시
+                                            ├ span v3  ← 계약 구간
+                                            └ post     복호 → sendmsg
+계층 1  span v3 = admit + v2 (+ret)         avg·p50·p99
+계층 2  v2      = xfer + crypto + sync + 잔차
+곁      busy CPU, err5, badcrc, hit%
+```
+
+**남기는 곳**: `experiments/night-20260806/{rows.tsv, ariel/trace.csv,
+ariel/arm/, genie/}`. 절단이 결정적이라 원본만 있으면 언제든 다시 계산된다.
+
+기존 정본(`pipe=1` 207.20 µs — que 0.34 / pre 2.45 / span 17.88 [admit 7.00 /
+xfer 8.13 / crypto 1.61 / sync 0.05] / post 23.62)은 이 축의 왼쪽 끝점으로
+재측정된다. **저부하에서도 `post` 가 `xfer` 의 2.9 배**라는 관찰이 새 빌드에서
+재현되는지가 확인 항목이다.
 
 ## (c) 커넥션 ↔ 깊이 교환 (N=7,680 고정) — 6 부하
 

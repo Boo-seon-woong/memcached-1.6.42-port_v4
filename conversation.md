@@ -10844,3 +10844,75 @@ c1 혼합  9.653 M  ✗     c2 혼합 10.190 M  ✓
 남은 구성(c12, c16, r1, r2, r4, r12)은 구동기가 계속 돌린다.
 
 NEXT: genie (블록 4 잔여)
+
+CELL E4-C12R8-GET DONE  13.149 M  avg 2.28837 / p50 2.22300 / p99 3.99900 / p99.9 7.29500 ms
+창(UTC) 2026-08-05T18:18:38Z ~ 2026-08-05T18:19:08Z   pipe=256 --ratio=0:1 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=12 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL E4-C12R8-MIX DONE  10.768 M  avg 2.81176 / p50 2.73500 / p99 4.95900 / p99.9 8.38300 ms
+창(UTC) 2026-08-05T18:19:32Z ~ 2026-08-05T18:20:02Z   pipe=256 --ratio=1:9 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=12 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL E4-C12R8-SET DONE  5.713 M  avg 5.31815 / p50 4.31900 / p99 9.34300 / p99.9 14.20700 ms
+창(UTC) 2026-08-05T18:20:26Z ~ 2026-08-05T18:20:56Z   pipe=256 --ratio=1:0 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=12 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+---
+
+## [2026-08-06 KST] genie — E4-C12R8 완료. **c12 가 c8 보다 +3.6% 다 — "c4 포화" 가 안 맞는다**
+
+```text
+E4-C12R8-GET  13.149 M   avg 2288.37  p50 2223.0  p99 3999.0  p99.9  7295.0 µs
+E4-C12R8-MIX  10.768 M   avg 2811.76  p50 2735.0  p99 4959.0  p99.9  8383.0 µs
+E4-C12R8-SET   5.713 M   avg 5318.15  p50 4319.0  p99 9343.0  p99.9 14207.0 µs
+지문 전후 동일, chain=12 reap=8 확인, bed 3/3
+```
+
+### 스윕 (라운드 내, 전부 30초)
+
+```text
+  c=1   GET 11.343 (-10.6%)   MIX  9.688 (-10.2%)
+  c=2   GET 12.113 ( -4.6%)   MIX 10.173 ( -5.8%)
+  c=4   GET 12.717 ( +0.2%)   MIX 10.591 ( -1.9%)
+  c=8   GET 12.695   기준      MIX 10.794   기준
+  c=12  GET 13.149 ( +3.6%)   MIX 10.768 ( -0.2%)
+
+연속 구간   1->2 +6.79%   2->4 +4.99%   4->8 -0.17%   8->12 +3.58%
+```
+
+**GET 이 단조가 아니다.** 4→8 이 평평하고 8→12 가 +3.6% 다.
+당신이 방금 올린 "c4 에서 포화" 는 c12 를 넣으면 안 맞는다.
+
+### 세 해석이 있고, 지금 데이터로는 못 가른다
+
+```text
+(a) 진짜 비단조   4~8 평탄부 뒤 12 에서 다시 오른다 (기전 불명)
+(b) c8 셀이 낮았다   c8 GET p99 5791 / p99.9 11647 로 이웃보다 크게 나쁘다
+                     (c4 4255/7615, c12 3999/7295) — 그 셀만 꼬리가 길다
+(c) 재기동 변동      구성마다 n=1 이고 당신이 ±3% 로 잡아둔 축이다
+```
+
+**(b) 가 제일 그럴듯하다.** `c8` 은 GET 만 p99 가 1.4 배, p99.9 가 1.5 배
+튀었는데 MIX·SET 은 이웃과 같다. **한 워크로드에서만 꼬리가 길면 그 셀의
+런 사정이지 구성 특성이 아니다.**
+
+그러면 `c8` 의 참값은 12.9~13.1 M 대일 수 있고, 그 경우
+`c4(12.717) < c8 < c12(13.149)` 로 **완만한 단조 증가**가 되어
+"4 에서 포화" 도 "로그 선형" 도 아닌 중간 그림이 된다.
+
+### 제안 — c8 을 한 번 더 (30초, 재기동 불필요하면 즉시)
+
+`c16` 다음에 어차피 축 2(reap 스윕)로 넘어가는데, **그 첫 구성이 `c8@r1` 이라
+`c8@r8` 은 다시 안 나온다.** 지금 c16 무장 전에 `c8@r8` r2 를 30초 한 번
+받으면 (b)/(c)가 갈린다. 재기동이 필요하면 c16 무장 김에 그 앞에 끼워도 된다.
+
+**이건 판단이 필요한 지점이라 적어만 둔다 — 셀은 안 멈췄다.**
+
+### MIX 는 c4 부터 평평하다
+```text
+MIX  c4 10.591   c8 10.794   c12 10.768      c8~c12 은 0.2% 차
+```
+**MIX 는 c4 이후 포화가 맞다.** GET 만 c12 에서 더 오른다.
+`SET` 은 다섯 점 전부 5.675~5.734 로 여전히 평평하다.
+
+NEXT: ariel (E4-C16R8 무장 / c8 재측정 여부 판단)

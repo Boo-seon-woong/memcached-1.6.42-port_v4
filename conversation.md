@@ -9726,3 +9726,55 @@ DEM16·DEM64 도 같은 2셀이다. **보고를 받는 즉시 다음 값으로 �
 셀 둘을 마치면 바로 올려달라** — 오늘 밤은 왕복 횟수가 총 시간을 정한다.
 
 NEXT: genie (E0-DEM4 2부하)
+
+CELL E0-DEM4-P1 DONE  0.572 M  avg 0.20786 / p50 0.18300 / p99 0.56700 / p99.9 0.96700 ms
+창(UTC) 2026-08-05T17:21:32Z ~ 2026-08-05T17:22:02Z   pipe=1 --ratio=0:1 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=4 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL E0-DEM4-P32 DONE  7.271 M  avg 0.50018 / p50 0.43900 / p99 1.45500 / p99.9 2.25500 ms
+창(UTC) 2026-08-05T17:22:27Z ~ 2026-08-05T17:22:58Z   pipe=32 --ratio=0:1 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=4 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+---
+
+## [2026-08-06 KST] genie — E0-DEM4 완료. **DEM=4 는 판정 기준에서 이미 탈락이다**
+
+```text
+E0-DEM4-P1    0.572 M   avg 207.86  p50 183.0  p99  567.0  p99.9  967.0 µs
+E0-DEM4-P32   7.271 M   avg 500.18  p50 439.0  p99 1455.0  p99.9 2255.0 µs
+지문 전후 동일, ext_drain_empty_max=4 확인, bed 3/3
+```
+
+### 판정 기준(pipe=32 처리량 −1% 이내) 대비
+
+```text
+DEM=0    P1 0.562 M   P32 7.913 M    기준선          (대조군)
+DEM=4    P1 0.572 M   P32 7.271 M    -8.11%   탈락
+```
+
+**−8.11% 는 −1% 기준의 8배다.** 잡음(σ 1.0%)이나 램프(−0.21%)로 설명 안 된다.
+
+### 방향이 하나 보인다
+
+```text
+        P1 처리량   P32 처리량   P32 지연(avg)
+DEM=0     0.562      7.913        456.48 µs
+DEM=4     0.572      7.271        500.18 µs
+          +1.8%      -8.1%        +9.6%
+```
+
+**저부하는 좋아지고 고부하는 나빠진다.** DEM 이 빈 드레인에서 일찍 물러나게
+하는 노브라면 방향이 맞는다 — 저부하에선 스핀을 덜 태워 이득이고,
+pipe=32 에선 완료가 계속 오는데 물러나서 손해다.
+
+**그러면 "−1% 이내 중 P1 busyCPU 최소" 기준이 DEM=0 을 뽑을 위험이 크다.**
+남은 후보(1·2 로 예정돼 있다면)가 −1% 안에 들어와야 기준이 의미를 갖는다.
+`DEM=1` 이 −1% 안이면 그게 답일 것이고, 그것도 밖이면 **기준상 DEM=0 유지**가
+결론이다. 어느 쪽이든 데이터가 정한다.
+
+### 내가 못 보는 것
+`busyCPU` 는 당신 계측이다. 위 P1 비교는 처리량만으로 한 것이고,
+**기준의 실제 판별자(P1 busyCPU)는 당신 쪽에서만 보인다.** P1 처리량이
++1.8% 라는 건 저부하에서 이득이 있다는 방증일 뿐 기준 자체는 아니다.
+
+NEXT: ariel (DEM 다음 값 무장)

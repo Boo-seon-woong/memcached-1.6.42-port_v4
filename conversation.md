@@ -13594,3 +13594,52 @@ BD3 14셀     port 로 도는 것이면 지금 가능 — 명세만 주면 바�
 **지금 port 가 떠 있으니 `BD3` 나 블록 5(c) 를 먼저 주면 시간이 안 빈다.**
 
 NEXT: ariel (stock 무장 또는 port 블록 지정)
+## [2026-08-06 KST] ariel — **서버 종류 줄, 받는다.** 그리고 지금 떠 있는 것은 v3 다 (BD3 GO)
+
+당신 요청이 맞다. 오늘 밤 서버가 다섯 번 바뀌었고 그중 한 번은 부하 도중이었다.
+**앞으로 모든 GO 에 `SERVER:` 줄을 맨 위에 둔다.** 셀을 돌기 전에 그 줄과
+실제를 대조해서 어긋나면 돌지 말아달라.
+
+`ST` 를 못 돌린 것은 당신 판단이 맞다 — **그때 떠 있던 것은 port 였다.**
+내 구동기가 앞 묶음(PTZ) 응답을 못 알아보고 대기에 갇혀 있었고(내 매칭
+문자열이 당신 셀 이름과 달랐다), 그래서 stock 무장까지 못 갔다. 구동기를
+끊고 손으로 진행한다.
+
+### SERVER: port_v3 + 계층 3 계측 (`86da4222ba5825d9d84b19bd`)
+
+```text
+바이너리   ~/coherent-mr-v2/bin/memcached.v3l3
+판별       stats settings 에 ext_submit_inline 이 **없다**  ← v4 와 가르는 줄
+           (있으면 v4 다. 그 경우 돌지 말고 알려달라)
+확인됨     coherent MR 2줄 · selftest OK · span_ver 3 · pac_fallback 0
+           curr_items 1,000,000 · ext_qp_per_worker 4
+구성       -t 30 taskset 0-29 -m 2048 -c 16384 -R 1024
+           ext_worker_window=40 ext_qp_per_worker=4 ext_drain_spin=1024
+           hashpower=22 ext_pac_set    (v4 노브는 이 빌드에 존재하지 않는다)
+```
+
+이 빌드가 무엇인지 다시 적는다: **EXP-0 이 쟀던 v3 코드**(`6b150c9` — admit/ret
+성분 분해는 있고 v4 수정 둘은 없는 지점)에 **계층 3 계측을 이식**한 것이다.
+그래서 v3 도 `srv/que/pre/post` 가 나온다 — 이게 오늘 밤 관리자 지시의 본체다.
+
+### 요청 — BD3 14 부하 × 60초 (블록 5 BD2 와 같은 격자)
+
+```text
+BD3-GET-P1, P8, P32, P64, P128, P256, P384      --ratio=0:1
+BD3-MIX-P1, P8, P32, P64, P128, P256, P384      --ratio=1:9
+
+memtier_benchmark -s 10.99.0.3 -p 11411 -P memcache_text -d 64 \
+  --key-prefix=m- --key-minimum=1 --key-maximum=1000000 --key-pattern=R:R \
+  --distinct-client-seed --hide-histogram \
+  -t 30 -c 4 --pipeline=<pipe> --test-time=60 --ratio=<ratio>
+```
+
+**GET 7 점 먼저, 그다음 MIX 7 점.** 셀마다 avg/p50/p99/p99.9.
+
+주의: v3 는 span 이 크다(EXP-0 pipe=256 에서 GET 242 µs, SET-only ret 2372 µs).
+**클라이언트 timeout 을 넉넉히** 잡아달라. 처리량도 v4 보다 낮은 것이 정상이다.
+
+`ST`(stock 24셀)는 BD3 뒤에 돌린다. 시간이 모자라면 BD3 가 우선이다 —
+관리자가 오늘 요청한 것이 v3↔v4 분해 비교다.
+
+NEXT: genie (BD3 14 부하)

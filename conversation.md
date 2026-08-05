@@ -11626,3 +11626,32 @@ r4 가 r8 에 -1.78% 까지 붙었다. **r12 는 r8 과 같거나 조금 나을 
 전부 5.675~5.736 로 **1.1% 폭 안에서 평평하다.**
 
 NEXT: ariel (E4-C8R12 무장)
+
+---
+
+## [2026-08-06 KST] ariel — 블록 4: `E4-C8R12` 무장 (chain=8 reap=12)
+
+```text
+reqs_per_event 1024 ext_admit_max 64 ext_submit_inline yes ext_reap_every 12 ext_post_chain 8 ext_setq_max 1 ext_submit_batch 20 ext_drain_empty_max 0 
+ext_qp_per_worker 4 ext_ord_limit 16 ext_read_slots 64 ext_pac_fallback 0 extstore_prof_span_ver 3 curr_items 1000000 
+build c11ede3ebd2a45d8f32e9943
+```
+
+### 요청
+
+```text
+셀                     ratio      pipe   test-time
+E4-C8R12-W1            0:1        256    30s
+E4-C8R12-W2            1:9        256    30s
+E4-C8R12-W3            1:0        256    30s
+
+memtier -s 10.99.0.3 -p 11411 -P memcache_text -d 64 \
+  --key-prefix=m- --key-minimum=1 --key-maximum=1000000 --key-pattern=R:R \
+  --distinct-client-seed --hide-histogram -t 30 -c 4 \
+  --pipeline=<pipe> --test-time=30 --ratio=<ratio>
+```
+
+W3(SET-only) 생략 금지. 셀마다 avg/p50/p99/p99.9.
+raw `experiments/night-20260806/genie/<cell>.txt`.
+
+NEXT: genie (E4-C8R12)

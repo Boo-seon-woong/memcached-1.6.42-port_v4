@@ -28,9 +28,11 @@ esac; }
 mct() { case $1 in C2-*) echo "${1#C2-}" ;; *) echo 30 ;; esac; }
 pipe_of() { case $1 in C1-128) echo 128 ;; *) echo 256 ;; esac; }
 
-DEFAULT="A16-5 A32-1 A32-2 A32-3 A32-4 A32-5 A64-1 A64-2 A64-3 A64-4 A64-5 \
-A128-1 A128-2 A128-3 A128-4 A128-5 B1 B2 B3 B4 B5 B6 B7 \
-C2-8 C2-12 C2-16 C2-20 C2-24 C1-128 C1-256"
+# KTC §5-④ 를 메우는 셀(C1-256·C1-128)을 맨 앞에 둔다 — 블록 2 가 밤을
+# 다 못 채울 수 있고, 그때 남아야 하는 것이 이 둘이다. 나머지는 A→B→C2.
+DEFAULT="C1-256 C1-128 A16-5 A32-1 A32-2 A32-3 A32-4 A32-5 \
+A64-1 A64-2 A64-3 A64-4 A64-5 A128-1 A128-2 A128-3 A128-4 A128-5 \
+B1 B2 B3 B4 B5 B6 B7 C2-8 C2-12 C2-16 C2-20 C2-24"
 
 for id in ${CELLS:-$DEFAULT}; do
   read -r nqp ord w slots <<<"$(spec "$id")" || { echo "UNKNOWN CELL $id"; exit 1; }

@@ -301,6 +301,47 @@ def f4(rows, out):
         s.save(f"{out}/f4c-corridor.svg")
 
 
+# ── F1: exp1 local vs remote ─────────────────────────────────────────────
+def f1(rows, out):
+    pipes = [1, 8, 32, 64, 128, 256, 384]
+    pt = [r for r in rows if r["label"] == "PT"]
+    st = [r for r in rows if r["label"] == "ST2"]
+    if len(pt) < 24 or len(st) < 21:
+        print("  F1 건너뜀 (셀 부족)"); return
+    # PT 는 앞 2 행이 프리로드/무장 잔여라 seq 4 부터 24 까지가 본 셀이다
+    pt = pt[-24:] if len(pt) > 24 else pt
+    panels = (("YCSB A (1:1)", 14, 21), ("YCSB B (1:19)", 7, 14), ("YCSB C (0:1)", 0, 7))
+    for nm, a, b_ in panels:
+        s2 = Svg(title=f"F1 — local(stock) vs remote(port), {nm}")
+        l, r, t, b = axes(s2, "처리량 (M ops/s)", "pipeline 깊이에 따른 점")
+        xs_hi = 17.0
+        for gv in (0, 4, 8, 12, 16):
+            x = linmap(gv, 0, xs_hi, l, r)
+            s2.line(x, t, x, b, C["grid"])
+            s2.txt(x, b + 16, str(gv), 10, C["mute"], "middle")
+        for rowset, col, nm2, hollow in ((st[a:b_], C["v3"], "stock (로컬)", False),
+                                         (pt[a:b_], C["v4"], "port (원격)", False)):
+            pts = []
+            for i, rw in enumerate(rowset):
+                x = linmap(num(rw, "Mops"), 0, xs_hi, l, r)
+                y = logmap(pipes[i], 1, 384, b, t)
+                pts.append((x, y))
+            s2.path(pts, col, 2.0)
+            for (x, y), p_ in zip(pts, pipes):
+                s2.dot(x, y, col, 3.6, hollow)
+        for p_ in pipes:
+            y = logmap(p_, 1, 384, b, t)
+            s2.txt(l - 8, y + 4, str(p_), 10, C["mute"], "end")
+        peak_s = max(num(x, "Mops") for x in st[a:b_])
+        peak_p = max(num(x, "Mops") for x in pt[a:b_])
+        d = (peak_p / peak_s - 1) * 100 if peak_s else 0
+        s2.txt(l + 10, t - 12, f"빨강 stock · 파랑 port    정점 {peak_s:.2f} → {peak_p:.2f} M "
+                               f"({d:+.0f}%)", 11, C["ink"], "start", 600)
+        if "A (" in nm:
+            s2.txt(l + 10, t + 6, "주의: 이 워크로드는 메모리 배치와 item_lock 경합이 겹친다", 10, C["mute"])
+        s2.save(f"{out}/f1-{nm.split()[1].strip('()')}.svg")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--rows", default="experiments/night-20260806/rows.tsv")
@@ -309,7 +350,7 @@ def main():
     Path(a.out).mkdir(parents=True, exist_ok=True)
     rows = load(a.rows)
     print(f"rows={len(rows)} → {a.out}")
-    f2b(rows, a.out); f2c(rows, a.out); f3(rows, a.out); f4(rows, a.out)
+    f1(rows, a.out); f2b(rows, a.out); f2c(rows, a.out); f3(rows, a.out); f4(rows, a.out)
 
 
 main()

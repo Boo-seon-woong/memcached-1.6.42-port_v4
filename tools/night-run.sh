@@ -4,7 +4,7 @@
 # 멈추지 않고 **다음 블록으로 넘어간다** — 밤에 한 곳이 막혔다고 나머지
 # 여섯을 잃을 이유가 없다. 실패는 로그에 남고 아침에 판단한다.
 set -u
-ROOT=$(cd "$(dirname "$0")/.." && pwd); cd "$ROOT"
+ROOT=${ROOT:-$(cd "$(dirname "$0")/.." && pwd)}; cd "$ROOT"
 S=/tmp/night-msgs; mkdir -p $S
 G="ssh -n -i $HOME/.ssh/snp_guest -p 2222 -o BatchMode=yes -o ConnectTimeout=8 ubuntu@localhost"
 say() { echo "### $* $(date -u +%H:%M:%S)"; }

@@ -10510,3 +10510,52 @@ W3(SET-only) 생략 금지. 셀마다 avg/p50/p99/p99.9.
 raw `experiments/night-20260806/genie/<cell>.txt`.
 
 NEXT: genie (E4-C2R8)
+
+CELL E4-C2R8-GET DONE  12.113 M  avg 2.49093 / p50 2.38300 / p99 4.60700 / p99.9 8.15900 ms
+창(UTC) 2026-08-05T18:05:22Z ~ 2026-08-05T18:05:52Z   pipe=256 --ratio=0:1 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=2 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL E4-C2R8-MIX DONE  10.173 M  avg 2.97952 / p50 2.87900 / p99 5.37500 / p99.9 9.02300 ms
+창(UTC) 2026-08-05T18:06:16Z ~ 2026-08-05T18:06:46Z   pipe=256 --ratio=1:9 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=2 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL E4-C2R8-SET DONE  5.675 M  avg 5.35378 / p50 4.35100 / p99 9.40700 / p99.9 14.65500 ms
+창(UTC) 2026-08-05T18:07:10Z ~ 2026-08-05T18:07:40Z   pipe=256 --ratio=1:0 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=2 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+---
+
+## [2026-08-06 KST] genie — E4-C2R8 완료. chain 스윕 2/6
+
+```text
+E4-C2R8-GET  12.113 M   avg 2490.93  p50 2383.0  p99 4607.0  p99.9  8159.0 µs
+E4-C2R8-MIX  10.173 M   avg 2979.52  p50 2879.0  p99 5375.0  p99.9  9023.0 µs
+E4-C2R8-SET   5.675 M   avg 5353.78  p50 4351.0  p99 9407.0  p99.9 14655.0 µs
+지문 전후 동일, chain=2 reap=8 확인, bed 3/3
+```
+
+### 스윕 진행 (운영점 chain=8 대비)
+
+```text
+chain=1   GET 11.343 (-14.8%)   MIX  9.688 (-10.9%)   SET 5.734 (-0.3%)
+chain=2   GET 12.113 ( -9.0%)   MIX 10.173 ( -6.5%)   SET 5.675 (-1.3%)
+chain=8   GET 13.309   기준      MIX 10.877   기준     SET 5.751   기준
+```
+
+**MIX 가 chain=2 에서 10.173 M 으로 계약선을 다시 넘었다.** chain=1 의
+9.688 M 과 사이에 10 M 이 있다 — **계약 회랑의 아래쪽 경계가 1 과 2 사이다.**
+설계가 `4<=chain<=8` 로 적어둔 것보다 실제 경계는 낮다. 다만 여유가 1.7%
+뿐이라 회랑을 4 부터로 잡은 보수적 선택은 여전히 합리적이다.
+
+**SET 은 -0.3% / -1.3% 로 계속 평평하다.** 두 점 다 σ 안이다.
+
+### chain 이득의 형태
+```text
+1 -> 2   GET +6.8%
+2 -> 8   GET +9.9%   (4배 구간)
+```
+1→2 한 칸이 2→8 네 칸의 2/3 를 낸다. **초반 기울기가 급하고 곧 완만해진다** —
+c4 가 8 에 얼마나 근접하는지가 다음 관전점이고, 근접하면 `min(chain,reap)`
+모형의 `c16@r8 ≈ c8@r8` 예측도 같은 포화의 다른 얼굴이 된다.
+
+NEXT: ariel (E4-C4R8 무장)

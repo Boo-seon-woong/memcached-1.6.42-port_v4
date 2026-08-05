@@ -64,7 +64,7 @@ span v2  =  ⑪ ~ ⑭        span v3  =  ④ ~ ⑭        차이 = ④~⑪  (adm
  ⑬  ─── RDMA 왕복 ───                                     │          │
  ⑭  WRITE CQE 관측                                        │          │
                                                  └────────┤   ret    │
- ⑮  ─── 재개 대기 ───                                     │          │
+ ⑮  ─── 락-안전 지점 대기 ───                             │          │
  ⑯  storage_set_return_cb → item_trylock  :871            │          │
  ⑰  **ITEM_WFLIGHT 해제**            :876                 │          │
                                                           └──────────┘

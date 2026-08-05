@@ -278,8 +278,13 @@ void storage_stats(ADD_STAT add_stats, void *c) {
                 (unsigned long long)st.slot_acct_leak);
         APPEND_STAT("extstore_alloc_failures", "%llu",
                 (unsigned long long)st.alloc_failures);
-        APPEND_STAT("extstore_prof_span_ver", "%u", 2);
+        /* 계약이 판정에 쓰는 정의다. 2026-08-01 에 v2 → v3 로 넓혔는데
+         * 이 값이 2 로 박혀 있었다 — 서버가 자기 정의를 틀리게 알리고 있었고
+         * 그 사이 아무도 읽지 않았다(2026-08-05 발견).
+         * v2 성분(_avg_ns 계열)은 분해용으로 계속 노출한다. 아래 참조. */
+        APPEND_STAT("extstore_prof_span_ver", "%u", 3);
         // Span v2 distribution (ns); populated only under EXT_RDMA_PROF=1.
+        // v3 = admit + (이 v2 구간) + ret.  v3 는 _e2e_ 접두를 쓴다.
         APPEND_STAT("extstore_prof_read_count", "%llu", (unsigned long long)st.prof_read_count);
         APPEND_STAT("extstore_prof_read_avg_ns", "%llu", (unsigned long long)st.prof_read_avg_ns);
         APPEND_STAT("extstore_prof_read_p50_ns", "%llu", (unsigned long long)st.prof_read_p50_ns);

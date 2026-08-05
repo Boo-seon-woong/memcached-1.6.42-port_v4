@@ -12,6 +12,32 @@
 >        span 정의는 v3 — backend 진입에서 응용 가시 완료까지
 > ```
 >
+> #### span 정의 — 정본
+>
+> **2026-08-01 에 v2 에서 v3 로 넓혔다.** 서버는 두 정의를 동시에 내보내므로
+> 어느 쪽 수치인지 반드시 확인해야 한다.
+>
+> ```text
+>                시작                                   끝
+> span v2 GET    READ post 직전                         복호 완료
+> span v3 GET    storage_get_item() 진입  (:470)        복호 완료          ← 계약
+> span v2 SET    seal                                   WRITE CQE 관측
+> span v3 SET    storage_store_item_pac() 진입 (:904)   ITEM_WFLIGHT 해제  ← 계약
+>                                                       (storage.c:876)
+> ```
+>
+> **v3 는 v2 를 포함한다.** `GET v3 = admit + v2`, `SET v3 = admit + v2 + ret`.
+> 세 성분은 각각 독립 집계라 합이 v3 와 맞는지가 정합성 검사가 된다.
+>
+> ```text
+> stats 필드   extstore_prof_read_e2e_avg_ns    ← v3 (계약)
+>              extstore_prof_read_avg_ns        ← v2 (참고)
+>              extstore_prof_span_ver           ← 3 이어야 한다
+> ```
+>
+> 왜 넓혔는지와 그때 드러난 대기는
+> [`EXTENDED_SPAN_DIAGNOSIS.md`](EXTENDED_SPAN_DIAGNOSIS.md).
+>
 > **2026-08-03 최종 게이트에서 전부 충족됐다** (각 120 초):
 >
 > ```text

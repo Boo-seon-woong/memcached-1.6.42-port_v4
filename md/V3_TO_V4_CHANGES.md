@@ -374,12 +374,61 @@ hit 율 0.025% 는 "100%" 로 반올림된다 — 양쪽 다 못 봤다.
 
 ## 6. 계측 — span v2 에서 v3 로
 
+**2026-08-01 에 정의를 넓혔다.** 정본은
+[`OPTIMAL_RUNBOOK.md`](OPTIMAL_RUNBOOK.md) 의 계약 블록에 있고, 왜 넓혔는지는
+[`EXTENDED_SPAN_DIAGNOSIS.md`](EXTENDED_SPAN_DIAGNOSIS.md) 다.
+
 | | 시작 | 끝 |
 |---|---|---|
 | span v2 GET | READ post 직전 | 복호 완료 |
-| span v2 SET | seal | WRITE CQE |
-| **span v3 GET** | **`storage_get_item()` 진입** | 복호 완료 |
-| **span v3 SET** | **`storage_store_item_pac()` 진입** | `ITEM_WFLIGHT` 해제 |
+| span v2 SET | seal | WRITE CQE 관측 |
+| **span v3 GET** | **`storage_get_item()` 진입** (`storage.c:470`) | 복호 완료 |
+| **span v3 SET** | **`storage_store_item_pac()` 진입** (`:904`) | `ITEM_WFLIGHT` 해제 (`:876`) |
+
+### 6-1. 단계별로 무엇이 새로 들어왔나
+
+경계만 보면 "조금 넓혔다" 로 읽힌다. **요청 경로 위에 놓아야 v2 가 무엇을
+빠뜨리고 있었는지 보인다.**
+
+```text
+GET 경로                                            v2      v3
+────────────────────────────────────────────────────────────────
+소켓 read → 명령 파싱 → 해시 조회                    ✗       ✗
+storage_get_item() 진입                              ✗     ◀ 시작
+  admit   진입 → 실제 post (제출 대기)               ✗       ●   ← v3 가 드러낸 것
+  post → READ CQE  (RDMA 왕복)                     ◀ 시작    ●
+  복호 (AES-GCM)                                    끝 ▶    끝 ▶
+응답 조립 → sendmsg                                  ✗       ✗
+```
+
+```text
+SET 경로                                            v2      v3
+────────────────────────────────────────────────────────────────
+소켓 read → 명령 파싱 → 값 수신                      ✗       ✗
+storage_store_item_pac() 진입                        ✗     ◀ 시작
+  admit   진입 → seal (스텁·슬롯·pending 확보)       ✗       ●   ← v3 가 드러낸 것
+  seal → WRITE CQE 관측                            ◀ 시작    ●
+  ret     CQE → ITEM_WFLIGHT 해제                    ✗       ●   ← v3 가 드러낸 것
+응답 조립 → sendmsg                                  ✗       ✗
+```
+
+**GET 은 앞에 한 구간(`admit`), SET 은 앞뒤로 두 구간(`admit`·`ret`) 이
+새로 들어왔다.** 그래서 v2 → v3 전환에서 SET 이 GET 보다 훨씬 크게 튀었다:
+
+```text
+                 v2      v3       배수     새로 들어온 구간
+GET-only        7.8    242.29     31 배    admit 217.12
+혼합 GET        7.8    311.77     40 배    admit 285.16
+SET-only        7.8   2380.29    305 배    admit 0.61 + ret 2371.84
+```
+
+**같은 서버를 다르게 쟀을 뿐이다.** v2 시절에도 그 대기는 있었고, 클라이언트가
+SET 지연을 7.45 ms 로 보고하던 것이 그 증거다 — 서버는 7.8 µs 라고 답하고
+있었다.
+
+> **`extstore_prof_span_ver` 는 2026-08-05 까지 `2` 로 박혀 있었다.**
+> 정의를 v3 로 넓히고도 서버가 자기 버전을 v2 라고 알리고 있었고, 그 사이
+> 아무도 그 필드를 읽지 않았다. 지금은 `3` 이다.
 
 v4 는 여기에 **분해**를 더했다(`6d70026`):
 

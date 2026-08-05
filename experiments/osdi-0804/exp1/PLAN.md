@@ -19,11 +19,19 @@ real-world dataset  이번 라운드 제외 — 자산 없음 (PENDING 차단 �
 
 ## YCSB ↔ memtier
 
-| YCSB | 비율 | memtier | | 
-|---|---|---|---|
-| A | 50/50 | `--ratio=1:1` | D(latest)/E(scan)/F(RMW) 는 불가·부분 — 제외 |
-| B | 95/5 | `--ratio=1:19` | zipf: `--key-pattern=Z:Z --key-zipf-exp=0.99` |
-| C | 100 read | `--ratio=0:1` | (SET 쪽도 Z — YCSB update 분포 동일 원칙) |
+| YCSB | read / update | memtier |
+|---|---|---|
+| A | 50 / 50 | `--ratio=1:1` |
+| B | 95 / 5 | `--ratio=1:19` |
+| C | 100 / 0 | `--ratio=0:1` |
+
+- `--ratio` 는 **SET:GET** 순서다 — B 의 update 5% 가 `1:19` 이 되는 이유.
+- D(latest 분포)·E(scan)는 memcached/memtier 에 대응이 없고 F(RMW)는 부분
+  구현뿐 — 셋 다 제외.
+- 분포: uniform 셀은 공통 규약의 `R:R` 그대로. zipf 셀은
+  `--key-pattern=Z:Z --key-zipf-exp=0.99` — SET 쪽도 `Z` 로 두는 것은 YCSB
+  가 read 와 update 에 같은 분포를 쓰기 때문 (memtier 소스 확인: `Z` 는
+  양측 유효, exp 범위 (0,5)).
 
 ## 셀 — 26 개 (co-located 13셀의 off-box 미러 × 서버 2종)
 

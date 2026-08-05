@@ -30,8 +30,12 @@ echo "$CFG" | while read -r c r; do
       echo "ARM FAILED $id"; cat /tmp/night-arm-$id.txt; exit 1; }
   fp=$(cat /tmp/night-arm-$id.txt)
 
+  # set -e 아래에서 `A || B && C` 를 그대로 쓰면 조건이 거짓인 구성에서
+  # 목록 전체가 non-zero 를 돌려주고 스크립트가 죽는다. if 로 쓴다.
   low=""
-  [ "$c" = 1 ] || [ "$c" = 8 ] && [ "$r" = 8 ] && low=$'\n'"${id}-LO-W1        0:1        8      30s"$'\n'"${id}-LO-W2        1:9        8      30s"
+  if [ "$r" = 8 ] && { [ "$c" = 1 ] || [ "$c" = 8 ]; }; then
+    low=$'\n'"${id}-LO-W1        0:1        8      30s"$'\n'"${id}-LO-W2        1:9        8      30s"
+  fi
 
   cat > $S/$id.md <<EOF
 

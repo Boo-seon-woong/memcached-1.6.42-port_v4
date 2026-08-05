@@ -13643,3 +13643,125 @@ memtier_benchmark -s 10.99.0.3 -p 11411 -P memcache_text -d 64 \
 관리자가 오늘 요청한 것이 v3↔v4 분해 비교다.
 
 NEXT: genie (BD3 14 부하)
+
+CELL BD3-GET-P1 DONE  0.576 M  avg 0.20640 / p50 0.18300 / p99 0.56700 / p99.9 0.94300 ms
+창(UTC) 2026-08-05T21:29:40Z ~ 2026-08-05T21:30:40Z   pipe=1 --ratio=0:1 --test-time=60
+지문    reqs_per_event=1024 ext_worker_window=40 extstore_prof_span_ver=3 
+
+CELL BD3-GET-P8 DONE  3.437 M  avg 0.26945 / p50 0.21500 / p99 0.96700 / p99.9 1.53500 ms
+창(UTC) 2026-08-05T21:31:04Z ~ 2026-08-05T21:32:04Z   pipe=8 --ratio=0:1 --test-time=60
+지문    reqs_per_event=1024 ext_worker_window=40 extstore_prof_span_ver=3 
+
+CELL BD3-GET-P32 DONE  7.787 M  avg 0.46445 / p50 0.38300 / p99 1.69500 / p99.9 2.86300 ms
+창(UTC) 2026-08-05T21:32:28Z ~ 2026-08-05T21:33:28Z   pipe=32 --ratio=0:1 --test-time=60
+지문    reqs_per_event=1024 ext_worker_window=40 extstore_prof_span_ver=3 
+
+CELL BD3-GET-P64 DONE  9.671 M  avg 0.75269 / p50 0.71100 / p99 2.25500 / p99.9 4.63900 ms
+창(UTC) 2026-08-05T21:33:52Z ~ 2026-08-05T21:34:52Z   pipe=64 --ratio=0:1 --test-time=60
+지문    reqs_per_event=1024 ext_worker_window=40 extstore_prof_span_ver=3 
+
+CELL BD3-GET-P128 DONE  11.625 M  avg 1.27664 / p50 1.25500 / p99 2.43100 / p99.9 5.53500 ms
+창(UTC) 2026-08-05T21:35:16Z ~ 2026-08-05T21:36:16Z   pipe=128 --ratio=0:1 --test-time=60
+지문    reqs_per_event=1024 ext_worker_window=40 extstore_prof_span_ver=3 
+
+CELL BD3-GET-P256 DONE  11.923 M  avg 2.53178 / p50 2.54300 / p99 3.75900 / p99.9 7.19900 ms
+창(UTC) 2026-08-05T21:36:40Z ~ 2026-08-05T21:37:40Z   pipe=256 --ratio=0:1 --test-time=60
+지문    reqs_per_event=1024 ext_worker_window=40 extstore_prof_span_ver=3 
+
+CELL BD3-GET-P384 DONE  11.025 M  avg 4.13939 / p50 4.19100 / p99 5.95100 / p99.9 11.26300 ms
+창(UTC) 2026-08-05T21:38:04Z ~ 2026-08-05T21:39:04Z   pipe=384 --ratio=0:1 --test-time=60
+지문    reqs_per_event=1024 ext_worker_window=40 extstore_prof_span_ver=3 
+
+CELL BD3-MIX-P1 DONE  0.565 M  avg 0.21045 / p50 0.18300 / p99 0.58300 / p99.9 0.94300 ms
+창(UTC) 2026-08-05T21:39:28Z ~ 2026-08-05T21:40:28Z   pipe=1 --ratio=1:9 --test-time=60
+지문    reqs_per_event=1024 ext_worker_window=40 extstore_prof_span_ver=3 
+
+CELL BD3-MIX-P8 DONE  3.233 M  avg 0.28771 / p50 0.23100 / p99 1.06300 / p99.9 1.73500 ms
+창(UTC) 2026-08-05T21:40:52Z ~ 2026-08-05T21:41:52Z   pipe=8 --ratio=1:9 --test-time=60
+지문    reqs_per_event=1024 ext_worker_window=40 extstore_prof_span_ver=3 
+
+CELL BD3-MIX-P32 DONE  6.817 M  avg 0.53669 / p50 0.44700 / p99 1.86300 / p99.9 3.05500 ms
+창(UTC) 2026-08-05T21:42:16Z ~ 2026-08-05T21:43:16Z   pipe=32 --ratio=1:9 --test-time=60
+지문    reqs_per_event=1024 ext_worker_window=40 extstore_prof_span_ver=3 
+
+CELL BD3-MIX-P64 DONE  8.206 M  avg 0.89784 / p50 0.84700 / p99 2.75100 / p99.9 4.89500 ms
+창(UTC) 2026-08-05T21:43:41Z ~ 2026-08-05T21:44:41Z   pipe=64 --ratio=1:9 --test-time=60
+지문    reqs_per_event=1024 ext_worker_window=40 extstore_prof_span_ver=3 
+
+CELL BD3-MIX-P128 DONE  9.743 M  avg 1.53856 / p50 1.52700 / p99 2.38300 / p99.9 5.53500 ms
+창(UTC) 2026-08-05T21:45:05Z ~ 2026-08-05T21:46:05Z   pipe=128 --ratio=1:9 --test-time=60
+지문    reqs_per_event=1024 ext_worker_window=40 extstore_prof_span_ver=3 
+
+CELL BD3-MIX-P256 DONE  9.843 M  avg 3.08139 / p50 3.08700 / p99 4.54300 / p99.9 8.03100 ms
+창(UTC) 2026-08-05T21:46:29Z ~ 2026-08-05T21:47:29Z   pipe=256 --ratio=1:9 --test-time=60
+지문    reqs_per_event=1024 ext_worker_window=40 extstore_prof_span_ver=3 
+
+CELL BD3-MIX-P384 DONE  8.046 M  avg 5.68203 / p50 4.99100 / p99 10.94300 / p99.9 15.99900 ms
+창(UTC) 2026-08-05T21:47:53Z ~ 2026-08-05T21:48:53Z   pipe=384 --ratio=1:9 --test-time=60
+지문    reqs_per_event=1024 ext_worker_window=40 extstore_prof_span_ver=3 
+
+---
+
+## [2026-08-06 KST] genie — **BD3 14부하 완주. v3↔v4 가 같은 격자에서 겹쳐졌다**
+
+SERVER 확인: `reqs_per_event=1024 ext_worker_window=40 span_ver=3`,
+v4 노브(`ext_post_chain`/`ext_submit_inline`/`ext_reap_every`) 부재 = v3.
+지문 14셀 전후 동일 + 블록 기준선 일치, bed 3/3, 각 60초.
+
+### GET-only
+
+```text
+pipe     v3 M     v4 M    v4/v3      v3 avg    v4 avg
+   1    0.576    0.578    +0.3%      206.4     205.7
+   8    3.437    3.400    -1.1%      269.4     272.3
+  32    7.787    7.552    -3.0%      464.4     481.2
+  64    9.671   10.086    +4.3%      752.7     729.0
+ 128   11.625   12.358    +6.3%     1276.6    1196.5
+ 256   11.923   13.173   +10.5%     2531.8    2284.4
+ 384   11.025   13.141   +19.2%     4139.4    3458.3
+```
+
+### 1:9 혼합
+
+```text
+   1    0.565    0.565    +0.0%      210.4     210.4
+   8    3.233    3.311    +2.4%      287.7     280.7
+  32    6.817    7.012    +2.9%      536.7     521.2
+  64    8.206    8.588    +4.7%      897.8     855.2
+ 128    9.743   10.357    +6.3%     1538.6    1440.4
+ 256    9.843   10.843   +10.2%     3081.4    2792.7
+ 384    8.046   10.169   +26.4%     5682.0    4486.8
+```
+
+### 읽히는 것 셋
+
+**① v4 의 이득은 부하에 비례한다.** `pipe=1` 에서 0.3%/0.0% 로 **완전히
+같고**, 깊이가 깊어질수록 벌어져 384 에서 19~26% 다. v4 가 고친 것이
+**제출·수거의 대기**라면 정확히 이 모양이다 — 저부하에는 대기가 없으니
+고칠 것도 없다.
+
+**② 저부하는 두 판이 같은 기계다.** `pipe=1` 클라이언트 지연이
+`206.4 vs 205.7 µs`, 혼합은 `210.4 vs 210.4 µs` 다. **v3 의 span 이 242 µs 로
+계약을 8배 위반하던 그 구성인데 클라이언트 체감은 v4 와 같다.**
+span 이 재는 구간과 사용자가 겪는 것의 괴리를 이보다 잘 보여주는 쌍이 없다.
+
+**③ v3 는 256 에서 꺾이고 v4 는 안 꺾인다.**
+```text
+v3 GET   256 11.923 -> 384 11.025   -7.5%
+v4 GET   256 13.173 -> 384 13.141   -0.2%
+v3 MIX   256  9.843 -> 384  8.046  -18.3%
+v4 MIX   256 10.843 -> 384 10.169   -6.2%
+```
+**v3 는 깊이를 더 주면 무너지고 v4 는 버틴다.** v4 의 진짜 이득은
+정점 높이(+10%)보다 **정점 이후 붕괴를 막은 것**에 가깝다.
+
+**그리고 v3 혼합은 어느 깊이에서도 10 M 을 못 넘는다**(최대 9.843).
+v4 는 128 에서 10.357 로 넘는다 — **계약 통과 여부가 여기서 갈린다.**
+
+### 남은 것
+```text
+ST 24셀 + ST zipf 3셀   stock 무장 필요
+블록 5(c) 6부하          port 무장 필요 (아직 한 점도 없다)
+```
+
+NEXT: ariel (stock 또는 port 무장)

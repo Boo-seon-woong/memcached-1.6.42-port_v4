@@ -22,6 +22,7 @@ ORD=${ORD:-0}  # ext_ord_limit: QP당 READ 게이트. 0 = CM 협상값(16)
 ORDOPT=""; [ "$ORD" != 0 ] && ORDOPT=",ext_ord_limit=$ORD"
 ILPOPT=""; [ "$ILP" != 0 ] && ILPOPT=",item_lock_power=$ILP"
 R=${R:-1024}   # reqs_per_event: pass 당 명령 수 상한 (= backend 유입 조리개)
+DEM=${DEM:-0}  # ext_drain_empty_max: 연속 빈 CQ poll 이 이 값이면 스핀 중단. 0=무중단
 case "${1:-}" in
   S3) SB=20; W=40; NQP=4; SLOTS=64 ;;
   S2) SB=4;  W=40; NQP=4; SLOTS=64 ;;
@@ -34,7 +35,7 @@ case "${1:-}" in
   *) echo "usage: $0 {S3|S2|S1|W1 <sb>|W2 <sb>| <sb> <W> <nqp> <slots>}" >&2; exit 1 ;;
 esac
 
-echo "── 무장: submit_batch=$SB W=$W nqp=$NQP READ_SLOTS=$SLOTS -R $R admit=$AD reap=$RE chain=$PC setq=$SQ mcT=$MCT ilp=$ILP hp=$HP ord=$ORD cpu=$CPUSET (총 QP = $MCT × $NQP)"
+echo "── 무장: submit_batch=$SB W=$W nqp=$NQP READ_SLOTS=$SLOTS -R $R admit=$AD reap=$RE chain=$PC setq=$SQ dem=$DEM mcT=$MCT ilp=$ILP hp=$HP ord=$ORD cpu=$CPUSET (총 QP = $MCT × $NQP)"
 
 # /tmp 에 스테이징한 바이너리(mc_stock 등)는 이름이 memcached 가 아니라
 # -x 로 안 죽는다. 그래서 포트가 안 뜬 채 stock 이 계속 서비스했고, 나는
@@ -47,13 +48,13 @@ LD_LIBRARY_PATH=\\\$HOME/coherent-mr-v2/lib:\\\$HOME/kvs-port \
 MLX5_COHERENT_QP=1 MLX5_COHERENT_CQ=1 EXT_RDMA_PROF=1 EXT_SELFTEST=1 \
 EXT_CRYPTO_KEY=\\\$HOME/kvs-port/ext.key EXT_SLOT_SIZE=256 EXT_READ_SLOTS=$SLOTS \
 \\\$HOME/coherent-mr-v2/bin/memcached -p 11411 -U 0 -t $MCT -m 2048 -c 16384 -R $R \
--o ext_path=10.99.0.2:11212:4g,ext_worker_window=$W,ext_qp_per_worker=$NQP,ext_drain_spin=1024,hashpower=$HP,ext_submit_batch=$SB,ext_admit_max=$AD${INLINE:+,ext_submit_inline},ext_reap_every=$RE,ext_post_chain=$PC,ext_setq_max=$SQ$ILPOPT$ORDOPT \
+-o ext_path=10.99.0.2:11212:4g,ext_worker_window=$W,ext_qp_per_worker=$NQP,ext_drain_spin=1024,hashpower=$HP,ext_submit_batch=$SB,ext_admit_max=$AD${INLINE:+,ext_submit_inline},ext_reap_every=$RE,ext_post_chain=$PC,ext_setq_max=$SQ,ext_drain_empty_max=$DEM$ILPOPT$ORDOPT \
 > /tmp/mc.log 2>&1\""
 sleep 10
 
 echo "── coherent MR 게이트 (2 여야 한다): $($G 'grep -icE "coherent MR [0-9]+B" /tmp/mc.log')"
 $G 'grep -iE "genie_connect OK|Address already|error|failed" /tmp/mc.log | head -3'
-$G 'printf "stats settings\r\nquit\r\n" | timeout 5 nc -q1 127.0.0.1 11411 | grep -E "ext_submit_batch|ext_drain_spin|ext_pac_set|reqs_per_event|ext_admit_max|ext_submit_inline|ext_reap_every|ext_post_chain|ext_setq_max"'
+$G 'printf "stats settings\r\nquit\r\n" | timeout 5 nc -q1 127.0.0.1 11411 | grep -E "ext_submit_batch|ext_drain_spin|ext_pac_set|reqs_per_event|ext_admit_max|ext_submit_inline|ext_reap_every|ext_post_chain|ext_setq_max|ext_drain_empty_max"'
 echo "── 프리로드 필요 (재기동했다)"
 
 # 무엇이 11411 을 쥐고 있는지 확인한다. 로그만 보면 낡은 것을 읽는다 —

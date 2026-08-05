@@ -10107,3 +10107,83 @@ SET-only 칸이 "참고 창" 하나뿐이라 같이 채운다.
 G 22.31 · S 9.11. **빌드가 바뀌었으니(`c11ede3e`) 재현 여부 자체가 확인 항목이다.**
 
 NEXT: genie (GATE 3부하 × 120초)
+
+CELL E0-DEM0-P32-r2 DONE  7.870 M  avg 0.46109 / p50 0.39100 / p99 1.50300 / p99.9 2.44700 ms
+창(UTC) 2026-08-05T17:36:35Z ~ 2026-08-05T17:37:05Z   pipe=32 --ratio=0:1 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL GATE-GET DONE  13.309 M  avg 2.27451 / p50 2.19100 / p99 4.06300 / p99.9 7.23100 ms
+창(UTC) 2026-08-05T17:37:29Z ~ 2026-08-05T17:39:30Z   pipe=256 --ratio=0:1 --test-time=120
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL GATE-MIX DONE  10.877 M  avg 2.78460 / p50 2.70300 / p99 4.89500 / p99.9 8.12700 ms
+창(UTC) 2026-08-05T17:39:54Z ~ 2026-08-05T17:41:54Z   pipe=256 --ratio=1:9 --test-time=120
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL GATE-SET DONE  5.751 M  avg 5.28256 / p50 4.51100 / p99 9.91900 / p99.9 13.95100 ms
+창(UTC) 2026-08-05T17:42:18Z ~ 2026-08-05T17:44:19Z   pipe=256 --ratio=1:0 --test-time=120
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL GATE-SET-ramp DONE  5.741 M  avg 5.29152 / p50 4.35100 / p99 9.21500 / p99.9 13.82300 ms
+창(UTC) 2026-08-05T17:44:56Z ~ 2026-08-05T17:45:28Z   pipe=256 --ratio=1:0 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+---
+
+## [2026-08-06 KST] genie — 블록 3 완료. **게이트 재현, 기준선 확정, SET 램프 해결**
+
+```text
+E0-DEM0-P32-r2   7.870 M   avg 461.09  p50 391.0  p99 1503.0  p99.9 2447.0 µs
+GATE-GET        13.309 M   avg 2274.51 p50 2191.0 p99 4063.0  p99.9 7231.0 µs
+GATE-MIX        10.877 M   avg 2784.60 p50 2703.0 p99 4895.0  p99.9 8127.0 µs
+GATE-SET         5.751 M   avg 5282.56 p50 4511.0 p99 9919.0  p99.9 13951.0 µs
+지문 4셀 전후 동일, DEM=0 확인, bed 3/3, build c11ede3e
+```
+
+### ① 기준선 확정 — E0 판정이 선다
+
+```text
+E0-DEM0-P32  r1 7.913 M / r2 7.870 M   차이 -0.54%  (±1% 안)
+```
+
+**기준선이 2런으로 확정됐다.** 내가 제기한 (b)안(기준선 한 런이 낮았다)은
+기각이다. `-8.11 / -5.65 / -4.61%` 델타가 그대로 서고 **DEM=0 종결이 유효**하다.
+
+### ② 게이트 재현 — 새 빌드에서 GET 은 맞고 MIX 는 2% 낮다
+
+```text
+        08-03      c11ede3e     차이
+GET   13.397 M    13.309 M    -0.66%    재현
+MIX   11.099 M    10.877 M    -2.00%    σ(1.0%) 의 2배
+```
+
+**GET 은 재현이고 MIX 만 −2.00% 다.** 잡음 2σ 라 단정은 못 하지만, 빌드가
+바뀌었고(계측 확장 두 번) MIX 만 골라 내려간 것이라 **계측 추가분이 SET
+경로에 더 실렸을 가능성**이 있다 — MIX 는 SET 10% 를 포함하고 GET-only 는
+아니다. 당신 창의 `srv/post` 를 GET·SET 별로 보면 갈릴 것이다.
+
+### ③ SET 램프 — 해결됐다. GET 과 같다
+
+내 초당 샘플러는 SET 에서 못 썼다(`cmd_get` 만 읽고 있었다. 고쳤다).
+그런데 **두 창 대조가 샘플러 없이 답을 준다**:
+
+```text
+GATE-SET       120초   5.751 M
+GATE-SET-ramp   30초   5.741 M      차이 -0.17%
+GET 램프(0.063초분)가 예측하는 30 vs 120 차이   0.16%
+```
+
+**관측 0.17% vs 예측 0.16%.** SET 램프는 GET 과 같은 크기다.
+`WFLIGHT 가 차느라 SET 램프가 길 것`이라던 내 유보는 **기각**한다.
+30초 라운드에 SET 셀을 넣어도 별도 보정이 필요 없다.
+
+### 내 샘플러 결함 하나 (기록)
+첫 표본이 종종 음수로 나온다 — `nc` 판독이 잘려 카운터 한 종이 빠지면
+합이 줄어든 것처럼 보인다. 램프 판정에는 두 창 대조를 쓰므로 영향 없지만,
+초당 추이를 인용할 때는 **첫 표본을 버려야 한다.**
+
+### 판단이 필요한 지점 (셀은 멈추지 않았다)
+`GATE-MIX -2.00%` 를 재현 실패로 볼지 잡음으로 볼지. 내 쪽에서는 못 가른다.
+다음 블록 전에 정해주면 된다 — 게이트를 한 번 더 돌 거면 120초 3부하 6분이다.
+
+NEXT: ariel (블록 4 무장)

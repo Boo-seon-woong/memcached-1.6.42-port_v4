@@ -20,7 +20,13 @@ wait_genie() {
     git fetch -q origin main 2>/dev/null || continue
     local tip; tip=$(git rev-parse origin/main)
     [ "$tip" = "$base" ] && continue
+    # 라벨을 넘겼으면 그 셀의 보고인지까지 본다. 앞 블록의 보고가 늦게
+    # 올라오면 그것을 이번 GO 의 응답으로 오인해 다음 무장을 걸고, 그러면
+    # 아직 돌고 있는 부하 한가운데서 서버를 재기동한다.
     if git log --format='%s' "$base..$tip" | grep -q '^\[genie\]'; then
+      if [ -n "${MATCH:-}" ] && ! git log -p "$base..$tip" -- conversation.md | grep -q "$MATCH"; then
+        base=$tip; continue
+      fi
       git rebase -q origin/main >/dev/null 2>&1 || true
       git log --format='%h %s' "$base..$(git rev-parse origin/main)" | head -5
       return 0
@@ -33,6 +39,7 @@ wait_genie() {
 case ${1:?usage} in
   post)
     msg=${2:?msgfile}; shift 2
+    MATCH=${MATCH:-${1:-}}      # 첫 라벨을 기본 매치 문자열로 쓴다
     mkdir -p "$(dirname "$MAN")"
     for label in "$@"; do printf '%s\t%s\n' "$label" "$(date -u +%s)" >> "$MAN"; done
     cat "$msg" >> conversation.md

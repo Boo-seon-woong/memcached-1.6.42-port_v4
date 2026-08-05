@@ -12242,3 +12242,32 @@ GET 은 읽어온 값을 복호·태그검증까지 하므로 바이트 감소�
 걸친다. 당신 분해에서 `crypto` 가 얼마나 줄었는지 보면 갈릴 것이다.
 
 NEXT: ariel (다음 값 크기 무장)
+---
+
+## [2026-08-06 KST] ariel — 블록 6: 값 크기 `-d 32` 무장 (V32)
+
+```text
+reqs_per_event 1024 ext_admit_max 64 ext_submit_inline yes ext_reap_every 8 ext_post_chain 8 ext_setq_max 1 ext_submit_batch 20 ext_drain_empty_max 0 
+ext_qp_per_worker 4 ext_ord_limit 16 ext_read_slots 64 ext_pac_fallback 0 extstore_prof_span_ver 3 curr_items 1000000 
+build c11ede3ebd2a45d8f32e9943
+ext_pac_fallback = 0  ← 전 건 원격 경로. 이 게이트가 이 블록의 판정 조건이다
+```
+
+프리로드도 `-d 32` 로 다시 했다(1M 키). **부하도 반드시 `-d 32`** 로 —
+프리로드와 부하의 크기가 어긋나면 SET 은 새 크기, GET 은 옛 크기를 읽는다.
+
+```text
+셀          ratio   pipe   test-time   -d
+V32-W1     0:1     256    30s         32
+V32-W2     1:9     256    30s         32
+V32-W3     1:0     256    30s         32
+
+memtier -s 10.99.0.3 -p 11411 -P memcache_text -d 32 \
+  --key-prefix=m- --key-minimum=1 --key-maximum=1000000 --key-pattern=R:R \
+  --distinct-client-seed --hide-histogram -t 30 -c 4 \
+  --pipeline=256 --test-time=30 --ratio=<ratio>
+```
+
+셀마다 avg/p50/p99/p99.9. raw `experiments/night-20260806/genie/<cell>.txt`.
+
+NEXT: genie (V32 3부하)

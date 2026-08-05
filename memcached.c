@@ -266,9 +266,8 @@ static void settings_init(void) {
     settings.ext_drain_spin = 1024; /* v2 P2a: measured knee (see V2_CODE_SPEC) */
     /* 0 = 중단 없음. 2026-08-06 E0 스윕(0/4/16/64, GET-only pipe 1·32):
      * 4·16·64 가 pipe=32 에서 각 −8.11/−5.65/−4.61%, 저부하 이득 없음.
-     * 다만 같은 구성 재측정이 −4.5% 라 구성 간 차이와 크기가 같다 —
-     * n=1 로는 판정 불가. 바꿀 근거가 없어 0 을 유지한다(이겨서가 아니다).
-     * 근거·한계 experiments/osdi-0804/exp2/PLAN.md §E0 */
+     * 기준선 재현 r1 7.913 → r2 7.870 M (−0.54%) 로 안정 — 세 후보의 손실은
+     * 재기동 변동을 넘는다. 근거 experiments/osdi-0804/exp2/PLAN.md §E0 */
     settings.ext_drain_empty_max = 0;
     settings.dump_enabled = true;
     settings.crawls_persleep = 1000;

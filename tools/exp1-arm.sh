@@ -22,6 +22,7 @@ ORD=${ORD:-0}  # ext_ord_limit: QP당 READ 게이트. 0 = CM 협상값(16)
 ORDOPT=""; [ "$ORD" != 0 ] && ORDOPT=",ext_ord_limit=$ORD"
 ILPOPT=""; [ "$ILP" != 0 ] && ILPOPT=",item_lock_power=$ILP"
 R=${R:-1024}   # reqs_per_event: pass 당 명령 수 상한 (= backend 유입 조리개)
+PROF=${PROF-1}  # EXT_RDMA_PROF. 빈 값이면 계측 없이 뜬다 (exp1 은 −4.2% 를 안 물어야 한다)
 DEM=${DEM:-0}  # ext_drain_empty_max: 연속 빈 CQ poll 이 이 값이면 스핀 중단. 0=무중단
 case "${1:-}" in
   S3) SB=20; W=40; NQP=4; SLOTS=64 ;;
@@ -45,9 +46,9 @@ sleep 3
 
 $G "tmux new-session -d -s mc \"cd \\\$HOME/kvs-port && exec taskset -c $CPUSET env \
 LD_LIBRARY_PATH=\\\$HOME/coherent-mr-v2/lib:\\\$HOME/kvs-port \
-MLX5_COHERENT_QP=1 MLX5_COHERENT_CQ=1 EXT_RDMA_PROF=1 EXT_SELFTEST=1 \
+MLX5_COHERENT_QP=1 MLX5_COHERENT_CQ=1 ${PROF:+EXT_RDMA_PROF=1} EXT_SELFTEST=1 \
 EXT_CRYPTO_KEY=\\\$HOME/kvs-port/ext.key EXT_SLOT_SIZE=256 EXT_READ_SLOTS=$SLOTS \
-\\\$HOME/coherent-mr-v2/bin/memcached -p 11411 -U 0 -t $MCT -m 2048 -c 16384 -R $R \
+\${BIN:-\\$HOME/coherent-mr-v2/bin/memcached} -p 11411 -U 0 -t $MCT -m 2048 -c 16384 -R $R \
 -o ext_path=10.99.0.2:11212:4g,ext_worker_window=$W,ext_qp_per_worker=$NQP,ext_drain_spin=1024,hashpower=$HP,ext_submit_batch=$SB,ext_admit_max=$AD${INLINE:+,ext_submit_inline},ext_reap_every=$RE,ext_post_chain=$PC,ext_setq_max=$SQ,ext_drain_empty_max=$DEM$ILPOPT$ORDOPT \
 > /tmp/mc.log 2>&1\""
 sleep 10

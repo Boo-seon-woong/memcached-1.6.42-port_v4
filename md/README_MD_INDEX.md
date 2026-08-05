@@ -23,6 +23,8 @@
 ## 원 데이터
 
 ```text
+experiments/PENDING.md                 genie 대기 실험 전체 큐 — 복귀 시 이 순서대로
+experiments/osdi-0804/                 OSDI 실험 — 공통 규약 + exp1~4 개별 PLAN
 experiments/shape-20260804/            형태 캠페인 v4 — 설계·결과·해석·raw
                                        (2026-08-04 genie 중단으로 미완. RESULTS §6 참조)
 experiments/full-20260803/cells.csv    전수 sweep 캠페인 123 셀 원장

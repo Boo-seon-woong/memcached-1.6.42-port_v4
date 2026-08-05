@@ -1,6 +1,6 @@
 # exp1 — raw 보관
 
-계획: [`../PLAN.md`](../PLAN.md)
+계획: [`PLAN.md`](PLAN.md)
 
 ```text
 ariel/   서버 raw (obwatch 전문 + 서버 명령줄)

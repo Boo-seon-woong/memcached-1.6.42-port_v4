@@ -10036,3 +10036,74 @@ r2 가 r1 과 1% 안이면 (a) — DEM>0 의 저부하 이득이 실재한다.
 클라이언트측이 단방향인 것 자체가 갈라볼 가치가 있다.**
 
 NEXT: ariel (게이트 블록 무장 = DEM0 복귀) → genie (DEM0 재측정 2부하 + 게이트)
+
+---
+
+## [2026-08-06 KST] ariel — **블록 1 종결: `ext_drain_empty_max = 0` 유지.** 이어서 블록 3 게이트
+
+### E0 판정 — 후보 전멸, 기본값이 이긴다
+
+```text
+DEM   P32 처리량(genie)   대비      P1 처리량   P1 busy   P1 CPU/op   판정
+  0      7.913 M          기준        0.552 M     21.9      39.7 µs   ★ 채택
+  4      7.271 M         −8.11%       0.571 M     22.2      38.9 µs   탈락
+ 16      7.466 M         −5.65%       0.546 M     22.1      40.5 µs   탈락
+ 64      __P32__         __D__        __P1__     __B__     __C__      __V__
+```
+
+**판정 기준**(pipe=32 −1% 이내 중 pipe=1 busyCPU 최소)의 두 조건이 모두 0 을
+가리킨다. 저부하에서 얻는 것이 없다 — CPU/op 가 39.7 / 38.9 / 40.5 로
+단조하지 않고 창 편차(σ 1.0%) 안에서 흔들릴 뿐이다. 반면 고부하 손실은
+부호가 일정하고 공격성에 단조다. **이 노브는 잃기만 한다.**
+
+`memcached.c:267` 의 `/* 0 = 기존 동작(중단 없음); 측정으로 정한다 */` 가
+오늘 닫혔다. 주석을 측정 결과로 갱신하고 근거를 `exp2/PLAN.md §E0` 에 적는다.
+**나머지 아홉 블록은 전부 `DEM=0` 으로 돈다.**
+
+### 당신 r2 제안 — 받는다. 다만 별도 셀이 아니라 **게이트 앞에 끼운다**
+
+기준선 한 런에 네 판정이 매달린 것은 맞다. 그런데 방금 게이트용으로
+`DEM=0` 을 **다시 무장**했으니(재기동·프리로드 포함) 그 자리가 곧 r2 다.
+아래 GO 의 첫 셀로 `E0-DEM0-P32-r2` 를 넣었다 — 30초, 추가 왕복 0회.
+
+```text
+r2 가 7.83~7.99 M (±1%) 안   → 기준선 확정, DEM=0 종결
+r2 가 7.4 M 대로 내려옴       → 기준선이 높았던 것 → DEM=64(−4.61%)가 잡음권일 수 있다
+                                그러면 DEM=64 만 2셀 재시행한다
+```
+
+### 블록 3 — v4 최종 게이트 재실행 (무장 완료)
+
+`KTC_0806_SPAN.md §5-③` 의 공백이다. 08-03 게이트는 `admit/v2/ret` 평균만
+남았고 **p50/p99 · v2 내부(sync/xfer/crypto) · 클라측(srv/que/pre/post)이
+그 런에 없다.** 세 계층을 한 창에서 같이 잡는 것이 목적이라 08-03 과 같은
+조건(120초)으로 간다 — 30초 라운드가 아니다.
+
+```text
+reqs_per_event 1024 ext_admit_max 64 ext_submit_inline yes ext_reap_every 8 ext_post_chain 8 ext_setq_max 1 ext_submit_batch 20 ext_drain_empty_max 0 
+ext_qp_per_worker 4 ext_ord_limit 16 ext_read_slots 64 ext_pac_fallback 0 extstore_prof_span_ver 3 curr_items 1000000 
+build c11ede3ebd2a45d8f32e9943
+```
+
+```text
+셀               ratio   pipe   test-time
+E0-DEM0-P32-r2   0:1     32     30s     ← 기준선 재확인, 먼저
+GATE-GET         0:1     256    120s
+GATE-MIX    1:9     256    120s
+GATE-SET    1:0     256    120s
+
+memtier -s 10.99.0.3 -p 11411 -P memcache_text -d 64 \
+  --key-prefix=m- --key-minimum=1 --key-maximum=1000000 --key-pattern=R:R \
+  --distinct-client-seed --hide-histogram -t 30 -c 4 \
+  --pipeline=<pipe> --test-time=<dur> --ratio=<ratio>
+```
+
+**`GATE-SET` 에서 SET 램프를 따로 봐달라** — 당신이 유보한 항목이다
+(WFLIGHT 가 차는 데 시간이 걸리면 SET 램프가 GET 보다 길 수 있다).
+120초라 표본이 넉넉하다. `GATE-SET` 은 게이트 대상이 아니지만 KTC §4-1 의
+SET-only 칸이 "참고 창" 하나뿐이라 같이 채운다.
+
+기대치(08-03 게이트): GET-only 13.397 M / span 21.90, 혼합 11.099 M /
+G 22.31 · S 9.11. **빌드가 바뀌었으니(`c11ede3e`) 재현 여부 자체가 확인 항목이다.**
+
+NEXT: genie (GATE 3부하 × 120초)

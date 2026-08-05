@@ -36,7 +36,10 @@ printf '%6s %10s %10s %7s %8s %8s %8s %8s %8s %8s %8s %6s %5s\n' \
 # 누적값이므로, 초기화하지 않으면 첫 행의 델타가 전체 누적치로 튄다.
 B=$(st)
 PG=$(f "$B" cmd_get); PS=$(f "$B" cmd_set); PW=$(f "$B" ext_worker_wait_enq)
-PG=${PG:-0}; PS=${PS:-0}; PW=${PW:-0}; PT=$(date -u +%s)
+# PT 만 %s 로 잘려 있었다. 그러면 첫 행의 DT 가 최대 1초(평균 0.5초) 부풀어
+# 그 행만 정상의 절반 수준으로 찍힌다 — genie 가 그 행을 램프로 읽고 손실을
+# 8배(0.50 초분) 과대 추정했다. 둘째 행부터는 PT 가 %s.%N 이라 무관했다.
+PG=${PG:-0}; PS=${PS:-0}; PW=${PW:-0}; PT=$(date -u +%s.%N)
 read -r _ ca cb cc cd ce cf cg ch _ < /proc/stat
 PCT=$((ca+cb+cc+cd+ce+cf+cg+ch)); PCI=$cd; NCPU=$(nproc)
 while :; do

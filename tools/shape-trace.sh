@@ -23,7 +23,7 @@ trap 'rm -f "$PIDF"' EXIT
 # v3 열은 뒤에 붙인다 — 기존 슬라이서가 위치로 읽으므로 앞을 건드리면 깨진다.
 # admit/ret 은 avg 만 있고 count 가 없다. 같은 op 가 e2e 도 함께 기록하므로
 # 창 국소값 복원에는 e2e count 를 그대로 쓴다.
-[ -s "$OUT" ] || echo "ts,cmd_get,cmd_set,get_hits,get_misses,rcount,ravg,rp99,wcount,wavg,wp99,badcrc,err5,cpu_total,cpu_idle,re2ec,re2ea,re2ep99,we2ec,we2ea,we2ep99,radmit,wadmit,wret,waitenq,yields" > "$OUT"
+[ -s "$OUT" ] || echo "ts,cmd_get,cmd_set,get_hits,get_misses,rcount,ravg,rp99,wcount,wavg,wp99,badcrc,err5,cpu_total,cpu_idle,re2ec,re2ea,re2ep99,we2ec,we2ea,we2ep99,radmit,wadmit,wret,waitenq,yields,srvc,srva,srvp50,srvp99,quec,quea,bkc,bka,rxfer,rcrypto,rsync,wxfer,wcrypto,wsync,rp50,wp50" > "$OUT"
 
 while true; do
   S=$(printf 'stats\r\nquit\r\n' | timeout 3 nc "$HOST" "$PORT" 2>/dev/null | tr -d '\r')
@@ -32,7 +32,7 @@ while true; do
     echo "$S" | awk -v ts="$(date -u +%s.%N)" \
         -v ct=$((ca+cb+cc+cd+ce+cf+cg+ch)) -v ci="$cd" '
       $1=="STAT"{v[$2]=$3}
-      END{ printf "%s,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n", ts,
+      END{ printf "%s,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n", ts,
         v["cmd_get"], v["cmd_set"], v["get_hits"], v["get_misses"],
         v["extstore_prof_read_count"], v["extstore_prof_read_avg_ns"], v["extstore_prof_read_p99_ns"],
         v["extstore_prof_write_count"], v["extstore_prof_write_avg_ns"], v["extstore_prof_write_p99_ns"],
@@ -44,7 +44,13 @@ while true; do
         v["extstore_prof_write_e2e_count"], v["extstore_prof_write_e2e_avg_ns"], v["extstore_prof_write_e2e_p99_ns"],
         v["extstore_prof_read_admit_avg_ns"], v["extstore_prof_write_admit_avg_ns"],
         v["extstore_prof_write_ret_avg_ns"],
-        v["ext_worker_wait_enq"], v["conn_yields"] }' >> "$OUT"
+        v["ext_worker_wait_enq"], v["conn_yields"],
+        v["extstore_prof_srv_count"], v["extstore_prof_srv_avg_ns"], v["extstore_prof_srv_p50_ns"], v["extstore_prof_srv_p99_ns"],
+        v["extstore_prof_que_count"], v["extstore_prof_que_avg_ns"],
+        v["extstore_prof_bk_count"], v["extstore_prof_bk_avg_ns"],
+        v["extstore_prof_read_xfer_avg_ns"], v["extstore_prof_read_crypto_avg_ns"], v["extstore_prof_read_sync_avg_ns"],
+        v["extstore_prof_write_xfer_avg_ns"], v["extstore_prof_write_crypto_avg_ns"], v["extstore_prof_write_sync_avg_ns"],
+        v["extstore_prof_read_p50_ns"], v["extstore_prof_write_p50_ns"] }' >> "$OUT"
   fi
   sleep 1
 done

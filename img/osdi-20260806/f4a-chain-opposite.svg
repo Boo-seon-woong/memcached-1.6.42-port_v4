@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="420" viewBox="0 0 760 420" font-family="Helvetica,Arial,sans-serif">
+<rect width="760" height="420" fill="white"/>
+<text x="380.0" y="24.0" font-size="15" fill="#0f172a" text-anchor="middle" font-weight="600">F4a — 같은 노브, 반대 부호 (chain 축, reap=8)</text>
+<line x1="78.0" y1="366.0" x2="702.0" y2="366.0" stroke="#0f172a" stroke-width="1"/>
+<line x1="78.0" y1="46.0" x2="78.0" y2="366.0" stroke="#0f172a" stroke-width="1"/>
+<text x="390.0" y="406.0" font-size="12" fill="#0f172a" text-anchor="middle" font-weight="400">ext_post_chain</text>
+<text x="18" y="206.0" font-size="12" fill="#0f172a" text-anchor="middle" transform="rotate(-90 18 206.0)">span v3 (µs)</text>
+<text x="746" y="206.0" font-size="12" fill="#64748b" text-anchor="middle" transform="rotate(90 746 206.0)">srv (µs)</text>
+<line x1="78.0" y1="304.5" x2="702.0" y2="304.5" stroke="#e5e7eb" stroke-width="1"/>
+<text x="70.0" y="308.5" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">5</text>
+<line x1="78.0" y1="242.9" x2="702.0" y2="242.9" stroke="#e5e7eb" stroke-width="1"/>
+<text x="70.0" y="246.9" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">10</text>
+<line x1="78.0" y1="181.4" x2="702.0" y2="181.4" stroke="#e5e7eb" stroke-width="1"/>
+<text x="70.0" y="185.4" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">15</text>
+<line x1="78.0" y1="119.8" x2="702.0" y2="119.8" stroke="#e5e7eb" stroke-width="1"/>
+<text x="70.0" y="123.8" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">20</text>
+<line x1="78.0" y1="58.3" x2="702.0" y2="58.3" stroke="#e5e7eb" stroke-width="1"/>
+<text x="70.0" y="62.3" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">25</text>
+<path d="M 130.0,192.7 L 234.0,164.6 L 338.0,145.1 L 442.0,98.1 L 546.0,98.9 L 650.0,97.9" fill="none" stroke="#2563eb" stroke-width="2.2"/>
+<circle cx="130.0" cy="192.7" r="3.6" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
+<circle cx="234.0" cy="164.6" r="3.6" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
+<circle cx="338.0" cy="145.1" r="3.6" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
+<circle cx="442.0" cy="98.1" r="3.6" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
+<circle cx="546.0" cy="98.9" r="3.6" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
+<circle cx="650.0" cy="97.9" r="3.6" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
+<path d="M 130.0,108.8 L 234.0,227.7 L 338.0,288.0 L 442.0,340.8 L 546.0,331.2 L 650.0,327.6" fill="none" stroke="#ea580c" stroke-width="2.2" stroke-dasharray="5 4"/>
+<circle cx="130.0" cy="108.8" r="3.2" fill="white" stroke="#ea580c" stroke-width="1.6"/>
+<circle cx="234.0" cy="227.7" r="3.2" fill="white" stroke="#ea580c" stroke-width="1.6"/>
+<circle cx="338.0" cy="288.0" r="3.2" fill="white" stroke="#ea580c" stroke-width="1.6"/>
+<circle cx="442.0" cy="340.8" r="3.2" fill="white" stroke="#ea580c" stroke-width="1.6"/>
+<circle cx="546.0" cy="331.2" r="3.2" fill="white" stroke="#ea580c" stroke-width="1.6"/>
+<circle cx="650.0" cy="327.6" r="3.2" fill="white" stroke="#ea580c" stroke-width="1.6"/>
+<text x="130.0" y="382.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">1</text>
+<text x="130.0" y="396.0" font-size="9" fill="#64748b" text-anchor="middle" font-weight="400">11.37M</text>
+<text x="234.0" y="382.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">2</text>
+<text x="234.0" y="396.0" font-size="9" fill="#64748b" text-anchor="middle" font-weight="400">12.14M</text>
+<text x="338.0" y="382.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">4</text>
+<text x="338.0" y="396.0" font-size="9" fill="#64748b" text-anchor="middle" font-weight="400">12.59M</text>
+<text x="442.0" y="382.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">8</text>
+<text x="442.0" y="396.0" font-size="9" fill="#64748b" text-anchor="middle" font-weight="400">13.04M</text>
+<text x="546.0" y="382.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">12</text>
+<text x="546.0" y="396.0" font-size="9" fill="#64748b" text-anchor="middle" font-weight="400">13.14M</text>
+<text x="650.0" y="382.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">16</text>
+<text x="650.0" y="396.0" font-size="9" fill="#64748b" text-anchor="middle" font-weight="400">13.07M</text>
+<text x="88.0" y="34.0" font-size="10" fill="#64748b" text-anchor="start" font-weight="400">실선(왼쪽 축) span v3 ↑   파선(오른쪽) srv ↓  — 같은 노브에 반대 부호</text>
+</svg>

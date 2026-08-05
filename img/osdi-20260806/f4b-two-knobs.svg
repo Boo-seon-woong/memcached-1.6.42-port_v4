@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="420" viewBox="0 0 760 420" font-family="Helvetica,Arial,sans-serif">
+<rect width="760" height="420" fill="white"/>
+<text x="380.0" y="24.0" font-size="15" fill="#0f172a" text-anchor="middle" font-weight="600">F4b — admit 은 대칭, v2 는 비대칭</text>
+<line x1="78.0" y1="366.0" x2="702.0" y2="366.0" stroke="#0f172a" stroke-width="1"/>
+<line x1="78.0" y1="46.0" x2="78.0" y2="366.0" stroke="#0f172a" stroke-width="1"/>
+<text x="390.0" y="406.0" font-size="12" fill="#0f172a" text-anchor="middle" font-weight="400">유효 배치 min(chain, reap)</text>
+<text x="18" y="206.0" font-size="12" fill="#0f172a" text-anchor="middle" transform="rotate(-90 18 206.0)">µs</text>
+<line x1="78.0" y1="366.0" x2="702.0" y2="366.0" stroke="#e5e7eb" stroke-width="1"/>
+<text x="70.0" y="370.0" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">0</text>
+<line x1="78.0" y1="286.0" x2="702.0" y2="286.0" stroke="#e5e7eb" stroke-width="1"/>
+<text x="70.0" y="290.0" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">5</text>
+<line x1="78.0" y1="206.0" x2="702.0" y2="206.0" stroke="#e5e7eb" stroke-width="1"/>
+<text x="70.0" y="210.0" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">10</text>
+<line x1="78.0" y1="126.0" x2="702.0" y2="126.0" stroke="#e5e7eb" stroke-width="1"/>
+<text x="70.0" y="130.0" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">15</text>
+<line x1="78.0" y1="46.0" x2="702.0" y2="46.0" stroke="#e5e7eb" stroke-width="1"/>
+<text x="70.0" y="50.0" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">20</text>
+<path d="M 156.0,364.2 L 312.0,353.8 L 468.0,333.5 L 624.0,294.5" fill="none" stroke="#2563eb" stroke-width="2.0"/>
+<circle cx="156.0" cy="364.2" r="3.2" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
+<circle cx="312.0" cy="353.8" r="3.2" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
+<circle cx="468.0" cy="333.5" r="3.2" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
+<circle cx="624.0" cy="294.5" r="3.2" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
+<path d="M 156.0,364.1 L 312.0,353.8 L 468.0,334.3 L 624.0,294.5" fill="none" stroke="#2563eb" stroke-width="2.0" stroke-dasharray="4 3"/>
+<circle cx="156.0" cy="364.1" r="3.2" fill="white" stroke="#2563eb" stroke-width="1.6"/>
+<circle cx="312.0" cy="353.8" r="3.2" fill="white" stroke="#2563eb" stroke-width="1.6"/>
+<circle cx="468.0" cy="334.3" r="3.2" fill="white" stroke="#2563eb" stroke-width="1.6"/>
+<circle cx="624.0" cy="294.5" r="3.2" fill="white" stroke="#2563eb" stroke-width="1.6"/>
+<path d="M 156.0,142.5 L 312.0,116.4 L 468.0,111.3 L 624.0,89.2" fill="none" stroke="#ea580c" stroke-width="2.0"/>
+<circle cx="156.0" cy="142.5" r="3.2" fill="#ea580c" stroke="#ea580c" stroke-width="1.6"/>
+<circle cx="312.0" cy="116.4" r="3.2" fill="#ea580c" stroke="#ea580c" stroke-width="1.6"/>
+<circle cx="468.0" cy="111.3" r="3.2" fill="#ea580c" stroke="#ea580c" stroke-width="1.6"/>
+<circle cx="624.0" cy="89.2" r="3.2" fill="#ea580c" stroke="#ea580c" stroke-width="1.6"/>
+<path d="M 156.0,276.9 L 312.0,241.7 L 468.0,204.9 L 624.0,89.2" fill="none" stroke="#ea580c" stroke-width="2.0" stroke-dasharray="4 3"/>
+<circle cx="156.0" cy="276.9" r="3.2" fill="white" stroke="#ea580c" stroke-width="1.6"/>
+<circle cx="312.0" cy="241.7" r="3.2" fill="white" stroke="#ea580c" stroke-width="1.6"/>
+<circle cx="468.0" cy="204.9" r="3.2" fill="white" stroke="#ea580c" stroke-width="1.6"/>
+<circle cx="624.0" cy="89.2" r="3.2" fill="white" stroke="#ea580c" stroke-width="1.6"/>
+<text x="156.0" y="382.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">1</text>
+<text x="312.0" y="382.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">2</text>
+<text x="468.0" y="382.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">4</text>
+<text x="624.0" y="382.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">8</text>
+<text x="88.0" y="34.0" font-size="10" fill="#64748b" text-anchor="start" font-weight="400">파랑 admit — 두 축이 포개진다(트리거 B)   주황 v2 — 갈라진다(reap 전용)</text>
+</svg>

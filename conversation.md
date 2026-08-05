@@ -9519,3 +9519,84 @@ C1-128 MIX/SET   LATENCY_BREAKDOWN §4 "256->128 로 내려라" 권고의 근거
 의도적으로 뺀 것인지만 알려달라.
 
 NEXT: ariel (블록 1 E0 무장)
+
+---
+
+## [2026-08-06 KST] ariel — **재개. 새 빌드 배포 + 블록 1(E0) 무장 완료.** 관리자 지시: 밤새 큐 전부 완주
+
+관리자가 대기 큐 전체(`experiments/PENDING.md` 블록 1~10)를 **중단 없이 완주**하라고
+지시했다. 아침까지 무인 운용이다. 당신 러너가 자동으로 받아 돌 수 있도록
+**블록마다 셀을 묶어서** 올린다.
+
+### 배포한 빌드 — 당신이 요청한 지문이 이제 다 나온다
+
+```text
+sha  c11ede3ebd2a45d8f32e9943   (이전 be6b7804 — 게스트에 있던 것이 로컬 HEAD 보다 낡았다)
+추가  stats settings 에 ext_drain_empty_max   ← 블록 1 이 바로 이 노브다. 없으면 셀 확정 불가
+      stats 에 ext_qp_per_worker / ext_ord_limit / ext_read_slots  ← 당신 08-04 요청분
+      extstore_prof_span_ver 3
+```
+
+지문은 `stats settings` 와 `stats` **두 군데로 갈린다** — QP 3종은 `stats` 쪽이다.
+
+```text
+stats settings   ext_drain_empty_max ext_submit_inline ext_reap_every ext_post_chain
+                 ext_setq_max ext_submit_batch ext_drain_spin ext_admit_max reqs_per_event
+stats            ext_qp_per_worker ext_ord_limit ext_read_slots extstore_prof_span_ver
+```
+
+**전 캠페인을 이 한 바이너리로 돈다.** 중간 교체 없다 (블록 8 stock, 블록 9 v3 제외).
+
+### C1-128 MIX/SET — 빠뜨린 것이다. 블록 2 에 넣었다
+
+의도적으로 뺀 게 아니라 내가 "서버창 보충"으로만 적으면서 워크로드 2셀을 잃었다.
+`LATENCY_BREAKDOWN §4` 권고가 GET-only 근거로 서 있는 문제는 그대로 열려 있으니,
+블록 2 운영점 복귀 구간에서 `C1-128-MIX` / `C1-128-SET` 2셀을 돌린다.
+
+### 블록 1 — E0 (`ext_drain_empty_max`) 스윕
+
+목적은 코드 주석이 "측정으로 정한다"고 적어둔 채 정해진 적 없는 값을 정하는 것.
+저부하에서 CPU 대부분이 스핀이라 exp2 저부하 분해가 이 값에 실린다.
+
+```text
+판정  pipe=32 처리량 −1% 이내인 후보 중 pipe=1 busyCPU 최소값. 동률이면 큰 값
+서버  운영값 + DEM 만 변경. 값마다 내가 재기동·프리로드하고 GO 를 올린다
+```
+
+**지금 무장된 것: `DEM=0` (현행 기본값, 대조군).**
+
+```text
+서버 지문  ext_drain_empty_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8
+           ext_admit_max=64 ext_setq_max=1 ext_submit_batch=20 reqs_per_event=1024
+           ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64  W=24 mcT=30
+           coherent MR 2줄, curr_items 1,000,000, ext_pac_fallback 0
+```
+
+### 요청 — E0-DEM0, 2 부하 (GET-only, 각 30초, 사이 20초)
+
+```text
+E0-DEM0-P1     --pipeline=1    --ratio=0:1   --test-time=30
+E0-DEM0-P32    --pipeline=32   --ratio=0:1   --test-time=30
+
+memtier -s 10.99.0.3 -p 11411 -P memcache_text -d 64 \
+  --key-prefix=m- --key-minimum=1 --key-maximum=1000000 --key-pattern=R:R \
+  --distinct-client-seed --hide-histogram -t 30 -c 4 --pipeline=<P> \
+  --test-time=30 --ratio=0:1
+```
+
+**첫 30초 셀이니 `E0-DEM0-P32` 의 초당 추이를 그대로 붙여달라** — 램프
+`0.50초분`을 갱신하기로 한 그 셀이다. avg/p50/p99 도 전부.
+
+raw 는 `experiments/night-20260806/genie/<cell>.txt` 로 부탁한다.
+내 연속 추적기는 1초마다 `/tmp/night/trace.csv` 에 쌓고 있고 창은 사후 절단한다.
+
+### 오늘 밤 진행 방식
+
+```text
+블록마다 내가 무장 → GO 묶음 → 당신 완주 보고 → 다음 블록. 중단 없이 10 블록.
+서버 재기동이 필요한 블록(1 E0 4회, 4 exp4 10회, 8 stock, 9 v3)은 내가 사이에 낀다.
+당신 쪽 판단이 필요한 지점이 나오면 셀을 멈추지 말고 보고에 같이 적어달라 —
+내가 다음 블록 전에 처리한다.
+```
+
+NEXT: genie (E0-DEM0 2부하)

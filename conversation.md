@@ -10423,3 +10423,61 @@ DEM=4   22.2 / 0.571 = 38.9         DEM=64  22.0 / 0.574 = 38.3
 `exp2/PLAN.md §E0` 표를 재절단값으로 갈아끼웠다.
 
 NEXT: genie (블록 4 진행)
+
+CELL E4-C1R8-GET DONE  11.343 M  avg 2.66398 / p50 2.44700 / p99 5.02300 / p99.9 8.70300 ms
+창(UTC) 2026-08-05T17:52:36Z ~ 2026-08-05T17:53:06Z   pipe=256 --ratio=0:1 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=1 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL E4-C1R8-MIX DONE  9.688 M  avg 3.13077 / p50 2.95900 / p99 5.69500 / p99.9 9.27900 ms
+창(UTC) 2026-08-05T17:53:30Z ~ 2026-08-05T17:54:00Z   pipe=256 --ratio=1:9 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=1 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL E4-C1R8-SET DONE  5.734 M  avg 5.29885 / p50 4.35100 / p99 9.15100 / p99.9 13.69500 ms
+창(UTC) 2026-08-05T18:02:46Z ~ 2026-08-05T18:03:16Z   pipe=256 --ratio=1:0 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=1 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+---
+
+## [2026-08-06 KST] genie — E4-C1R8 완료. **예측 둘 다 적중, 계약 회랑이 재현된다**
+
+```text
+E4-C1R8-GET  11.343 M   avg 2663.98  p50 2447.0  p99 5023.0  p99.9  8703.0 µs
+E4-C1R8-MIX   9.688 M   avg 3130.77  p50 2959.0  p99 5695.0  p99.9  9279.0 µs
+E4-C1R8-SET   5.734 M   avg 5298.85  p50 4351.0  p99 9151.0  p99.9 13695.0 µs
+지문 전후 동일, chain=1 reap=8 확인, bed 3/3
+```
+
+### 사전 등록 예측 대조
+
+```text
+예측  c1  GET >= 10 M          -> 11.343 M   적중
+예측  c1  MIX <  10 M 재현      ->  9.688 M   적중
+```
+
+**계약 회랑(4<=chain<=8)의 존재 이유가 재현됐다.** chain=1 에서 GET 은
+계약을 통과하는데 MIX 가 9.688 M 로 못 넘긴다. **워크로드 하나만 봤으면
+"chain=1 도 된다" 가 나온다** — W3 생략 금지 원칙이 여기서 값을 한다.
+
+운영점(chain=8) 대비:
+
+```text
+       chain=8 (GATE)   chain=1     차이
+GET      13.309 M       11.343 M   -14.8%
+MIX      10.877 M        9.688 M   -10.9%
+SET       5.751 M        5.734 M    -0.3%
+```
+
+**SET 은 chain 을 안 탄다** — 세 축(pipeline·W·nqp·이제 chain)에서 전부
+평평하다. `post` 가 WRITE CQE 대기에 묶여 있다는 당신 해석과 일관된다.
+**chain 은 GET 경로의 post 묶음이니 SET 에 안 실리는 게 맞다.**
+
+### 사고 하나 — SET 셀을 내가 한 번 죽였다 (데이터 영향 없음)
+
+첫 시도에서 SET 이 6초에 끊겼다. **내 셸 도구의 2분 타임아웃이 프로세스
+그룹째 memtier 를 죽인 것**이다(백그라운드로 띄웠지만 같은 그룹이었다).
+`setsid` 로 분리해 재실행했고 위 값은 온전한 30초다.
+
+**부분 데이터는 채널에도 manifest 에도 안 들어갔다** — 러너가 셀 완료
+시점에만 기록하기 때문이다. 남은 블록 4~10 은 전부 `setsid` 로 돈다.
+
+NEXT: ariel (E4-C2R8 무장)

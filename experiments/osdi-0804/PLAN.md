@@ -223,6 +223,80 @@ memcached.h:146  ITEM_ntotal = sizeof(_stritem)(48) + nkey + 1 + nbytes
 
 ---
 
+## exp4 — batching 축 (`ext_post_chain` / `ext_reap_every`)
+
+**목적**: 배칭이 성능-지연 곡선을 어떻게 움직이는지. GET 배칭(chain)과 완료
+수거 주기(reap)가 v4 의 두 신설 축이고, 계약 회랑(4≤chain≤8)이 왜 그렇게
+좁은지가 여기서 나온다.
+
+### 질문 셋
+
+```text
+①  배칭 이득의 크기와 대가 — chain 1(포기) → 16 의 전체 곡선
+②  유효 체인 = min(chain, reap) 검증 — c16@r8 이 c8@r8 과 같은가
+③  span 과 client latency 가 배칭에 대해 반대 부호인가
+```
+
+③ 이 논문 포인트다. 포화(N 고정)에서 chain↑ 은 admit↑(span↑)인데 X↑ 라
+`L = N/X` 는 **내려간다** — 서버 지표와 클라이언트 지표가 같은 노브에
+반대로 반응한다는 예측. 기존 데이터로 계산하면 c1→c8 에서 span 은
+~19→26 µs 로 오르고 L 은 2,592→2,325 µs 로 내린다. **실측으로 확정할 것.**
+
+### 기존 데이터 (2026-08-02 캠페인 블록 1) — 재사용과 공백
+
+| chain (reap=12) | 1 | 2 | 4 | 8 | 12 | 16~32 |
+|---|---:|---:|---:|---:|---:|---:|
+| GET M | 11.851 | 12.837 | 13.137 | 13.214 | 13.719 | 13.67~13.78 |
+| MIX M | **9.793** ✗ | 10.495 | 10.799 | ~10.87 | 11.123 | ~11.1 |
+| GET span | — | 19.12 | 20.62 | 26.32 | **31.17** ✗ | — |
+
+reap 산점: r8c8 13.405/11.091, r10·r14 각 c4/c8/c12.
+
+**공백** — osdi 그림이 요구하는 것 중 기존에 없는 것:
+
+```text
+client latency        전 셀 전무 (avg 도 없다)
+span p50/p99          전무 (avg 만)
+c1 의 span            미절단 (외삽뿐)
+srv/que/pre/post 분해  전무 (계측이 그 후에 생겼다)
+바이너리              계측 결함(p99=0·버킷 포화) 수정 전
+```
+
+### 셀 설계
+
+```text
+축 1  chain 스윕   reap=8 고정,  chain ∈ {1, 2, 4, 8, 12, 16}     6 구성
+축 2  reap 스윕    chain=8 고정, reap ∈ {1, 2, 4, 12}             4 구성
+공유  r8c8 (운영점)                                        합계 10 구성
+워크로드  W1/W2/W3 전부 (W3 생략 금지 — 관리자 원칙)       30 측정 ≈ 2 h
+부하      운영점 고정: -t 30 -c 4 pipe=256, R:R, 1M keys
+```
+
+- **구성마다 서버 재기동** 필요(`-o` 인자). `ext_post_chain`·`ext_reap_every`
+  가 `stats settings` 에 노출되므로 **fingerprint 로 셀 확정 가능**.
+- 전 셀 `EXT_RDMA_PROF=1`(−4.2%), 같은 바이너리 — 셀 간 비교 유효.
+- 선택 확장: 저부하 대조 `{c1, c8} × pipe=8` 4 측정 — 배칭이 저부하에서는
+  span 만 해치고 처리량을 못 산다는 §3-3 관찰의 확정.
+
+### 예측 (±2σ, 실측 앵커)
+
+```text
+c1  GET ≥ 10 M 유지 / span 18~19 (단조 외삽 검증) / MIX < 10 M 재현
+c12 GET span > 30 재현
+c16@r8 ≈ c8@r8 (2% 안)          ← min(chain,reap). 갈리면 모형 반증
+client L: chain 에 단조 감소     ← span 과 반대 부호. 동률이면 ③ 기각
+reap 1: v2 급증 예측 (수거가 pass 끝으로 후퇴)  — reap=1 은 미측정 축이다
+```
+
+### 그림
+
+```text
+(a) x=chain — 좌축 X, 우축 span avg + client avg 겹침 → ③ 의 교차 부호
+(b) throughput-latency 산점, chain 을 파라미터로 (exp2a 와 같은 형식)
+```
+
+---
+
 ## 추가 제안 셋
 
 ### ① 메모리 노드 CPU = 0 을 그림으로
@@ -286,6 +360,7 @@ pipe 384  busyCPU 29.9 (99.8%)       13.057 M   op 당  2.29 µs
 2  exp2a  pipeline 축 곡선 (7 점 기측정) + mcT/nqp
    exp2b  pipe=1 저부하 분해 (기측정)
 3  exp3   값 크기, 셀마다 pac_fallback=0 확인
+4  exp4   batching 축 10 구성 × 3 워크로드 (+선택 저부하 4)
 ```
 
 ---
@@ -297,6 +372,7 @@ PLAN.md    이 문서
 exp1/      local vs remote
 exp2/      성능 축 + 지연 분해
 exp3/      값 크기
+exp4/      batching 축 (chain / reap)
 ```
 
 기측정 데이터의 원본:

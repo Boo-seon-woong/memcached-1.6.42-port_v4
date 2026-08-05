@@ -25,6 +25,15 @@ def load(path):
     return [dict(zip(head, r)) for r in body]
 
 
+def load_client(path="experiments/night-20260806/client.tsv"):
+    """genie 보고에서 뽑은 셀별 클라이언트 지연. 없으면 빈 dict."""
+    try:
+        rows = load(path)
+    except OSError:
+        return {}
+    return {r["cell"]: r for r in rows}
+
+
 def num(r, k, d=0.0):
     try:
         return float(r[k])
@@ -301,45 +310,107 @@ def f4(rows, out):
         s.save(f"{out}/f4c-corridor.svg")
 
 
-# ── F1: exp1 local vs remote ─────────────────────────────────────────────
+# ── F1: exp1 local vs remote (명세: x=처리량, y=클라이언트 지연) ──────────
 def f1(rows, out):
+    cl = load_client()
+    if not cl:
+        print("  F1 건너뜀 (client.tsv 없음 — tools/parse-client.py 먼저)")
+        return
     pipes = [1, 8, 32, 64, 128, 256, 384]
-    pt = [r for r in rows if r["label"] == "PT"]
-    st = [r for r in rows if r["label"] == "ST2"]
-    if len(pt) < 24 or len(st) < 21:
-        print("  F1 건너뜀 (셀 부족)"); return
-    # PT 는 앞 2 행이 프리로드/무장 잔여라 seq 4 부터 24 까지가 본 셀이다
-    pt = pt[-24:] if len(pt) > 24 else pt
-    panels = (("YCSB A (1:1)", 14, 21), ("YCSB B (1:19)", 7, 14), ("YCSB C (0:1)", 0, 7))
-    for nm, a, b_ in panels:
-        s2 = Svg(title=f"F1 — local(stock) vs remote(port), {nm}")
-        l, r, t, b = axes(s2, "처리량 (M ops/s)", "pipeline 깊이에 따른 점")
-        xs_hi = 17.0
-        for gv in (0, 4, 8, 12, 16):
-            x = linmap(gv, 0, xs_hi, l, r)
-            s2.line(x, t, x, b, C["grid"])
-            s2.txt(x, b + 16, str(gv), 10, C["mute"], "middle")
-        for rowset, col, nm2, hollow in ((st[a:b_], C["v3"], "stock (로컬)", False),
-                                         (pt[a:b_], C["v4"], "port (원격)", False)):
+    for wl, nm in (("A", "YCSB A (1:1, 쓰기 50%)"), ("B", "YCSB B (1:19, 쓰기 5%)"),
+                   ("C", "YCSB C (0:1, 읽기 100%)")):
+        series = {}
+        for side, tag in (("ST", "stock (로컬)"), ("PT", "port (원격)")):
             pts = []
-            for i, rw in enumerate(rowset):
-                x = linmap(num(rw, "Mops"), 0, xs_hi, l, r)
-                y = logmap(pipes[i], 1, 384, b, t)
-                pts.append((x, y))
-            s2.path(pts, col, 2.0)
-            for (x, y), p_ in zip(pts, pipes):
-                s2.dot(x, y, col, 3.6, hollow)
-        for p_ in pipes:
-            y = logmap(p_, 1, 384, b, t)
-            s2.txt(l - 8, y + 4, str(p_), 10, C["mute"], "end")
-        peak_s = max(num(x, "Mops") for x in st[a:b_])
-        peak_p = max(num(x, "Mops") for x in pt[a:b_])
-        d = (peak_p / peak_s - 1) * 100 if peak_s else 0
-        s2.txt(l + 10, t - 12, f"빨강 stock · 파랑 port    정점 {peak_s:.2f} → {peak_p:.2f} M "
-                               f"({d:+.0f}%)", 11, C["ink"], "start", 600)
-        if "A (" in nm:
-            s2.txt(l + 10, t + 6, "주의: 이 워크로드는 메모리 배치와 item_lock 경합이 겹친다", 10, C["mute"])
-        s2.save(f"{out}/f1-{nm.split()[1].strip('()')}.svg")
+            for p_ in pipes:
+                c = cl.get(f"{side}-{wl}-P{p_}")
+                if c and c["avg_ms"]:
+                    pts.append((float(c["ops_M"]), float(c["avg_ms"]), p_))
+            if pts:
+                series[side] = pts
+        if len(series) < 2:
+            continue
+        zp = {side: cl.get(f"{'PTZ' if side=='PT' else 'ST'}-{wl}-Z256")
+              for side in ("ST", "PT")}
+        s2 = Svg(title=f"F1 — local(stock) vs remote(port), {nm}")
+        l, r, t, b = axes(s2, "처리량 (M ops/s)", "클라이언트 지연 avg (ms, 로그)")
+        xhi = max(max(x for x, _, _ in v) for v in series.values()) * 1.12
+        ylo = min(min(y for _, y, _ in v) for v in series.values()) * 0.7
+        yhi = max(max(y for _, y, _ in v) for v in series.values()) * 1.5
+        for gv in (0.1, 0.3, 1, 3, 10, 30, 100):
+            if ylo <= gv <= yhi:
+                y = logmap(gv, ylo, yhi, b, t)
+                s2.line(l, y, r, y, C["grid"])
+                s2.txt(l - 8, y + 4, str(gv), 10, C["mute"], "end")
+        step = 2 if xhi <= 9 else 4
+        gx = 0
+        while gx <= xhi:
+            x = linmap(gx, 0, xhi, l, r)
+            s2.line(x, t, x, b, C["grid"])
+            s2.txt(x, b + 16, str(gx), 10, C["mute"], "middle")
+            gx += step
+        for side, col in (("ST", C["v3"]), ("PT", C["v4"])):
+            pts = [(linmap(x, 0, xhi, l, r), logmap(y, ylo, yhi, b, t), p_)
+                   for x, y, p_ in series[side]]
+            s2.path([(x, y) for x, y, _ in pts], col, 2.2)
+            for x, y, p_ in pts:
+                s2.dot(x, y, col)
+                if p_ in (1, 32, 256, 384):
+                    s2.txt(x + 6, y - 5, str(p_), 8, C["mute"])
+            z = zp[side]
+            if z and z["avg_ms"]:
+                s2.dot(linmap(float(z["ops_M"]), 0, xhi, l, r),
+                       logmap(float(z["avg_ms"]), ylo, yhi, b, t), col, 4.6, True)
+        ps = max(x for x, _, _ in series["ST"]); pp = max(x for x, _, _ in series["PT"])
+        s2.txt(l + 10, t - 12, f"빨강 stock · 파랑 port · 속 빈 마커 = zipf θ=0.99    "
+                               f"정점 {ps:.2f} → {pp:.2f} M ({(pp/ps-1)*100:+.0f}%)",
+               11, C["ink"], "start", 600)
+        if wl == "A":
+            s2.txt(l + 10, t + 6, "주의: 메모리 배치와 item_lock 경합이 겹친 워크로드다", 10, C["mute"])
+        s2.save(f"{out}/f1-{wl}.svg")
+
+
+# ── F2a: pipeline 곡선, 클라이언트 지연 vs span 이중축 ────────────────────
+def f2a(rows, out):
+    cl = load_client()
+    pipes = [1, 8, 32, 64, 128, 256, 384]
+    v4 = [r for r in rows if r["label"] == "BD2-b"]
+    if not cl or len(v4) < 16:
+        print("  F2a 건너뜀"); return
+    s = Svg(title="F2a — 같은 부하 축에서 두 지표가 반대로 간다 (port_v4)")
+    l, r, t, b = axes(s, "처리량 (M ops/s)", "클라이언트 지연 avg (ms, 로그)", "span v3 (µs)")
+    xhi = 14.5
+    ylo, yhi = 0.1, 40
+    for gv in (0.1, 1, 10):
+        y = logmap(gv, ylo, yhi, b, t)
+        s.line(l, y, r, y, C["grid"])
+        s.txt(l - 8, y + 4, str(gv), 10, C["mute"], "end")
+    for gx in (0, 4, 8, 12):
+        x = linmap(gx, 0, xhi, l, r)
+        s.line(x, t, x, b, C["grid"])
+        s.txt(x, b + 16, str(gx), 10, C["mute"], "middle")
+    y30 = linmap(30, 0, 40, b, t)
+    s.line(l, y30, r, y30, C["set"], 1.4, "6 4")
+    s.txt(r - 4, y30 - 6, "계약 span 30 µs", 10, C["set"], "end")
+    for tag, sl, col in (("GET-only", slice(2, 9), C["get"]), ("1:9 혼합", slice(9, 16), C["mix"])):
+        rowset = v4[sl]
+        lat, spn = [], []
+        for p_, rw in zip(pipes, rowset):
+            c = cl.get(f"BD2-GET-P{p_}") if "GET" in tag else cl.get(f"BD2-MIX-P{p_}")
+            x = linmap(num(rw, "Mops"), 0, xhi, l, r)
+            if c and c["avg_ms"]:
+                lat.append((x, logmap(float(c["avg_ms"]), ylo, yhi, b, t)))
+            spn.append((x, linmap(num(rw, "Gv3_avg"), 0, 40, b, t)))
+        s.path(lat, col, 2.2)
+        for pt in lat:
+            s.dot(pt[0], pt[1], col)
+        s.path(spn, col, 1.4, "4 3")
+        for pt in spn:
+            s.dot(pt[0], pt[1], col, 3.0, True)
+    s.txt(l + 10, t - 12, "실선(왼쪽) 클라이언트 지연 ↑    파선(오른쪽) span v3 — 평평하다",
+          10, C["mute"])
+    s.txt(l + 10, t + 4, "파랑 GET-only · 주황 1:9 혼합", 10, C["mute"])
+    s.save(f"{out}/f2a-pipeline-curve.svg")
 
 
 def main():
@@ -350,7 +421,7 @@ def main():
     Path(a.out).mkdir(parents=True, exist_ok=True)
     rows = load(a.rows)
     print(f"rows={len(rows)} → {a.out}")
-    f1(rows, a.out); f2b(rows, a.out); f2c(rows, a.out); f3(rows, a.out); f4(rows, a.out)
+    f1(rows, a.out); f2a(rows, a.out); f2b(rows, a.out); f2c(rows, a.out); f3(rows, a.out); f4(rows, a.out)
 
 
 main()

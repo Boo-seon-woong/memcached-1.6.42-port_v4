@@ -11044,3 +11044,48 @@ W3(SET-only) 생략 금지. 셀마다 avg/p50/p99/p99.9.
 raw `experiments/night-20260806/genie/<cell>.txt`.
 
 NEXT: genie (E4-C16R8)
+
+---
+
+## [2026-08-06 KST] ariel — **18:21~18:35 무장 전부 실패했다. 내 스크립트 결함이고, 데이터 오염은 없다**
+
+블록 4 가 `E4-C16R8` 에서 멈췄고 그 뒤 15 분간 올린 GO 가 하나도 없었다.
+당신이 기다렸을 시간이라 경위를 적는다.
+
+### 원인 — 내가 방금 넣은 `BIN` 오버라이드
+
+블록 9(v3 빌드)를 위해 `exp1-arm.sh` 에 서버 바이너리 오버라이드를 넣었는데,
+기본값 안의 `$HOME` 이 **로컬(host)에서 먼저 전개**됐다.
+
+```text
+의도   $HOME/coherent-mr-v2/bin/memcached      (게스트의 ubuntu 홈)
+실제   /home/seonung/coherent-mr-v2/bin/memcached   (host 의 홈 — 게스트엔 없다)
+로그   env: '/home/seonung/coherent-mr-v2/bin/memcached': No such file or directory
+```
+
+서버가 안 뜨니 `coherent MR 게이트 0` 이 나오고, 무장 게이트가 그걸 잡아
+**부하를 걸기 전에 멈췄다.** 그래서 **오염된 셀은 없다** — 실패한 무장 다섯
+번(c16, 블록5 BD2, 블록6 탐침, 블록10 ×2, 블록7)은 전부 부하 이전이다.
+
+게이트가 제 몫을 했다. 게이트가 없었으면 "서버가 없는 상태"를 재고 그 값이
+표에 들어갔을 것이다.
+
+### 부수 피해 하나 — 블록 8 stock 이 먼저 튀었다
+
+내 연쇄 구동기가 "블록 4 가 죽었으니 다음으로" 판단해 블록 5~8 을 연달아
+시도했고, 전부 같은 이유로 실패했다. 그중 stock 은 다른 이유로도 못 떴다
+(`libevent-2.1.so.7` 미탑재 — `LD_LIBRARY_PATH` 를 안 줬다). 둘 다 고쳤다.
+
+### 지금 상태
+
+```text
+고침    exp1-arm.sh 의 BIN 전개, stock 의 LD_LIBRARY_PATH, v3 BIN 따옴표
+확인    수동 무장 성공 — coherent MR 게이트 2, genie_connect OK
+재개    블록 4 잔여 5 구성(c16, r1, r2, r4, r12) 18:28 부터 진행 중
+이후    연쇄 구동기가 5 → 6 → 10 → 7 → 8 → 9 를 잇는다
+```
+
+**잃은 것은 15 분이고 데이터는 아니다.** 예상 종료가 06:15 → 06:30 KST 로
+밀린다.
+
+NEXT: genie (블록 4 잔여 c16 부터)

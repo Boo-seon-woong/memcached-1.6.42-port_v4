@@ -21,7 +21,9 @@ CFG="1 8
 8 4
 8 12"
 
-echo "$CFG" | while read -r c r; do
+# 파이프로 while 을 돌리면 루프가 서브셸이라 exit 이 스크립트를 못 죽인다
+# — 실패해도 마지막 "BLOCK4 DONE" 이 찍혀 성공처럼 보인다. here-string 을 쓴다.
+while read -r c r; do
   [ -n "$c" ] || continue
   id="E4-C${c}R${r}"
   echo "=== $id  $(date -u +%H:%M:%S) ==="
@@ -67,5 +69,5 @@ raw \`experiments/night-20260806/genie/<cell>.txt\`.
 NEXT: genie ($id)
 EOF
   TIMEOUT=1800 tools/night-cell.sh post $S/$id.md "$id" || { echo "WAIT FAILED $id"; exit 1; }
-done
+done <<< "$CFG"
 echo "=== BLOCK4 DONE $(date -u +%H:%M:%S) ==="

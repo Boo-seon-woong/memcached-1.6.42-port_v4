@@ -1,12 +1,11 @@
-# v3 → v4 — 무엇이 어떻게 바뀌었나
+# v3 → v4 — 무엇이, 왜, 어떻게 바뀌었나
 
-작성 2026-08-03. 기준점은 v3 최종 `c0c5b4f`(브랜치 `v3-set-pac`), 도착점은
-v4 `main`. v3 는 `../memcached-1.6.42-port_v3/` 에 동결돼 있다.
+작성 2026-08-03, 전면 재작성 2026-08-05. 기준점은 v3 최종 `c0c5b4f`(브랜치
+`v3-set-pac`, `../memcached-1.6.42-port_v3/` 에 동결), 도착점은 v4 `main`.
 
-이 문서는 **거시 구조**를 다룬다. 셀 단위 측정은
-[`V4_RESULT.md`](V4_RESULT.md), 단계별 코드 주석은
-[`GET_WORKFLOW.md`](GET_WORKFLOW.md)·[`SET_WORKFLOW.md`](SET_WORKFLOW.md) 에
-있다.
+**이 문서 하나로 닫히도록 쓴다** — span 정의와 그 차이, v3 의 문제와 원인,
+해결, 두 버전의 구조 차이, 결과까지. 다른 문서는 각 절 끝에 "더 깊이"
+용도로만 단다.
 
 ```text
 소스 변경   10 파일, +442 / −53   (extstore·items·memcached·proto_*·storage·thread)
@@ -15,11 +14,7 @@ v4 `main`. v3 는 `../memcached-1.6.42-port_v3/` 에 동결돼 있다.
 
 ---
 
-## 0. 한 장 요약
-
-v3 는 **계약을 span v2 기준으로 달성**했고, 정의를 span v3 로 넓히자
-**8~79 배 초과로 깨졌다**(GET-only 8.1 · 혼합 GET 10.4 · SET-only 79.3 배). v4 가 한 일은 성능 개선이 아니라 **원래 있던 대기를
-드러내고 걷어낸 것**이다.
+## 0. 한눈에
 
 ```text
               혼합 처리량   GET span   SET span
@@ -28,72 +23,113 @@ v3 (span v3)  10.06 M       311.77     188.75     ✗ ✗   다르게 쟀을 뿐
 v4 최종       11.10 M        22.31       9.11     ✓ ✓
 ```
 
-**정의가 성능을 바꾼 것이 아니다.** 증거는 v3 당시 클라이언트가 SET 지연을
-7.45 ms 로 보고하는데 서버는 7.8 µs 라고 답하고 있었다는 것이다. 그 차이가
-전부 계측 밖의 대기였다.
-
-### 그 대기의 91~99.6% 가 **조건문 두 개**였다
-
-> **아래는 요지만 적는다.** 왜 그 조건문이 문제인지는 v3 의 요청 경로를
-> 알아야 하므로 [`EXTENDED_SPAN_DIAGNOSIS.md`](EXTENDED_SPAN_DIAGNOSIS.md)
-> 에서 워크플로부터 세워 설명한다 — 제출·재개가 무엇인지, 왜 배칭하는지,
-> 우리 구성에서 왜 20 연결 조건이 **한 번도 발화하지 않는지**까지.
-> 이 문서의 인용만 읽으면 지엽적으로 보인다.
-
-v4 의 span 감소는 알고리즘이나 하드웨어에서 온 것이 아니다. **언제 제출하고
-언제 재개하는지를 정하는 조건문 두 줄**이 span 의 거의 전부를 차지하고
-있었다.
-
-```text
-                    span v3    그중 조건문 탓    비중
-혼합 GET            311.77     admit 285.16     91.5%
-혼합 SET            188.75     ret   173.11     91.7%
-SET-only           2380.29     ret  2371.84     99.6%
-```
-
-```c
-/* ① memcached.c:3324 — GET admit.  연결 20 개가 모여야 제출한다 */
-if (t->conns_tosubmit++ >= settings.ext_submit_batch) {
-    thread_io_queue_submit(c->thread);
-}
-
-/* ② thread.c:531 — SET ret.  앞선 flush 가 CQ 를 비우면 out == 0 이라
-   재개 블록이 통째로 건너뛰어진다 */
-unsigned int out = extstore_worker_outstanding(me->ext_worker);
-if (out) {
-    ...  /* 이 안에 storage_flush_returns() 가 있다 */
-}
-```
-
-**두 줄을 우회하자 span 이 14 배(GET) · 21 배(SET) 내려갔고 처리량은 오히려
-늘었다.** 데이터 경로(`v2` 열 = 실제 RDMA 왕복 + 복호)는 처음부터 계약 안에
-있었다 — pipeline 을 32 배 늘려도 GET 계열 15.9~26.6 µs, SET 계열
-7.7~16.9 µs 로 거의 안 움직였다.
-
-기전과 증거는 §1, 원 분석은 `experiments/exp0-20260801/FINDINGS.md` §3·§4.
+v3 는 계약을 **span v2 정의**로 달성했다. 정의를 v3 로 넓히자(§1) 계약이
+8~79 배로 깨졌는데(§2), 깨진 몫의 91~99.6% 는 RDMA 가 아니라 **제출·재개
+시점을 정하는 조건문 두 개**가 만든 대기였다. v4 는 그 대기를 걷어냈고(§3),
+그 과정에서 처리량도 10.4% 올랐다(§5).
 
 ---
 
-## 1. 아키텍처 — 세 개의 큐를 없앴다
+## 1. span 정의 — v2, v3, 그리고 정확한 차이
 
-v3 의 GET 경로는 상류 memcached 의 `io_queue` 배칭을 그대로 물려받았다.
-그 배칭이 **한 요청을 세 번 기다리게** 했다.
+### 1-1. GET 워크플로 위에 두 구간을 그으면
 
 ```text
-v3   ① GET 을 파싱해 io_queue 에 쌓는다
-     ② **연결 20 개**가 모여야 제출한다        ← 제출이 여기까지 기다린다
-     ③ event loop 로 복귀
-     ④ 다음 pass 가 되어야 CQ 를 폴링          ← 완료 관측이 여기까지 기다린다
-     ⑤ 앞선 flush 가 CQ 를 비웠으면 재개
-        블록이 통째로 건너뛰어진다             ← 재개가 다음 pass 로 밀린다
-
-v4   ① GET 을 파싱해 체인에 얹는다
-     ② **요청 8 개**가 모이면 그 자리에서 post   ← 문턱이 연결 20 → 요청 8
-     ③ reap 틱마다 CQ 수거 + 재개
-     ④ 못 채운 것은 pass 끝 flush 가 처리 (stock 과 같은 지점)
+ ①  소켓 read()
+ ②  명령 파싱
+ ③  해시 조회 → ITEM_HDR 발견 (로컬엔 값의 위치만 있다)
+                                                        ┌─────────┐
+ ④  storage_get_item() 진입          storage.c:470      │         │
+ ⑤  평문 버퍼·io_pending 준비                           │  admit  │
+ ⑥  연결 suspend, io_queue 삽입      storage.c:569      │         │
+ ⑦  ─── 제출 대기 ───                                   │         │  span
+ ⑧  워커 window·bounce slot 확보                        │         │   v3
+                                               ┌────────┴─────────┤
+ ⑨  ibv_post_send (RDMA READ)        extstore.c:855     │  span   │
+ ⑩  ─── RDMA 왕복 ───                                   │   v2    │
+ ⑪  CQE 관측                                            │         │
+ ⑫  AES-GCM 복호                                        │         │
+                                               └────────┴─────────┘
+ ⑬  완료 주차 (g_ret_head)           storage.c:474
+ ⑭  ─── 재개 대기 ───
+ ⑮  연결 재개 → 응답 조립 → sendmsg
 ```
 
-**대기의 실측 크기 — EXP-0 (v3 코드, 변경 전, pipe=256):**
+```text
+span v2 = ⑨~⑫        span v3 = ④~⑫        차이 = ④~⑨  (= admit)
+```
+
+### 1-2. SET
+
+```text
+ ①  소켓 read() + 값 수신, 파싱
+                                                        ┌─────────┐
+ ②  storage_store_item_pac() 진입    storage.c:904      │         │
+ ③  hdr stub 할당 · **원격 슬롯 확보**(:915)            │  admit  │
+     · io_pending 구성                                  │         │
+                                               ┌────────┴─────────┤
+ ④  pac_seal — AES-GCM 봉인          :951               │         │
+ ⑤  스텁 게시 (ITEM_WFLIGHT 설정)    :965               │  span   │  span
+ ⑥  WRITE 제출 → ibv_post_send                          │   v2    │   v3
+ ⑦  ─── RDMA 왕복 ───                                   │         │
+ ⑧  WRITE CQE 관측                                      │         │
+                                               └────────┤─────────┤
+ ⑨  ─── 재개 대기 ───                                   │   ret   │
+ ⑩  item_trylock → ITEM_WFLIGHT 해제  :876              │         │
+                                                        └─────────┘
+ ⑪  STORED 조립 → sendmsg
+```
+
+```text
+span v2 = ④~⑧        span v3 = ②~⑩        차이 = ②~④ (admit) + ⑧~⑩ (ret)
+```
+
+### 1-3. 차이의 요약
+
+| | 재는 것 | 새로 들어온 구간 |
+|---|---|---|
+| **span v2** | **장치가 일한 시간** — 전송과 암복호. 대기는 앞뒤로 전부 밖 | — |
+| **span v3** | **backend 에 맡긴 순간 → 응용이 결과를 쓸 수 있는 순간** | GET: `admit` / SET: `admit`+`ret` |
+
+한 줄로: **v2 는 "얼마나 빨리 전송했나", v3 는 "얼마나 빨리 답했나".**
+
+GET 은 끝점이 같고 시작만 당겨졌다. SET 은 **앞뒤가 다 넓어졌다** — 뒤로도
+`CQE 관측` 에서 `WFLIGHT 해제` 로 밀렸다. 이 비대칭이 §2 의 측정에서 SET 이
+GET 보다 훨씬 크게 튀는 이유다.
+
+세 성분(`admit`·`v2`·`ret`)은 **각각 독립으로 집계**된다 — v3 에서 빼서
+만드는 값이 아니다(`extstore.c` 셀렉터 1·2, admit/ret 별도 누적). 그래서
+`admit + v2 + ret = v3` 가 **정합성 검사**로 성립한다:
+
+```text
+EXP-0 GET-only     217.12 + 25.16         = 242.28   vs 실측 242.29
+최종 게이트 SET      0.52 +  7.97 + 0.62  =   9.11   vs 실측   9.11
+```
+
+stats 필드는 `_e2e_avg_ns`(v3) 와 `_avg_ns`(v2) 로 갈린다.
+`extstore_prof_span_ver` 는 `3` 이어야 한다.
+
+> 두 정의 다 **⑬~⑮(완료 주차 → 재개 → 응답 송신)는 안 잰다.** 이 구간은
+> §5-3 에서 다시 나온다.
+
+### 1-4. 왜 넓혔나
+
+v2 정의로 계약(`< 30 µs`)은 여유 있게 통과하고 있었다 — GET 7.8, SET 7.8 µs.
+**그런데 같은 시각 memtier 가 보고한 SET 지연이 7.45 ms 였다.** 서버가
+7.8 µs 라고 답하는 동안 클라이언트는 그 955 배를 기다렸다.
+
+§1-1 의 그림이 모순을 해소한다: v2 는 ⑨~⑫만 보고, 클라이언트는 ①~⑮를
+기다린다. **전송은 실제로 빨랐다. 느린 것은 그 앞(제출 대기)과 뒤(재개
+대기)였고, 둘 다 계측 밖이었다.** 2026-08-01 에 정의를 v3 로 넓힌 것은 그
+대기를 계측 안으로 들여오기 위해서다.
+
+---
+
+## 2. 문제 — 정의를 넓히자 드러난 대기
+
+### 2-1. 측정: EXP-0 (v3 코드 그대로, pipe=256)
+
+정의만 바꾸고 **코드는 한 줄도 안 고친 상태**의 기준선:
 
 ```text
 워크로드      ops/s     span v3    = admit  +  v2   +  ret
@@ -103,360 +139,312 @@ GET-only     11.932 M    242.29     217.12    25.16     —
 SET-only      4.133 M   2380.29       0.61     7.84   2371.84
 ```
 
-| 대기 | 크기 | 원인 | v4 의 처리 |
-|---|---:|---|---|
-| **GET admit** | **285.16 µs** | **연결 20 개**가 모일 때까지 io_queue 를 붙든다 + 창 파킹 | 파싱 즉시 post (`ext_submit_inline`) |
-| **SET ret** | **173.11 µs** (SET-only 2371.84) | CQ 를 미리 비워 재개 블록이 **건너뛰어진다** | 거둔 그 pass 에서 재개 |
-| GET v2 | 26.59 µs | CQE 가 pass 끝까지 폴링조차 안 됨 | post 자리에서 수거 (`ext_reap_every`) |
+```text
+혼합 GET     311.77 중 admit 285.16  =  91.5%
+혼합 SET     188.75 중 ret   173.11  =  91.7%
+SET-only    2380.29 중 ret  2371.84  =  99.6%
+```
 
-**기전은 조건문 두 개다** — 자세한 것은 `V4_RESULT.md` §1-2·§1-3, 원 분석은
-`experiments/exp0-20260801/FINDINGS.md` §3·§4.
+원 분석: `experiments/exp0-20260801/FINDINGS.md` §3·§4.
+
+### 2-2. 배경 — io_queue 는 왜 있나
+
+원인을 이해하려면 상류 memcached 의 extstore 설계 한 가지만 알면 된다.
+값이 서버 밖에 있으면 GET 이 즉시 답할 수 없다. 읽어 오는 동안 워커를
+붙잡아 두면 그 워커의 다른 연결이 전부 멈추므로, 상류는 이렇게 짰다:
+
+```text
+요청을 io_queue 에 쌓고 연결을 suspend
+→ 나중에 한꺼번에 제출(submit)          ← 건건이 내보내는 비용을 아끼려고
+→ IO 가 끝나면 연결을 재개(resume)해 응답
+```
+
+**요청이 기다릴 수 있는 곳이 두 군데 생긴다: 제출 전(④~⑨)과 재개 전(⑬~⑮,
+SET 은 ⑧~⑩도).** v3 의 두 문제는 정확히 이 두 자리에서 났다.
+
+### 2-3. 원인 A — GET `admit`: 제출 조건이 우리 구성에서 발화하지 않는다
+
+v3 의 제출은 두 조건 중 먼저 오는 쪽에서 일어난다:
 
 ```c
-/* memcached.c:3324 — GET admit 의 원인. 버퍼가 아니라 연결 수가 기준이다 */
+/* ① memcached.c:3324 (v3) — IO 걸린 "연결"이 스레드에 20 개 쌓이면 */
 if (t->conns_tosubmit++ >= settings.ext_submit_batch) {   /* 기본 20 */
     thread_io_queue_submit(c->thread);
 }
 
-/* thread.c:531 — SET ret 의 원인. 앞선 flush 가 CQ 를 비우면 out == 0 이라 */
+/* ② thread.c — 이벤트루프 한 바퀴(pass)가 끝나면 */
+event_base_loop(me->base, EVLOOP_ONCE);
+thread_io_queue_submit(me);
+```
+
+`conns_tosubmit` 은 **요청 수가 아니라 연결 수**이고, **스레드마다 따로**
+센다. 그런데:
+
+```text
+부하        memtier -t 30 -c 4   →  연결 120 개
+서버        -t 30                →  스레드 30 개
+스레드당 연결                     →  4 개      ← 20 에 도달 불가능
+```
+
+**① 은 한 번도 발화하지 않는다.** 제출은 항상 ② — pass 끝 — 에서만 일어난다.
+그리고 pipeline 이 깊을수록 한 pass 에 파싱할 명령이 많아 **pass 자체가
+길어진다.** 그래서 admit 은 부하와 함께 자란다:
+
+```text
+pipe          8      16      32      256
+admit     16.57   28.0    53.9    217.12  µs
+```
+
+파킹(워커 window `W` 초과 대기)이 원인이 아니라는 증거: pipe=8 에서 워커당
+backend 체류가 3.9 건인데 `W=40` 이라 **파킹이 일어날 수 없는데도** admit 이
+16.57 µs 다.
+
+**SET 은 이 문제가 없었다** — v3 의 pac(publish-at-command)이 큐에 넣자마자
+그 자리에서 flush 했기 때문에 SET admit 은 처음부터 0.5~0.6 µs 였다.
+**GET 만 상류의 제출 배칭을 물려받았다.** (v4 의 GET 수정은 결국 "GET 을 SET
+처럼 만든 것"이다 — §3-1.)
+
+### 2-4. 원인 B — SET `ret`: 제출 경로가 CQ 를 비워 재개가 건너뛰어진다
+
+pass 끝의 v3 코드:
+
+```c
+thread_io_queue_submit(me);                          /* 제출 */
 unsigned int out = extstore_worker_outstanding(me->ext_worker);
-if (out) {                    /* ← 이 블록 안에 storage_flush_returns() 가 있다 */
+if (out) {                                           /* ← 문제의 조건문 */
+    do {
+        if (extstore_worker_drain(...) > 0)
+            storage_flush_returns();                 /* ← 재개가 이 안에만 있다 */
+        ...
+    } while (...);
+}
 ```
 
-`admit` 이 큐가 아니라는 증거: pipe=8 에서 워커당 체류가 3.9 건인데 `W=40`
-이라 **파킹이 불가능한데도** admit 이 16.57 µs 다. `ret` 이 SET-only 에서
-14 배 나쁜 이유: GET 이 없으면 워커의 `outstanding` 이 WRITE 뿐이라 drain 이
-매번 CQ 를 완전히 비워 **건너뛰기가 항상 일어난다.**
-
-**SET-only 가 2380 µs 였다** — 계약선의 79 배다. 원본은
-`experiments/exp0-20260801/FINDINGS.md`.
-
-**그런데 SET 이 답을 갖고 있었다.** v3 의 pac(publish-at-command)은 admit 이
-처음부터 0.5~0.6 µs 였다 — 큐에 넣자마자 그 자리에서 flush 했기 때문이다.
-**GET 만 상류의 배칭을 물려받아 admit 이 285 µs 였고**, v4 는 GET 을 SET 처럼
-만든 것이다. SET 은 반환 경로만 고치면 됐다.
+재개(`storage_flush_returns`)가 `if (out)` 블록 **안에만** 있다. 그런데 SET
+의 제출 경로(`storage_flush_pending_writes`)는 **제출하면서 완료도 같이
+거둔다** — 거둔 완료는 재개 대기열에 올려두기만 한다. 그 과정에서 CQ 가
+비워지면:
 
 ```text
-                 EXP-0        v4 최종      배율
-혼합 GET admit   285.16        9.17        31 배
-혼합 SET ret     173.11        0.62       279 배
+제출 경로가 CQ 를 비운다 → outstanding() == 0 → if (out) 거짓
+→ 재개 블록이 통째로 건너뛰어진다 → 이미 도착한 응답이 다음 pass 까지 대기
 ```
 
-> **정정 (2026-08-03).** 초판은 이 표를 `9.91 / 31.56 / 25.48 µs` 로 적었다.
-> 그것은 최초 진단이 아니라 **캠페인 후반 각 수정 시점의 델타**이고, 셋을
-> 더해도 67 µs 라 출발점을 설명하지 못했다. 자세한 경위는
-> `V4_RESULT.md` §1 의 정정 주석과 §1-1.
+**일을 빨리 끝낸 것이 응답을 늦춘다.** SET-only 에서 극단이 되는 이유:
+GET 이 없으면 CQ 에 남을 것이 더 없어 `out == 0` 이 거의 항상 성립한다 —
+그래서 2371.84 µs, 혼합에서는 GET 의 outstanding 이 가끔 블록을 살려
+173.11 µs 다.
 
-### 1-1. 새로 생긴 손잡이 넷
+### 2-5. 데이터 경로는 처음부터 무죄였다
 
-| 설정 | 하는 일 | 기본 | v4 운영값 |
-|---|---|---:|---:|
-| `ext_submit_inline` | 파싱 즉시 post, `io_queue` 우회 | off | **on** |
-| `ext_post_chain` | 인라인 post 를 N 건 묶어 한 번에 | 1 | **8** |
-| `ext_reap_every` | N 건마다 CQ 수거 + 재개 | 1 | **8** |
-| `ext_admit_max` | 워커당 backend 체류 상한 | 0 | **64** |
-
-**`chain` 과 `reap` 이 span 의 두 구간을 나눠 쥔다** — 이것이 v4 에서 가장
-중요한 구조적 사실이고, 캠페인 123 셀이 확인했다:
-
-```text
-adm  ←  유효 체인 = min(chain, reap)     storage.c:607 이 reap 틱 안에서
-                                          pending_chain_flush() 를 부른다
-v2   ←  reap 이 지배 (chain 도 들어온다)
-```
-
-`reap` 이 `chain` 보다 작으면 **체인이 차기 전에 reap 이 비운다.** 그래서
-`chain` 을 12·16·20·24·32 로 올려도 결과가 같다(§14-1).
+`v2` 열(실제 RDMA 왕복 + 암복호)은 pipeline 을 8 → 256 으로 32 배 늘려도
+GET 계열 15.9~26.6 µs, SET 계열 7.7~16.9 µs 로 거의 움직이지 않았다.
+**고칠 것은 전송이 아니라 제출·재개의 시점이었다.**
 
 ---
 
-## 2. GET 워크플로 — 거시 대조
+## 3. 해결
 
-### v3
+### 3-1. GET `admit` → 큐를 우회하고, 배칭은 새 축으로
 
-```text
-drive_machine
- └ try_read_network        연결의 읽기 버퍼를 통째로 읽는다
-    └ 파싱 루프 (모든 GET)
-       └ storage_get_item   eio 를 만들어 q->stack 에 쌓는다   ← post 안 한다
-    ⇣ 버퍼를 다 파싱한 뒤
- └ thread_io_queue_submit   쌓인 것을 한 번에 제출
- └ (event loop 복귀)
- ⇣ 다음 pass
- └ drain point              CQ 폴링 → 복호 → 응답 조립
+```c
+/* storage.c:568 — ext_submit_inline 이 켜져 있으면 io_queue 에 넣지 않는다 */
+if (!settings.ext_submit_inline)
+    STAILQ_INSERT_TAIL(&q->stack, (io_pending_t *)p, iop_next);
 ```
 
-**한 연결의 버퍼를 다 파싱해도 post 되지 않는다 — `ext_submit_batch`(기본
-20) 개의 *연결*이 모여야 나간다.** 그것이 EXP-0 의 GET admit **285.16 µs**
-(혼합) / **217.12 µs**(GET-only)다. pipeline 이 깊을수록 연결 하나의 파싱이
-길어져 같은 20 개를 모으는 데 더 걸리므로 부하와 함께 자란다
-(pipe 8 → 256 에서 16.57 → 217.12).
+`ext_submit_inline` 을 켜면 `storage_get_item()` 이 eio 를 다 채운 뒤 **그
+자리에서 post 한다.** §1-1 의 ⑥⑦(io_queue 삽입, 제출 대기)이 경로에서
+사라진다.
 
-### v4
+> **`ext_submit_batch`(20)를 낮춘 것이 아니다 — 지금도 20 이다.** 그 조건이
+> 놓인 경로 자체를 안 쓰게 됐으므로 값이 무엇이든 무관해졌다.
+
+큐를 우회하면 배칭 이득(제출 1 회에 여러 건)이 사라진다. 그래서 배칭을
+**요청 수 기준의 새 축 두 개**로 다시 만들었다:
 
 ```text
-drive_machine
- └ try_read_network
-    └ 파싱 루프
-       └ storage_get_item
-          ├ eio 준비, p->c = t->cur_conn   ← post 전에 채운다 (아래 2-2)
-          ├ 체인에 붙인다
-          ├ 체인이 chain 건이면 → pending_chain_flush() → 실제 post
-          └ reap 틱이면 → 체인 flush + CQ drain + 재개
- └ storage_post_chain_flush  pass 끝에 남은 것을 내보낸다
- └ storage_flush_returns     pass 끝에 남은 재개를 처리한다
+ext_post_chain = 8    inline post 를 N 건씩 한 submit 으로 묶는다   (기본 1)
+ext_reap_every = 8    N 건 post 마다 CQ 수거 + 재개                 (기본 1)
 ```
 
-핵심은 **파싱 루프 안에서 post·수거·재개가 모두 일어난다**는 것이다.
-`io_queue` 는 GET 경로에서 우회된다.
+reap 틱이 chain flush 를 포함하므로(`storage.c:599-626`) **유효 체인 =
+`min(chain, reap)`** 이다. 캠페인 123 셀이 확인한 역할 분담은:
 
-### 2-0. 단일 요청은 v4 에서도 즉시 안 나간다
+```text
+admit ← chain 이 쥔다        v2 ← reap 이 쥔다
+```
 
-**오해하기 쉬운 지점이다.** `ext_post_chain=8` 이므로 요청 하나는
-`g_chain_n = 1 < 8` 이라 체인에 얹히기만 하고, `thread.c:522` 의
-`storage_post_chain_flush()` 에서야 나간다. 그 지점은 **stock 의
-`thread.c:528` `thread_io_queue_submit()` 과 같은 자리**다.
+문턱의 변화를 요약하면:
 
-**그렇다고 갇히지는 않는다 — 같은 event-loop 반복 안에서 나간다.**
+```text
+v3   연결 20 개(도달 불가) 또는 pass 끝     → 사실상 항상 pass 끝
+v4   요청 8 건            또는 pass 끝     → 고부하에선 사실상 즉시
+```
+
+### 3-2. SET `ret` → 거둔 그 pass 에서 무조건 재개
+
+```c
+/* thread.c:522-531 (v4) — pass 끝 */
+storage_post_chain_flush(me);       /* 이 pass 의 READ 체인을 내보낸다 */
+storage_flush_pending_writes();
+storage_flush_returns();            /* ← v4 추가. if (out) 밖, 무조건 실행 */
+unsigned int out = extstore_worker_outstanding(me->ext_worker);
+if (out) { ... }
+```
+
+제출 경로가 CQ 를 비워 `out == 0` 이 되더라도, **이미 거둔 완료는 같은 pass
+에서 응답으로 나간다.** reap 틱(`storage.c:619-626`)에서도 재개한다.
+
+두 가지 안전장치가 따라붙었다:
+
+- **마지막 재개만 보류한다.** 처음엔 처리 중 연결의 재개를 통째로 보류했더니
+  6 M SET 에 44.5 M 건이 보류됐다(사실상 전부 다음 pass 행). 위험한 것은
+  `conn_worker_readd` 를 유발하는 **마지막 재개뿐**이므로
+  (`resps_suspended <= 1` 검사, `storage.c:709`) 그것만 미룬다.
+- **락 보유를 추측하지 않고 `item_trylock` 으로 질의한다**(`storage.c:871`).
+  meta-get 의 `limited_get_locked` 가 `item_lock` 을 쥔 채 이 경로에 들어올
+  수 있는데, 호출 경로를 열거해 버킷을 비교하던 방식은 실제로 한 경로를
+  빠뜨려 워커들이 futex 에서 멈췄다.
+
+### 3-3. 단일 요청은 갇히지 않는다
+
+체인이 8 건 기준이면 "요청이 하나뿐일 때 영영 안 나가는가" 가 자연스러운
+질문이다. 안 갇힌다:
 
 ```c
 while (!event_base_got_exit(me->base)) {
-    event_base_loop(me->base, EVLOOP_ONCE);   /* ← 이 안에서 파싱·체인 */
-    thread_io_queue_submit(me);
-    if (me->ext_worker != NULL) {
-        storage_post_chain_flush(me);         /* ← 리턴 직후, 조건 없이 post */
+    event_base_loop(me->base, EVLOOP_ONCE);   /* 파싱·체인 적재 */
+    ...
+    storage_post_chain_flush(me);             /* 리턴 직후, 조건 없이 post */
 ```
 
-`EVLOOP_ONCE` 는 준비된 이벤트를 처리하면 **리턴**하고, flush 는 그 뒤에
-온다. 체인은 iteration N 에서 쌓여 **같은 iteration N 끝에서** 비워진다.
-**다음 이벤트를 기다리며 잠들기 전에 실행되므로 요청이 하나뿐이어도
-붙잡히지 않는다.** 그래서 지연은 "pass 끝까지"가 아니라 **"그 iteration 의
-남은 처리만큼"** 이고, 요청이 하나면 사실상 즉시다.
+`EVLOOP_ONCE` 는 준비된 이벤트를 처리하면 리턴하고, flush 가 **잠들기 전에**
+실행된다. 체인은 쌓인 그 iteration 끝에서 비워지므로 요청이 하나여도 지연은
+"그 iteration 의 남은 처리만큼" — 사실상 즉시다. (v3 주석이 이 순서의 이유를
+명시한다: *"큐가 남은 채 잠들면 그 연결들은 영원히 재개되지 않는다."*)
 
-이 배치는 의도된 것이다. v3 주석이 그 위험을 명시한다 —
-*"수면 판단보다 반드시 앞서야 한다 — 큐가 남은 채 잠들면 그 연결들은
-영원히 재개되지 않는다."* 순서가 반대였다면 실제로 교착이 났을 것이다.
-
-```text
-고립된 요청 한 건의 지연   v3 == v4   (둘 다 그 iteration 끝, 사실상 즉시)
-```
-
-v4 가 바꾼 것은 **부하가 있을 때의 문턱**이다:
-
-```text
-v3   연결 20 개  또는  pass 끝     pipe=256 이면 최대 20×256 = 5,120 건 분량의 파싱
-v4   요청  8 개  또는  pass 끝
-```
-
-그래서 고부하에서 `adm` 이 285 → 9.17 µs 로 내려갔고, **저부하에서는 이득이
-없거나 오히려 나쁘다.** 배칭이 건수 기준이고 **시간 타임아웃이 없기** 때문에
-도착이 느리면 8 건을 못 채우고 pass 끝까지 기다린다:
+대신 **건수 기준 배칭에는 타임아웃이 없으므로 저부하에서는 이득이 없거나
+오히려 약간 나쁘다** — 도착이 느리면 8 건을 못 채우고 pass 끝을 기다린다:
 
 ```text
 pipe      8     16     32     64    128    256    384
-adm    5.83   5.58   4.43   4.61   3.88   3.70   3.73
+adm    5.83   5.58   4.43   4.61   3.88   3.70   3.73   µs
 ```
 
-**pipe=8 의 5.83 µs 가 pipe=256 의 3.70 보다 크다.** 이 설계는
-저지연 저부하가 목표라면 시간 기준 flush 가 필요하다 — 계약이 고부하
-기준이라 넣지 않았다.
+pipe=8 의 adm 이 pipe=256 보다 크다. 계약이 고부하 기준이라 시간 기준
+flush 는 넣지 않았다.
 
-### 2-1. 왜 pass 끝 flush 가 여전히 필요한가
+### 3-4. 인라인화의 대가 — 서버가 세 번 죽고 얻은 규칙
 
-체인은 건수로 끊긴다. **도착이 느리면 건수가 안 차므로** pass 끝에서
-비워줘야 한다. 이것 때문에 **저부하에서 오히려 `adm` 이 크다**(pipe=8 에서
-5.83 µs, pipe=256 에서 3.70 µs) — 배칭이 시간 기준이 아니라 건수 기준이고
-**타임아웃이 없다**(§14-3).
-
-### 2-2. post 자리 재개가 만든 두 가지 위험
-
-인라인 post 는 **완료가 post 직후에 돌아올 수 있게** 만들었다. co-located
-RDMA 는 5 µs 라 파싱 루프 안에서 완료가 난다. 여기서 두 번 서버가 죽었다.
+post 를 파싱 루프 안으로 옮기자 **완료가 파싱 도중에 돌아올 수 있게** 됐다
+(co-located RDMA 왕복 ~5 µs). 여기서 두 번 죽었다:
 
 ```text
 ① 파싱 중인 연결을 재개하면 죽는다
-   drive_machine 이 아직 그 연결을 돌고 있는데 conn_worker_readd 가 걸린다
-   → t->cur_conn 으로 표시하고 그 연결만 제외한다 (proto_text.c 4 자리 + multiget)
+   drive_machine 이 아직 그 연결을 돌고 있는데 conn_worker_readd 가 겹친다
+   → t->cur_conn 으로 표시하고 그 연결만 재개에서 제외 (g_skip_conn)
 
-② 자기 자신의 pending 을 재개하면 죽는다
-   p->c 가 아직 NULL 인 채로 완료가 와서 conn_resp_unsuspend(NULL,…) → segfault at 0xfc
-   → p->c = t->cur_conn 을 post **전에** 채운다
+② 자기 pending 을 재개하면 죽는다
+   p->c 가 NULL 인 채 완료가 돌아와 conn_resp_unsuspend(NULL,…) → 0xfc segfault
+   → p->c 를 post **전에** 채운다
 ```
 
-②는 세 번 만에 잡았다. 앞의 두 번은 추측이었고, 세 번째에 `dmesg` 의 폴트
-주소를 먼저 본 것이 답이었다.
+②는 세 번 만에 잡았다 — 앞의 두 번은 추측이었고, `dmesg` 의 폴트 주소를
+먼저 본 것이 답이었다. 재진입 일반화 규칙: 완료 콜백은 응답을 직접 보내지
+않고 `g_ret_head` 에 주차하고(`storage.c:474`), 방출은 드레인 루프 밖에서만
+한다 — 재진입 깊이가 1 로 유지된다.
 
-### 2-3. 서버가 멈춘 사례 하나 더
+### 3-5. 처리량 — 나머지는 전부 경합이었다
 
-`drain > 0` 가드를 없앴더니 워커들이 futex 에서 멈췄다. meta-get 의
-`limited_get_locked` 가 **`item_lock` 을 쥔 채** 이 경로로 들어오고,
-`storage_set_return_cb` 가 같은 락을 다시 잡는다. 호출 빈도를 올리자 그 창이
-열렸다. **락 보유를 추측하지 말고 `item_trylock` 으로 질의**하도록 고쳤다.
-
----
-
-## 3. SET 워크플로 — 거시 대조
-
-SET 은 v3 에서 이미 pac 이었다. v4 가 바꾼 것은 **반환 경로 하나**다.
-
-### v3
-
-```text
-storage_store_item_pac
- ├ item_lock 아래에서 stub 을 publish        ← 여기까지 0.5~0.7 µs (좋았다)
- ├ ITEM_WFLIGHT 를 세워 storage_delete 를 막는다
- └ WRITE 를 큐에 넣고 그 자리에서 flush
- ⇣
- (WRITE CQE)
- └ 거둔다 → 그런데 그 flush 가 CQ 를 비워서
-             `if (out)` 이 거짓이 되고
-             **재개 블록이 통째로 건너뛰어진다**  ← ret 173.11 µs (혼합)
-                                                   2371.84 µs (SET-only)
-```
-
-### v4
-
-```text
- (WRITE CQE)
- └ 거둔 그 pass 에서 재개한다
-    ├ 큐 상한 flush 안에서 재개 — 잡고 있는 버킷만 보류
-    └ 마지막 재개만 보류한다 (resps_suspended > 1 이면 안전)
-```
-
-**"마지막 재개만"** 이 핵심이다. 처음엔 연결 단위로 통째 보류했더니
-6 M SET 에 44.5 M 건이 보류돼 `ext_setret_now = 0` 이 됐다.
-위험한 것은 **마지막 재개뿐**이다 — `conn_worker_readd` 는 카운터가 0 이 될
-때만 걸리기 때문이다.
-
-결과: 혼합 SET `ret 173.11 → 0.62 µs`, `Sv3 188.75 → 9.11 µs`.
-(캠페인 중간의 A-1 시점 A/B 로는 `21.68 → 8.62 µs` 였다 — 그때는 이미
-다른 수정들이 들어가 절대값이 달랐다.)
-
----
-
-## 4. 처리량은 락에서 나왔다
-
-span 을 연 뒤 혼합은 9.2 M 이었다. 나머지는 전부 **경합**이었고, 셋 다
-"원자 연산이면 되는데 30 워커가 같은 캐시라인을 두드리던" 것이다.
+span 을 열어 대기를 걷어낸 뒤 혼합은 9.2 M 이었다. 격차의 나머지는 "원자
+연산이면 될 일을 30 워커가 같은 캐시라인으로 다투던" 것들이다:
 
 | 수정 | v3 에서 무엇이었나 | 효과 |
 |---|---|---|
-| 아이템 카운터 샤딩 | SET 1 건이 공유 캐시라인을 **10 번** 갱신 | SET-only +27% |
-| refcount 원자화 | GET 이 `item_lock` 을 **두 번** 잡음 (`--refcount` 가 비원자라) | 두 워크로드 +8.5% |
-| 워커 통계 뮤텍스 제거 | GET 1 건이 `stats.mutex` 를 **두 쌍** 잡음 | 혼합 +0.6% |
-| `mc_resp` memset | GET 마다 **1028 B** 를 쓸데없이 0 으로 (12 M ops 면 12.3 GB/s) | +8.2% / +6.5% |
+| 아이템 카운터 샤딩 | SET 1 건이 공유 캐시라인을 10 번 갱신 | SET-only +27% |
+| refcount 원자화 | GET 이 `item_lock` 을 두 번 잡음 | 두 워크로드 +8.5% |
+| 워커 통계 뮤텍스 제거 | GET 1 건이 `stats.mutex` 두 쌍 | 혼합 +0.6% |
+| `mc_resp` memset 축소 | GET 마다 불필요한 1028 B 를 0 으로 (12 M ops = 12.3 GB/s) | +8.2% / +6.5% |
 
-마지막 것은 `sizeof(mc_resp)`(1192 B) 대신
-`offsetof(mc_resp, wbuf)`(164 B)만 지우는 **한 줄**이다. `wbuf` 는 쓰기 전에
-채워지므로 0 으로 만들 이유가 없었다.
+마지막 것은 `sizeof(mc_resp)` 대신 `offsetof(mc_resp, wbuf)`(164 B)만 지우는
+한 줄이다 — `wbuf` 는 쓰기 전에 채워지므로 0 으로 만들 이유가 없었다.
+
+### 3-6. 정합성 — 조용한 MISS (badcrc) 를 잡았다
+
+혼합에서 **있는 키가 GET 의 0.025% 로 조용히 MISS 가 되고 있었다.** v4 이전
+부터 있던 결함이다:
+
+```text
+상류 extstore   페이지 단위 재활용 + page_version 으로 낡은 읽기를 거른다
+이 포트         슬롯 단위 재활용, 버전을 안 올림 (extstore.c:534)
+→ storage_delete 가 unlink 시점에 원격 슬롯을 회수
+→ 그 슬롯을 다음 SET 이 재할당받아, 읽는 중인 원격 메모리를 덮어쓴다
+→ GCM 태그 불일치(badcrc) → MISS
+```
+
+회수를 unlink 에서 **`item_free` 훅으로** 옮겼다 — GET 이 hdr 에 refcount 를
+쥐므로 소멸 시점 회수는 in-flight READ 와 겹칠 수 없다. 호출처가 9 군데라
+`STORAGE_delete` 매크로 한 곳에서 막고 실제 회수는 훅 한 곳에 뒀다.
+
+**v3 의 계약 달성치도 이 결함 위에서 잰 값이다** — `err5` 집계에 badcrc 가
+없었고 hit 99.975% 는 "100%" 로 보였다.
 
 ---
 
-## 5. 정합성 — v4 이전부터 있던 결함을 잡았다 (badcrc)
+## 4. 아키텍처 — v3 와 v4 의 경로 대조
 
-혼합에서 **있는 키가 조용히 MISS 로 돌아가고 있었다**(pipe=256 에서 GET 의
-0.025%).
-
-```text
-상류 extstore   페이지 단위로 재활용하고 page_version 으로 낡은 읽기를 거른다
-이 포트         슬롯 단위로 재활용하면서 버전을 안 올린다 (extstore.c:534)
-                → storage_delete 가 unlink 시점에 loc 을 회수
-                → 읽는 중인 원격 메모리를 다음 SET 이 덮어쓴다
-```
-
-회수를 `item_free` 로 옮겼다 — GET 이 이미 refcount 를 쥐므로 그것으로
-보호가 성립한다. 호출처가 9 군데라 `STORAGE_delete` 매크로 한 곳에서 막았다.
-
-**v3 의 계약 달성치도 이 조건에서 잰 값이다.** `err5` 집계에 badcrc 가 없었고
-hit 율 0.025% 는 "100%" 로 반올림된다 — 양쪽 다 못 봤다.
-
----
-
-## 6. 계측 — span v2 에서 v3 로
-
-**2026-08-01 에 정의를 넓혔다.** 정본은
-[`OPTIMAL_RUNBOOK.md`](OPTIMAL_RUNBOOK.md) 의 계약 블록에 있고, 왜 넓혔는지는
-[`EXTENDED_SPAN_DIAGNOSIS.md`](EXTENDED_SPAN_DIAGNOSIS.md) 다.
-
-| | 시작 | 끝 |
-|---|---|---|
-| span v2 GET | READ post 직전 | 복호 완료 |
-| span v2 SET | seal | WRITE CQE 관측 |
-| **span v3 GET** | **`storage_get_item()` 진입** (`storage.c:470`) | 복호 완료 |
-| **span v3 SET** | **`storage_store_item_pac()` 진입** (`:904`) | `ITEM_WFLIGHT` 해제 (`:876`) |
-
-### 6-1. 단계별로 무엇이 새로 들어왔나
-
-경계만 보면 "조금 넓혔다" 로 읽힌다. **요청 경로 위에 놓아야 v2 가 무엇을
-빠뜨리고 있었는지 보인다.** 18 단계 전체에 구간을 그은 그림은
-[`EXTENDED_SPAN_DIAGNOSIS.md`](EXTENDED_SPAN_DIAGNOSIS.md) §1 이고,
-아래는 그 요약이다.
+### 4-1. GET
 
 ```text
-GET 경로                                            v2      v3
-────────────────────────────────────────────────────────────────
-소켓 read → 명령 파싱 → 해시 조회                    ✗       ✗
-storage_get_item() 진입                              ✗     ◀ 시작
-  admit   진입 → 실제 post (제출 대기)               ✗       ●   ← v3 가 드러낸 것
-  post → READ CQE  (RDMA 왕복)                     ◀ 시작    ●
-  복호 (AES-GCM)                                    끝 ▶    끝 ▶
-응답 조립 → sendmsg                                  ✗       ✗
+v3
+ drive_machine
+  └ 파싱 루프 (연결의 버퍼 전체)
+     └ storage_get_item     eio 를 io_queue 에 쌓는다      ← post 없음
+  └ pass 끝: thread_io_queue_submit   한꺼번에 post
+  ⇣ 다음 pass
+  └ CQ 폴링 → 복호 → (out 이 남아 있을 때만) 재개
+
+v4
+ drive_machine
+  └ 파싱 루프
+     └ storage_get_item
+        ├ eio 준비, p->c = t->cur_conn        ← post 전에 채운다 (§3-4 ②)
+        ├ 체인에 적재
+        ├ 체인 8 건 → 그 자리에서 post
+        └ reap 틱(8 post 마다) → 체인 flush + CQ 수거 + 재개
+  └ pass 끝: storage_post_chain_flush + storage_flush_returns   (잔여 처리)
 ```
+
+**post·수거·재개가 전부 파싱 루프 안으로 들어왔다.** pass 경계는 배치
+지점에서 잔여 처리 지점으로 역할이 바뀌었다.
+
+### 4-2. SET
 
 ```text
-SET 경로                                            v2      v3
-────────────────────────────────────────────────────────────────
-소켓 read → 명령 파싱 → 값 수신                      ✗       ✗
-storage_store_item_pac() 진입                        ✗     ◀ 시작
-  admit   진입 → seal (스텁·슬롯·pending 확보)       ✗       ●   ← v3 가 드러낸 것
-  seal → WRITE CQE 관측                            ◀ 시작    ●
-  ret     CQE → ITEM_WFLIGHT 해제                    ✗       ●   ← v3 가 드러낸 것
-응답 조립 → sendmsg                                  ✗       ✗
+v3   pac: stub 게시 + 그 자리 flush          ← admit 0.5 µs, 이미 좋았다
+     완료 회수 후 재개는 if (out) 안         ← ret 173~2372 µs (§2-4)
+
+v4   pac: 변경 없음
+     재개를 조건문 밖으로 + reap 틱 재개 + 마지막 재개만 보류 (§3-2)
 ```
 
-**GET 은 앞에 한 구간(`admit`), SET 은 앞뒤로 두 구간(`admit`·`ret`) 이
-새로 들어왔다.** 그래서 v2 → v3 전환에서 SET 이 GET 보다 훨씬 크게 튀었다:
+SET 은 제출 경로가 아니라 **반환 경로만** 고쳤다.
 
-```text
-                 v2      v3       배수     새로 들어온 구간
-GET-only        7.8    242.29     31 배    admit 217.12
-혼합 GET        7.8    311.77     40 배    admit 285.16
-SET-only        7.8   2380.29    305 배    admit 0.61 + ret 2371.84
-```
+### 4-3. 손잡이 넷 (v4 신설)
 
-**같은 서버를 다르게 쟀을 뿐이다.** v2 시절에도 그 대기는 있었고, 클라이언트가
-SET 지연을 7.45 ms 로 보고하던 것이 그 증거다 — 서버는 7.8 µs 라고 답하고
-있었다.
+| 설정 | 하는 일 | 기본 | 운영값 |
+|---|---|---:|---:|
+| `ext_submit_inline` | io_queue 우회, 그 자리 post | off | **on** |
+| `ext_post_chain` | inline post N 건을 한 submit 으로 | 1 | **8** |
+| `ext_reap_every` | N 건 post 마다 CQ 수거 + 재개 | 1 | **8** |
+| `ext_admit_max` | 워커당 backend 체류 상한 | 0 | **64** |
 
-> **`extstore_prof_span_ver` 는 2026-08-05 까지 `2` 로 박혀 있었다.**
-> 정의를 v3 로 넓히고도 서버가 자기 버전을 v2 라고 알리고 있었고, 그 사이
-> 아무도 그 필드를 읽지 않았다. 지금은 `3` 이다.
+분해(`admit`/`v2`/`ret`) 없이는 이 축들을 조준할 수 없었다 — `chain` 이
+`admit` 을, `reap` 이 `v2` 를 쥔다는 것도, `W` 를 줄이면 대기가 `admit` 으로
+옮겨갈 뿐이라는 것도 세 열을 따로 봐야 보인다.
 
-v4 는 여기에 **분해**를 더했다(`6d70026`):
-
-```text
-span v3 = adm + v2 + ret
-          │     │    └ prof_w_ret_ns   완료 → 응용 가시 (SET)
-          │     └────── 기존 v2 구간
-          └──────────── prof_r_admit_ns / prof_w_admit_ns   진입 → v2 시작
-```
-
-**세 성분은 각각 독립으로 집계된다** — v3 에서 admit 을 빼서 만드는 것이
-아니다(`extstore.c:1244-1248`, 셀렉터 2·1). 그래서 `adm + v2 + ret = v3` 가
-**정합성 검사**로 성립한다: EXP-0 GET-only 에서 `217.12 + 25.16 = 242.28` 대
-실측 `242.29`, 최종 게이트 SET 에서 `0.52 + 7.97 + 0.62 = 9.11`.
-
-통계 이름은 `_e2e_avg_ns`(v3) 와 `_avg_ns`(v2) 로 갈린다. **혼동하면 안
-된다** — `tools/exp0-slice.py` 의 `Gv3` 열이 읽는 것은 전자다. 계측 검증은
-`SPAN_MEASUREMENT_REVIEW.md` §7.
-
-**이 분해가 없었으면 이번 캠페인은 못 했다.** `chain` 이 `adm` 을,
-`reap` 이 `v2` 를 쥔다는 것도, `W` 를 줄이면 대기가 `adm` 으로 옮겨갈 뿐이라는
-것도 이 세 열을 봐야 보인다.
-
----
-
-## 7. 운영점 이동
+### 4-4. 운영점 이동
 
 ```text
                 mcT   W    nqp  reap  chain  pipeline
@@ -465,63 +453,95 @@ v4 캠페인 초기   30   40    4    12      8      256
 v4 최종          30   24    4     8      8      256
 ```
 
-v3 의 `nqp=2 W=24` 는 실효 동시성 `min(24, 2×16) = 24` 였다. v4 는 `nqp=4` 라
-`min(24, 64) = 24` 로 같지만 **형태가 다르다** — 캠페인 실험 A 가 같은 총량에서
-`nqp=4` 가 span 의 U 자 바닥임을 보였다(§14-4).
+실효 동시성 `min(W, nqp×ORD)` 는 v3(24)와 v4(24)가 같다 — 바뀐 것은 형태다
+(실험 A: 같은 총량에서 `nqp=4` 가 span U 자의 바닥).
 
-**v4 에서 움직인 두 값은 코드가 아니라 런타임 값이다:**
+캠페인 중 움직인 두 값은 **코드가 아니라 런타임 값**이다:
 
 ```text
-W    40 → 24    혼합 +1.38%.  창은 24 이상에서 안 물린다 (체류 11.5)
-reap 12 →  8    혼합 +2.09%,  GET-only span −17%
+W    40 → 24    혼합 +1.38%   (체류 실측 11.5 건 — 24 위로는 안 물린다)
+reap 12 →  8    혼합 +2.09%,  GET span −17%   ← 캠페인 최대 단일 개선
 ```
 
-둘 다 처음엔 "빈 축"이라며 안 재려던 곳에서 나왔다.
+둘 다 처음엔 "잴 필요 없다"고 건너뛰려던 축에서 나왔다.
 
 ---
 
-## 8. 성능 — v3 대비
+## 5. 결과
 
-EXP-0(v3 코드, pipe=256) 대 v4 최종 게이트. 같은 bed, 같은 부하 형상이다.
+### 5-1. v3 대비 (같은 bed, 같은 부하 형상, pipe=256)
 
 ```text
                     v3 (EXP-0)      v4 최종      변화
 1:9 혼합 처리량       10.06 M        11.10 M     +10.4%
-  GET span           311.77 µs       22.31 µs    14.0 배 감소
-  SET span           188.75 µs        9.11 µs    20.7 배 감소
+  GET span v3        311.77 µs       22.31 µs    14.0 배 ↓
+  SET span v3        188.75 µs        9.11 µs    20.7 배 ↓
 GET-only 처리량       11.93 M        13.40 M     +12.3%
-  span               242.29 µs       21.90 µs    11.1 배 감소
-SET-only span       2380.29 µs          —        v4 미측정
+  span v3            242.29 µs       21.90 µs    11.1 배 ↓
+SET-only span v3    2380.29 µs       ~8.0 µs     ~300 배 ↓
 ```
 
-**로컬 메모리(stock) 대비** — 원 frontier 실험과 같은 바이너리(`97ceee04…`)
-로 잰 대조:
+SET-only 의 v4 값은 2026-08-04 형태 캠페인 실측이다(운영 구성, pipe 64~384
+에서 7.84~8.05 µs 로 평탄, 처리량 5.6~5.8 M — 단 계측 확장 빌드라 처리량은
+게이트 수치와 직접 비교하지 말 것).
+
+최종 게이트(각 120 초): GET-only **13.397 M / 21.90 µs**(adm 4.39 + v2
+17.51), 1:9 혼합 **11.099 M / GET 22.31 / SET 9.11**. 기록치는 전부 계측
+(`EXT_RDMA_PROF=1`, 처리량 −4.2%)을 켠 채 잰 값이다.
+
+### 5-2. 로컬 메모리(stock) 대비
+
+같은 게스트에서 같은 바이너리 계열(`97ceee04…`)의 stock 과 off-box 대조:
 
 ```text
-pipe    Port      stock     비율     원 실험 비율
-   8   3.243     3.882    83.5%      72.54%
- 256  13.287    16.417    80.9%        —      ← 운영 조건
+pipe    Port      stock     비율
+   8   3.243     3.882    83.5%
+ 256  13.287    16.417    80.9%   ← 운영 조건
 ```
 
-**운영 조건에서 로컬 메모리의 80.9% 를 낸다.** 값을 원격에 두고 one-sided
-RDMA 로 읽으며 AES-256-GCM 으로 봉인·복호하고 SEV-SNP guest 안에서 도는
-대가가 19.1% 다.
+값을 원격에 두고 one-sided RDMA 로 오가며 AES-256-GCM 봉인·복호를 하고
+SEV-SNP 게스트 안에서 도는 대가가 운영 조건에서 **19.1%** 다.
+
+### 5-3. 두 정의 밖에 남은 것 — `post`
+
+§1 의 ⑬~⑮(완료 주차 → 재개 → 송신)는 v3 정의로도 **여전히 계측 밖**이다.
+2026-08-04 에 이 구간을 따로 재기 시작했고, 운영점에서:
+
+```text
+클라이언트 체감 2,277.58 µs
+├ 네트워크 + 클라이언트 큐잉   1,786 µs   78.4%
+└ 서버 체류                      491 µs   21.6%
+   ├ span v3 [계약]               22 µs    0.9%
+   └ post (⑬~⑮)                 360 µs   15.8%   ← span v3 의 16 배
+```
+
+§2-4 에서 고친 것과 같은 계열의 문제(완료를 모아뒀다 주기적으로 방출)가 한
+단계 뒤에 남아 있는 셈이다. 분해와 절감 가능성 판단은
+[`LATENCY_BREAKDOWN.md`](LATENCY_BREAKDOWN.md).
 
 ---
 
-## 9. v3 문서를 읽을 때 주의할 것
+## 6. v3 문서를 읽을 때 주의할 것
 
-v3 시절 문서는 **그 시점의 기록으로 유효**하지만, 아래는 v4 에서 뜻이
-달라졌으므로 그대로 인용하면 안 된다.
+v3 시절 문서는 그 시점 기록으로 유효하지만, 아래는 뜻이 달라졌다:
 
-| v3 문서의 서술 | v4 에서 |
+| v3 서술 | v4 |
 |---|---|
 | 운영점 `mcT=28 nqp=2 pipeline=160` | `mcT=30 nqp=4 pipeline=256 W=24 reap=8 chain=8` |
-| span 수치 (v2 기준) | v3 기준으로 재정의 — 직접 비교 불가 |
-| `mcT=16 → 6.56 M` | 개선 전 빌드. 현재 빌드는 **9.279 M** |
-| "완료 1 건당 고정비" | 고정이 아니다. 동시성의 함수 (§14-4, B 실험) |
-| depth=1 천장 0.65 M | v4 에서 **11.5 M** |
-| 기각된 손잡이 목록 | **지형이 바뀌면 부호가 바뀐다.** `reap`·`ext_setq_max`·flush-락-밖 세 개가 실제로 뒤집혔다 |
+| span 수치 (v2 정의) | v3 정의 — **직접 비교 불가** (§1) |
+| "완료 1 건당 고정비" | 고정이 아니라 깊이의 함수 (형태 캠페인 A16-4) |
+| depth=1 천장 0.65 M | v4 에서 11.5 M |
+| 기각된 손잡이 목록 | **지형이 바뀌면 부호가 바뀐다** — `reap`·`ext_setq_max`·flush-락-밖 셋이 실제로 뒤집혔다 |
 
-마지막 줄이 이 포트에서 가장 자주 되풀이된 교훈이다. **옛 판정은 그것이
-측정된 지형이 바뀌면 살아남지 못한다.**
+---
+
+## 딸림 자료
+
+```text
+EXTENDED_SPAN_DIAGNOSIS.md            문제 규명 서사 (측정→분해→해결 과정 중심)
+LATENCY_BREAKDOWN.md                  클라이언트 지연 전체 분해와 post
+GET_WORKFLOW.md / SET_WORKFLOW.md     단계별 코드 주석
+V4_RESULT.md                          셀 단위 측정 전체 (§14 = 123 셀 sweep)
+experiments/exp0-20260801/FINDINGS.md 원인 규명 원 분석
+OPTIMAL_RUNBOOK.md                    운영값·측정 규율 정본
+```

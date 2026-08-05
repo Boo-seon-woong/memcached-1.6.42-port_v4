@@ -315,23 +315,28 @@ ext_reap_every = 8    N 건마다 완료를 회수한다                      (�
 비울까"(v4 는 그 경로를 안 쓴다), 8 은 "inline post 를 몇 건씩 묶을까"
 (v4 가 새로 만든 축)다. 숫자가 나란히 보인다고 20 → 8 로 읽으면 안 된다.
 
-### 4-2. `ret` → 조건문 앞에서 무조건 재개
+### 4-2. `ret` → 거둔 그 자리에서 즉시 실현
+
+**보류가 아니라 즉시가 원칙이다.** 완료를 거둔 그 호출에서 trylock 프로브
+→ `WFLIGHT` 해제 → 재개까지 간다. 다음 지점으로 미루는 것은 셋뿐이다 —
+락 아래에서 거둔 분(in-place flush 는 `item_lock` 아래라 방출 금지),
+trylock 충돌(~1/2^lock_power), 현재 파싱 중 연결의 마지막 재개.
+*"사실상 전부 즉시 재개된다"* (`storage.c:29`). 이것이 ret 을
+2371.84 → 0.14 µs 로 만들었다.
+
+그 위에 v3 의 스킵 결함(§2-3)을 막는 **pass 끝 무조건 flush** 가 얹힌다:
 
 ```c
-/* thread.c:522-531 (v4) */
-storage_post_chain_flush(me);
+/* thread.c:522-531 (v4) — pass 끝 */
 storage_flush_pending_writes();
-storage_flush_returns();                    /* ← v4 가 추가. 조건문 밖이다 */
+storage_flush_returns();            /* ← v4 추가. if (out) 밖, 무조건 실행 */
 unsigned int out = extstore_worker_outstanding(me->ext_worker);
 if (out) { ... }
 ```
 
-`if (out)` 앞에 **무조건 실행되는** `storage_flush_returns()` 를 넣었다.
-제출 경로가 CQ 를 비워 `out == 0` 이 되더라도 **이미 거둔 완료는 이 pass 에서
-응답으로 나간다.**
-
-코드 주석이 그때의 측정을 적어놨다 — *"측정상 이 한 pass 가 SET span v3 의
-287.64 µs 중 대부분이었다(RDMA 자체는 6.79 µs)."*
+제출 경로가 CQ 를 비워 `out == 0` 이 되더라도 미뤄진 잔여분이 같은 pass
+에서 나간다. **다만 이것만으로는 pass 입도라 부족하다** — µs 입도는
+즉시-실현이 만든다.
 
 ### 4-3. 그 외 — 노브 넷을 측정으로 정했다
 

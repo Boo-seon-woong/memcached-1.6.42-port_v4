@@ -333,31 +333,47 @@ v3   연결 20 개(도달 불가) 또는 pass 끝     → 사실상 항상 pass 
 v4   요청 8 건            또는 pass 끝     → 고부하에선 사실상 즉시
 ```
 
-### 3-2. SET `ret` → 거둔 그 pass 에서 무조건 재개
+### 3-2. SET `ret` → 거둔 그 자리에서 즉시 실현한다
+
+**보류가 아니라 즉시가 원칙이다.** 완료를 거둔 그 호출에서 trylock 프로브
+→ `WFLIGHT` 해제 → 재개까지 간다(EXP-1 S3b, ret `2371.84 → 0.14`, 커밋
+`3a50784`). 거두는 자리 셋과 각각의 처리:
+
+```text
+in-place flush   SET 마다, item_lock 아래   주차만 — 락 아래라 방출 금지
+reap 틱          8 post 마다, 락 없음        drain 2 줄 뒤 flush_returns — 즉시
+pass 끝 drain    락 없음                     spin 안에서 32 건마다 — 즉시
+```
+
+다음 지점으로 미루는 것은 §1-4 의 예외 셋뿐이다 — 락 아래 관측분,
+trylock 충돌(~1/2^lock_power), 현재 파싱 중 연결의 마지막 재개.
+*"사실상 전부 즉시 재개된다"* (`storage.c:29`).
+
+그 위에 **pass 끝 무조건 flush** 가 얹힌다:
 
 ```c
 /* thread.c:522-531 (v4) — pass 끝 */
-storage_post_chain_flush(me);       /* 이 pass 의 READ 체인을 내보낸다 */
 storage_flush_pending_writes();
 storage_flush_returns();            /* ← v4 추가. if (out) 밖, 무조건 실행 */
 unsigned int out = extstore_worker_outstanding(me->ext_worker);
 if (out) { ... }
 ```
 
-제출 경로가 CQ 를 비워 `out == 0` 이 되더라도, **이미 거둔 완료는 같은 pass
-에서 응답으로 나간다.** reap 틱(`storage.c:619-626`)에서도 재개한다.
+역할은 둘이다: v3 의 `if (out)` 스킵 결함(§2-4) 제거, 그리고 위 예외로
+미뤄진 잔여분의 mop-up. **이것만으로는 pass 입도(수십~수백 µs)라 부족하고,
+µs 입도는 즉시-실현이 만든다** — 순서를 바꿔 읽으면 안 된다.
 
-두 가지 안전장치가 따라붙었다:
+즉시-실현이 안전해지기까지 두 번 좁혔다:
 
-- **마지막 재개만 보류한다.** 처음엔 처리 중 연결의 재개를 통째로 보류했더니
-  6 M SET 에 44.5 M 건이 보류됐다(사실상 전부 다음 pass 행). 위험한 것은
-  `conn_worker_readd` 를 유발하는 **마지막 재개뿐**이므로
-  (`resps_suspended <= 1` 검사, `storage.c:709`) 그것만 미룬다.
-- **락 보유를 추측하지 않고 `item_trylock` 으로 질의한다**(`storage.c:871`).
+- 처음엔 처리 중 연결의 재개를 **통째로** 미뤘더니 6 M SET 에 44.5 M 건이
+  밀렸다(사실상 전부 다음 pass 행). 위험한 것은 `conn_worker_readd` 를
+  유발하는 **마지막 재개뿐**임을 확인하고(`resps_suspended <= 1`,
+  `storage.c:709`) 예외를 그것 하나로 좁혔다.
+- 락 보유는 추측하지 않고 `item_trylock` 으로 질의한다(`storage.c:871`).
   락 아래로 들어오는 경로가 실제로 둘 있다 — 큐 상한 flush 는
-  `do_store_item` 의 `item_lock` 아래에서 돌고(`storage.c:26` 첫머리 주석),
-  meta-get 의 `limited_get_locked` 도 락을 쥔 채 들어온다. 호출 경로를
-  열거해 버킷을 비교하던 방식은 후자를 빠뜨려 워커들이 futex 에서 멈췄다.
+  `do_store_item` 의 `item_lock` 아래에서 돌고(`storage.c:26`), meta-get 의
+  `limited_get_locked` 도 락을 쥔 채 들어온다. 호출 경로를 열거해 버킷을
+  비교하던 방식은 후자를 빠뜨려 워커들이 futex 에서 멈췄다.
 
 ### 3-3. 단일 요청은 갇히지 않는다
 
@@ -478,7 +494,7 @@ v3   pac: stub 게시 + 그 자리 flush          ← admit 0.5 µs, 이미 좋�
      완료 회수 후 재개는 if (out) 안         ← ret 173~2372 µs (§2-4)
 
 v4   pac: 변경 없음
-     재개를 조건문 밖으로 + reap 틱 재개 + 마지막 재개만 보류 (§3-2)
+     거둔 자리에서 즉시 실현(예외 셋만 미룸) + pass 끝 무조건 mop-up (§3-2)
 ```
 
 SET 은 제출 경로가 아니라 **반환 경로만** 고쳤다.

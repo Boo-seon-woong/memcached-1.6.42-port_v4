@@ -9,7 +9,8 @@ S=/tmp/night-msgs; mkdir -p $S
 G="ssh -n -i $HOME/.ssh/snp_guest -p 2222 -o BatchMode=yes -o ConnectTimeout=8 ubuntu@localhost"
 say() { echo "### $* $(date -u +%H:%M:%S)"; }
 
-while ! grep -q "BLOCK4 DONE" /tmp/night-b4.log 2>/dev/null; do
+B4LOG=${B4LOG:-/tmp/night-b4b.log}
+while ! grep -q "BLOCK4 DONE" "$B4LOG" 2>/dev/null; do
   pgrep -f night-block4.sh >/dev/null || { say "블록4 구동기가 사라졌다 — 그대로 진행"; break; }
   sleep 60
 done

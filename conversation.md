@@ -12271,3 +12271,72 @@ memtier -s 10.99.0.3 -p 11411 -P memcache_text -d 32 \
 셀마다 avg/p50/p99/p99.9. raw `experiments/night-20260806/genie/<cell>.txt`.
 
 NEXT: genie (V32 3부하)
+
+CELL V32-W1 DONE  14.226 M  avg 2.09209 / p50 2.04700 / p99 3.67900 / p99.9 6.75100 ms
+창(UTC) 2026-08-05T20:15:29Z ~ 2026-08-05T20:15:59Z   pipe=256 --ratio=0:1 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL V32-W2 DONE  11.463 M  avg 2.62228 / p50 2.57500 / p99 4.51100 / p99.9 7.74300 ms
+창(UTC) 2026-08-05T20:16:23Z ~ 2026-08-05T20:16:53Z   pipe=256 --ratio=1:9 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL V32-W3 DONE  6.104 M  avg 4.95319 / p50 4.95900 / p99 7.77500 / p99.9 11.77500 ms
+창(UTC) 2026-08-05T20:17:17Z ~ 2026-08-05T20:17:47Z   pipe=256 --ratio=1:0 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+---
+
+## [2026-08-06 KST] genie — V32 완료. **32 와 64 사이에 계단이 있다**
+
+```text
+V32-W1  14.226 M   avg 2092.09  p50 2047.0  p99 3679.0  p99.9  6751.0 µs
+V32-W2  11.463 M   avg 2622.28  p50 2575.0  p99 4511.0  p99.9  7743.0 µs
+V32-W3   6.104 M   avg 4953.19  p50 4959.0  p99 7775.0  p99.9 11775.0 µs
+지문 전후 동일, bed 3/3, pipe=256, 30초
+```
+
+### 세 크기
+
+```text
+  -d      GET       MIX       SET
+  16   14.503    11.616     6.132
+  32   14.226    11.463     6.104
+  64   13.159    10.931     5.714
+```
+
+### 배가 한 칸씩 — 같은 2배인데 비용이 4배 다르다
+
+```text
+16 -> 32 (2배)    GET -1.91%   MIX -1.32%   SET -0.46%
+32 -> 64 (2배)    GET -7.50%   MIX -4.64%   SET -6.39%
+```
+
+**두 구간 다 값이 2배인데 뒤쪽이 4~14배 비싸다.** 크기에 비례하는 비용이면
+두 칸이 비슷해야 한다. **32 와 64 사이에서 무언가를 넘는다.**
+
+### 짚이는 후보 — 당신이 확인해야 할 것
+
+```text
+(a) 슬랩 클래스 경계   item 헤더+키(m-1000000, 9B)+값
+                       d=16 -> 약 73B,  d=32 -> 89B,  d=64 -> 121B
+                       성장계수 1.25 면 96 / 120 / 152 클래스로 갈린다
+                       -> d=32 와 d=64 가 다른 클래스일 수 있다
+(b) 포트 고유 임계     인라인/슬롯 경계, PAC 스텁 크기, 정렬 패딩
+(c) 캐시라인          121B 는 64B 라인 두 개, 89B 도 두 개 -> (c) 는 약하다
+```
+
+**(a) 나 (b) 면 이 계단은 값 크기 곡선의 성질이 아니라 구현 경계다.**
+exp3 이 "값 크기 축" 을 그리는 실험이니 **경계가 어디인지 아는 것이 그림의
+핵심**이 된다 — XSTORE Fig.16a 가 인라인 대 간접 값을 가르는 그림인 것과
+정확히 같은 자리다.
+
+`-d 48` 한 점이면 계단이 32~48 인지 48~64 인지 좁혀진다. 30초 3부하 2분이다.
+**요청은 안 한다 — 당신 설계에 없으니 넣을지는 당신이 정할 일이다.**
+
+### 사고 하나 (데이터 영향 없음)
+V32 첫 시도에서 내 셀 이름 변수 `$D` 가 러너 내부의 출력 디렉터리 변수와
+충돌해 세 셀이 무효로 나왔다. **가드가 전부 "처리량 0 — 무효" 로 잡았고**,
+오염 항목은 `manifest.tsv` 와 채널 대기열에서 제거한 뒤 이름을 바꿔
+재실행했다. 위 값은 재실행분이다.
+
+NEXT: ariel (다음 값 크기 무장)

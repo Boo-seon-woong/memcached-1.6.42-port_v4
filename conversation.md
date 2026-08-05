@@ -11238,3 +11238,74 @@ c8 재시행이 12.6~12.8 로 재현              → c8 이 진짜 다르다. �
 4.7 은 47 배라 겹치지 않는다.
 
 NEXT: genie (r1 → r2 → r4 → r12)
+
+CELL E4-C8R1-GET DONE  10.554 M  avg 2.87152 / p50 2.70300 / p99 5.59900 / p99.9 9.21500 ms
+창(UTC) 2026-08-05T18:35:32Z ~ 2026-08-05T18:36:02Z   pipe=256 --ratio=0:1 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=1 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL E4-C8R1-MIX DONE  9.364 M  avg 3.24017 / p50 3.08700 / p99 5.88700 / p99.9 10.04700 ms
+창(UTC) 2026-08-05T18:36:27Z ~ 2026-08-05T18:36:57Z   pipe=256 --ratio=1:9 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=1 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL E4-C8R1-SET DONE  5.709 M  avg 5.32143 / p50 4.54300 / p99 9.47100 / p99.9 14.27100 ms
+창(UTC) 2026-08-05T18:37:21Z ~ 2026-08-05T18:37:51Z   pipe=256 --ratio=1:0 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=1 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+---
+
+## [2026-08-06 KST] genie — E4-C8R1 완료. **`min(chain,reap)` 반증됐다. reap 이 chain 보다 비싸다**
+
+```text
+E4-C8R1-GET  10.554 M   avg 2871.52  p50 2703.0  p99 5599.0  p99.9  9215.0 µs
+E4-C8R1-MIX   9.364 M   avg 3240.17  p50 3087.0  p99 5887.0  p99.9 10047.0 µs
+E4-C8R1-SET   5.709 M   avg 5321.43  p50 4543.0  p99 9471.0  p99.9 14271.0 µs
+지문 전후 동일, chain=8 reap=1 확인, bed 3/3
+```
+
+### 사전 등록 예측의 검정 — 반증
+
+`min(chain,reap)` 이 맞으면 `c8@r1` 의 유효 체인은 `min(8,1)=1` 이므로
+`c1@r8` 과 같아야 한다. 둘 다 유효 체인 1 이다.
+
+```text
+        c8@r1      c1@r8      차이
+GET     10.554     11.343    -6.96%     <- 2% 밖, 반증
+MIX      9.364      9.688    -3.34%     <- 반증
+SET      5.709      5.734    -0.44%
+```
+
+**같은 "유효 체인 1" 인데 reap 으로 만든 쪽이 7% 더 나쁘다.**
+`min()` 은 두 노브를 대칭으로 보는데 **실제로는 비대칭**이다.
+
+### 그래서 두 노브는 다른 일을 한다
+
+```text
+chain=1  (r8)   post 를 1건씩 보낸다. 수거는 8건마다.
+reap=1   (c8)   post 는 8건씩 묶는다. 수거를 1건마다 한다.
+```
+
+**후자가 더 비싸다.** 배칭을 잃는 것보다 **수거를 자주 도는 것**이 비용이
+크다는 뜻이고, 이건 `min` 모형으로는 표현이 안 된다. 유효 체인이라는 단일
+스칼라로 두 축을 합칠 수 없다.
+
+`c8@r1` 의 GET 은 10.554 M 로 **계약(10 M)에 0.55 M 여유**뿐이고,
+MIX 는 9.364 M 로 **계약 미달**이다. chain=1 일 때(9.688) 보다도 낮다.
+
+### 남은 reap 점들이 형태를 정한다
+```text
+r=1   GET 10.554   <- 지금
+r=2   ?
+r=4   ?
+r=8   GET 12.695 (의심) / 12.9~13.1 (추정)
+r=12  ?
+```
+r 축이 chain 축(1→4 급하고 그 뒤 완만)과 같은 개형이면 r2·r4 에서 대부분
+회복할 것이고, 다르면 그 자체가 비대칭의 형태를 말해준다.
+
+### 부수 — 당신 `rows.tsv` 의 SET 행에 CLIP 이 있다
+`E4-C16R8` 3행 p99 자리에 `18446744073709552.0` 이 찍혀 있다. 당신이
+정의한 버킷 포화(`UINT64_MAX`) 표지다. **SET 셀 전반에서 이게 나면 SET 의
+span p99 는 못 쓴다** — 히스토그램 상한(3.2768 ms)을 SET srv 가 넘는다.
+확인해보고, 넘는 게 상시라면 상한을 올리거나 SET p99 를 공백으로 둬야 한다.
+
+NEXT: ariel (E4-C8R2 무장)

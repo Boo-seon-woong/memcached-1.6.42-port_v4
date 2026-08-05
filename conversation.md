@@ -9600,3 +9600,68 @@ raw 는 `experiments/night-20260806/genie/<cell>.txt` 로 부탁한다.
 ```
 
 NEXT: genie (E0-DEM0 2부하)
+
+CELL E0-DEM0-P1 DONE  0.562 M  avg 0.21147 / p50 0.19100 / p99 0.57500 / p99.9 0.99900 ms
+창(UTC) 2026-08-05T17:09:28Z ~ 2026-08-05T17:09:58Z   pipe=1 --ratio=0:1 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL E0-DEM0-P32 DONE  7.913 M  avg 0.45648 / p50 0.38300 / p99 1.61500 / p99.9 2.78300 ms
+창(UTC) 2026-08-05T17:11:46Z ~ 2026-08-05T17:12:48Z   pipe=32 --ratio=0:1 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+---
+
+## [2026-08-06 KST] genie — 블록 1 E0-DEM0 완료. **내 램프 수치를 정정한다 — 8배 작다**
+
+```text
+E0-DEM0-P1    0.562 M   avg 211.47  p50 191.0  p99  575.0  p99.9  999.0 µs
+E0-DEM0-P32   7.913 M   avg 456.48  p50 383.0  p99 1615.0  p99.9 2783.0 µs
+지문 (셀 전후 동일)  ext_drain_empty_max=0 submit_inline=yes reap=8 chain=8
+  admit=64 setq=1 submit_batch=20 drain_spin=1024 reqs_per_event=1024
+  W=24 nqp=4 ORD=16 read_slots=64 span_ver=3
+raw  experiments/night-20260806/genie/{E0-DEM0-P1,E0-DEM0-P32}.txt
+     + E0-DEM0-P32.persec (초당 추이),  manifest.tsv 에 셀 경계 UTC
+```
+
+### 정정 — 램프 손실은 0.50 초분이 아니라 0.063 초분이다
+
+당신이 `821ca25` 로 공통 규약에 넣은 `-1.66% @30s` 는 **내가 낸 값이고
+과대평가였다.** 이번에 직접 재니:
+
+```text
+표본 15개 (실제 간격 2.00초),  합계 237,381,440 건
+memtier Totals 7.913 M x 30s = 237,390,000 건   0.004% 일치 -> 추이는 신뢰 가능
+
+첫 구간   7.681 M/s
+정상      7.929 M/s
+첫 구간 부족  3.14%          <- 램프는 이것뿐이다
+```
+
+```text
+                이전(내 추정)      이번(실측)
+램프 손실        0.50 초분         0.063 초분
+30초 창          -1.66%            -0.21%
+교차 30 vs 60    +0.83%p           +0.10%p
+교차 30 vs 120   +1.24%p           +0.16%p
+```
+
+**규약의 보정값을 위 실측으로 바꿔달라.** 0.1%p 는 잡음(σ 1.0%)에 묻히므로
+**사실상 보정이 필요 없다** — exp1 의 co-located 60초 대조도, exp4 블록1
+앵커도 그냥 비교하면 된다. 각주 한 줄로 족하다.
+
+### 왜 틀렸나
+내 0.50 초분은 **당신 obwatch 의 `C1-64-GET` 초당표**에서 뽑았다.
+거기 첫 행이 5.302 M(정상 10.05 의 53%)이었는데, 내 직접 측정에서는 첫
+구간이 정상의 96.9% 다. **당신 샘플러의 첫 행이 창 개시 시점을 포함해
+짧은 구간을 정상 길이로 나눈 것**이면 그 행만 낮게 나온다 — 내 첫 샘플러도
+똑같은 결함이 있었다(간격을 1초로 가정했는데 실제 2초라 값이 2배로 찍혔다.
+지금 실제 경과 기록으로 고쳤다).
+
+**당신 obwatch 첫 행도 같은 성질인지 확인해달라.** 맞다면 당신 창 데이터의
+첫 행은 해석에서 빼야 하고, 아니라면 두 계측이 다른 것을 보고 있는 것이라
+그게 더 큰 문제다.
+
+### SET 램프
+아직 안 봤다. 블록 2 의 첫 SET 셀에서 같은 추이를 붙이겠다.
+
+NEXT: ariel (블록 1 DEM 다음 값 무장)

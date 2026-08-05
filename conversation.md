@@ -12011,3 +12011,126 @@ c4 → c8   처리량 +3.6%,  span +3.8 µs      (이전 계산: +0.54%, +4.42 �
 셀이라 그대로다. exp4 의 그림은 유지된다.
 
 NEXT: genie (블록 5 본 격자 14셀 × 60초)
+
+CELL BD2-GET-P1 DONE  0.578 M  avg 0.20568 / p50 0.18300 / p99 0.54300 / p99.9 0.83100 ms
+창(UTC) 2026-08-05T18:56:13Z ~ 2026-08-05T18:57:13Z   pipe=1 --ratio=0:1 --test-time=60
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL BD2-GET-P8 DONE  3.400 M  avg 0.27227 / p50 0.21500 / p99 1.00700 / p99.9 1.62300 ms
+창(UTC) 2026-08-05T18:57:37Z ~ 2026-08-05T18:58:37Z   pipe=8 --ratio=0:1 --test-time=60
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL BD2-GET-P32 DONE  7.552 M  avg 0.48118 / p50 0.40700 / p99 1.55900 / p99.9 2.44700 ms
+창(UTC) 2026-08-05T18:59:01Z ~ 2026-08-05T19:00:01Z   pipe=32 --ratio=0:1 --test-time=60
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL BD2-GET-P64 DONE  10.086 M  avg 0.72904 / p50 0.67900 / p99 2.09500 / p99.9 4.67100 ms
+창(UTC) 2026-08-05T19:00:25Z ~ 2026-08-05T19:01:25Z   pipe=64 --ratio=0:1 --test-time=60
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL BD2-GET-P128 DONE  12.358 M  avg 1.19653 / p50 1.15900 / p99 2.63900 / p99.9 5.63100 ms
+창(UTC) 2026-08-05T19:01:49Z ~ 2026-08-05T19:02:49Z   pipe=128 --ratio=0:1 --test-time=60
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL BD2-GET-P256 DONE  13.173 M  avg 2.28442 / p50 2.20700 / p99 4.15900 / p99.9 7.26300 ms
+창(UTC) 2026-08-05T19:03:13Z ~ 2026-08-05T19:04:13Z   pipe=256 --ratio=0:1 --test-time=60
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL BD2-GET-P384 DONE  13.141 M  avg 3.45830 / p50 3.19900 / p99 6.30300 / p99.9 10.81500 ms
+창(UTC) 2026-08-05T19:04:37Z ~ 2026-08-05T19:05:38Z   pipe=384 --ratio=0:1 --test-time=60
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL BD2-MIX-P1 DONE  0.565 M  avg 0.21040 / p50 0.18300 / p99 0.57500 / p99.9 0.96700 ms
+창(UTC) 2026-08-05T19:06:02Z ~ 2026-08-05T19:07:02Z   pipe=1 --ratio=1:9 --test-time=60
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL BD2-MIX-P8 DONE  3.311 M  avg 0.28069 / p50 0.22300 / p99 1.10300 / p99.9 1.86300 ms
+창(UTC) 2026-08-05T19:07:26Z ~ 2026-08-05T19:08:26Z   pipe=8 --ratio=1:9 --test-time=60
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL BD2-MIX-P32 DONE  7.012 M  avg 0.52124 / p50 0.43900 / p99 1.80700 / p99.9 2.97500 ms
+창(UTC) 2026-08-05T19:08:50Z ~ 2026-08-05T19:09:50Z   pipe=32 --ratio=1:9 --test-time=60
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL BD2-MIX-P64 DONE  8.588 M  avg 0.85520 / p50 0.81500 / p99 2.33500 / p99.9 4.86300 ms
+창(UTC) 2026-08-05T19:10:14Z ~ 2026-08-05T19:11:14Z   pipe=64 --ratio=1:9 --test-time=60
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL BD2-MIX-P128 DONE  10.357 M  avg 1.44036 / p50 1.43100 / p99 2.38300 / p99.9 5.43900 ms
+창(UTC) 2026-08-05T19:11:38Z ~ 2026-08-05T19:12:38Z   pipe=128 --ratio=1:9 --test-time=60
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL BD2-MIX-P256 DONE  10.843 M  avg 2.79272 / p50 2.70300 / p99 4.79900 / p99.9 8.03100 ms
+창(UTC) 2026-08-05T19:13:02Z ~ 2026-08-05T19:14:02Z   pipe=256 --ratio=1:9 --test-time=60
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL BD2-MIX-P384 DONE  10.169 M  avg 4.48675 / p50 4.22300 / p99 9.85500 / p99.9 13.31100 ms
+창(UTC) 2026-08-05T19:14:26Z ~ 2026-08-05T19:15:26Z   pipe=384 --ratio=1:9 --test-time=60
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+---
+
+## [2026-08-06 KST] genie — **BD2 14부하 완주. `LATENCY_BREAKDOWN §4` 의 미검증 칸이 닫혔다**
+
+각 60초, 지문 14셀 전후 동일, bed 3/3, chain=8 reap=8.
+
+```text
+GET-only                              1:9 혼합
+pipe  Mops/s   avg µs    p50   p99    pipe  Mops/s   avg µs    p50   p99
+   1   0.578    205.7    183   543       1   0.565    210.4    183   575
+   8   3.400    272.3    215  1007       8   3.311    280.7    223  1103
+  32   7.552    481.2    407  1559      32   7.012    521.2    439  1807
+  64  10.086    729.0    679  2095      64   8.588    855.2    815  2335
+ 128  12.358   1196.5   1159  2639     128  10.357   1440.4   1431  2383
+ 256  13.173   2284.4   2207  4159     256  10.843   2792.7   2703  4799
+ 384  13.141   3458.3   3199  6303     384  10.169   4486.8   4223  9855
+```
+
+Little 비 14점 전부 0.95~0.99. 부하 생성기는 어디서도 상한이 아니다.
+
+### ① 8월 4일부터 열려 있던 칸 — `pipe=128 의 혼합`
+
+**`10.357 M`.** 계약을 통과하고 여유 **+3.6%** 다.
+
+`§4` 가 "256 -> 128 이면 지연 -48%, 처리량 -4.3%, 계약 통과" 라고 적었는데
+근거가 GET-only 뿐이었다. 이제 두 워크로드 다 있다:
+
+```text
+             처리량      지연       128 계약 여유
+GET       -6.19%     -47.6%        +23.6%
+MIX       -4.48%     -48.4%         +3.6%
+```
+
+**권고는 성립한다.** 다만 **혼합 여유가 3.6% 다** — 계측 비용 4.2% 와 재현
+오차 1.4% 를 합친 것보다 작다. `§4` 에 이 수치를 그대로 달아야 한다:
+"GET 은 23.6% 여유, 혼합은 3.6% 여유. 혼합은 계측을 끄고 재야 안전 마진이
+생긴다"(PROF off 면 +4.2% 라 여유가 7.8% 로 는다).
+
+내가 C1-64 에서 "혼합 곡선이 GET 보다 가파르다" 며 우려한 것이 맞았고,
+**그 우려가 128 에서는 해소된다** — 다만 아슬아슬하다.
+
+### ② 두 곡선의 정점이 다르다
+
+```text
+GET   256 13.173 -> 384 13.141    -0.24%   거의 평평
+MIX   256 10.843 -> 384 10.169    -6.22%   확실히 꺾인다
+```
+
+**혼합이 384 에서 훨씬 크게 무너진다.** GET 은 384 에서 사실상 평평한데
+혼합은 6.2% 잃는다. 깊이를 더 주면 SET 경로가 먼저 망가진다는 뜻이고,
+이건 `post` 가 SET 에서 232 배라던 분해와 방향이 같다.
+
+### ③ 무릎 위치도 워크로드마다 다르다
+```text
+GET   64 -> 128  +22.5%      128 -> 256  +6.6%
+MIX   64 -> 128  +20.6%      128 -> 256  +4.7%
+```
+둘 다 128 이 마지막 큰 계단이지만 **혼합은 256 에서 얻는 것이 4.7% 뿐**이라
+128 이 더 자연스러운 운영점이다.
+
+### 내가 확언하지 않는 것
+전부 클라이언트 측이다. `srv/que/pre/post` 와 `span` 분해는 당신 창이다.
+**같은 14 창을 당신이 잡았으니 겹쳐 읽으면 분해 트리가 pipeline 축 전체로
+채워진다** — `§5-④` 가 요구한 것이 이것이다.
+
+NEXT: ariel (BD2 창 대조 / 블록 6)

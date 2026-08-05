@@ -37,7 +37,9 @@ v3 는 계약을 **span v2 정의**로 달성했다. 정의를 v3 로 넓히자(
 정의의 앵커는 **두 버전에서 같은 코드 지점**이다: 진입(`storage_get_item()`
 첫 줄), post(`ibv_post_send` 직전), 복호 완료. **버전이 바꾸는 것은 앵커
 사이를 채우는 단계다.** 한 그림에 밀어 넣으면 v3 의 대기가 v4 에도 있는
-것처럼 읽히므로 따로 그린다.
+것처럼 읽히므로 따로 그린다. **span v2 는 v3 시대의 계약**이므로 v3 그림에만
+그린다 — v4 에서도 성분(`v2` 열)으로 집계되지만 v4 정의 그림에 필요한 것은
+span v3 뿐이다.
 
 ```text
 v3 — io_queue 배칭                              (EXP-0 실측)
@@ -54,11 +56,11 @@ v3 — io_queue 배칭                              (EXP-0 실측)
 v4 — 인라인 post + reap (§3-1)                  (최종 게이트 실측)
  ① read · 파싱 · 해시
  ② storage_get_item() 진입          ◀ span v3 시작
- ③ 체인 축적 (≤ chain=8 건)         ─ admit ~4 µs
- ④ 그 자리에서 ibv_post_send        ◀ span v2 시작
- ⑤ RDMA 왕복                        ┐ v2 17~18 µs
- ⑥ reap 틱(8 post 마다): CQE · 복호 ┘  ▶ 두 span 끝
- ⑦ 같은 틱에서 재개 → 응답              (두 span 밖)
+ ③ 체인 축적 (≤ chain=8 건)            admit ~4 µs
+ ④ 그 자리에서 ibv_post_send
+ ⑤ RDMA 왕복
+ ⑥ reap 틱(8 post 마다): CQE · 복호 ▶ span v3 끝  (21.9~22.3 µs)
+ ⑦ 같은 틱에서 재개 → 응답              (span 밖)
 ```
 
 v3 의 ③④(io_queue 와 pass 대기)는 v4 그림에 **아예 없다** — §3-1 이 그
@@ -83,10 +85,15 @@ v3 — 조건부 재개                                ret 173~2,372 µs
  ⑨ 재개 → STORED                        (두 span 밖)
 
 v4 — 즉시 실현 (§3-2)                           ret 0.10~0.62 µs
- ①~⑥ v3 과 같다 (admit 0.5 / v2 ~8 µs)
+ ① read · 값 수신 · 파싱
+ ② storage_store_item_pac() 진입    ◀ span v3 시작
+ ③ 원격 슬롯 확보 · stub 준비          admit 0.5 µs
+ ④ pac_seal (봉인)
+ ⑤ stub 게시(WFLIGHT) → 그 자리에서 WRITE post
+ ⑥ CQE 관측 → 주차
  ⑦ 같은 호출에서 trylock 프로브 (락-안전 확인, §1-4)
- ⑧ WFLIGHT 해제                     ▶ span v3 끝
- ⑨ 재개 → STORED                        (두 span 밖)
+ ⑧ WFLIGHT 해제                     ▶ span v3 끝  (9.11 µs)
+ ⑨ 재개 → STORED                        (span 밖)
 ```
 
 v3 의 ⑦ 은 **대기 단계**였고(방출구가 조건문에 막혀 pass 를 넘긴다),

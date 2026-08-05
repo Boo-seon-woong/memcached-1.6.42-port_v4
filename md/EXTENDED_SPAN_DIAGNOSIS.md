@@ -14,67 +14,70 @@
 말로 설명하면 안 보인다. **요청이 거치는 단계를 전부 늘어놓고 그 위에 구간을
 그으면** 차이가 그림으로 드러난다.
 
-### 1-1. GET
+### 1-1. GET — 같은 앵커, 두 개의 워크플로
+
+정의의 앵커(진입·post·복호)는 **두 버전에서 같은 코드 지점**이다. 버전이
+바꾸는 것은 앵커 사이를 채우는 단계다 — 한 그림에 밀어 넣으면 v3 의 대기가
+v4 에도 있는 것처럼 읽히므로 따로 그린다. **span v2 는 v3 시대의 계약**이라
+v3 그림에만 그린다.
 
 ```text
- ①  소켓 read()  — 바이트 도착
- ②  명령 파싱
- ③  해시 조회 → ITEM_HDR 발견 (값은 없고 "어디 있는지" 만)
-                                                          ┌──────────┐
- ④  storage_get_item() 진입          storage.c:470        │          │
- ⑤  평문 버퍼 확보 (read_it)                              │          │
- ⑥  io_pending 확보, obj_io 구성                          │  admit   │
- ⑦  연결 suspend                                          │          │
- ⑧  io_queue 삽입                    storage.c:569        │          │  span
- ⑨  ─── 제출 대기 ───  pass 끝 또는 커넥션 20 개          │          │   v3
- ⑩  워커 window · bounce slot 확보                        │          │
-                                                 ┌────────┴──────────┤
- ⑪  ibv_post_send (RDMA READ)        extstore.c:855       │  span    │
- ⑫  ─── RDMA 왕복 ───  원격 메모리                        │   v2     │
- ⑬  CQE 관측 (drain)                                      │          │
- ⑭  AES-GCM 복호                                          │          │
-                                                 └────────┴──────────┘
- ⑮  g_ret_head 주차                  storage.c:474
- ⑯  ─── 재개 대기 ───
- ⑰  storage_flush_returns → 연결 재개
- ⑱  응답 조립 → sendmsg
+v3 — io_queue 배칭                              (EXP-0 실측)
+ ① read · 파싱 · 해시
+ ② storage_get_item() 진입          ◀ span v3 시작
+ ③ io_queue 삽입                    ┐
+ ④ ── pass 끝까지 대기 ──           │ admit 217~285 µs
+ ⑤ 일괄 submit → window·slot 확보   ┘
+ ⑥ ibv_post_send                    ◀ span v2 시작
+ ⑦ RDMA 왕복                        ┐ v2 25~27 µs
+ ⑧ pass 끝 drain: CQE 관측 · 복호   ┘  ▶ 두 span 모두 여기서 끝
+ ⑨ 재개 → 응답                          (두 span 밖)
+
+v4 — 인라인 post + reap (§4-1)                  (최종 게이트 실측)
+ ① read · 파싱 · 해시
+ ② storage_get_item() 진입          ◀ span v3 시작
+ ③ 체인 축적 (≤ chain=8 건)            admit ~4 µs
+ ④ 그 자리에서 ibv_post_send
+ ⑤ RDMA 왕복
+ ⑥ reap 틱(8 post 마다): CQE · 복호 ▶ span v3 끝  (21.9~22.3 µs)
+ ⑦ 같은 틱에서 재개 → 응답              (span 밖)
 ```
+
+v3 의 ③④(io_queue 와 pass 대기)는 v4 그림에 **아예 없다** — §4-1 이 그
+단계를 제거한 것이지, 같은 단계가 짧아진 것이 아니다.
+
+### 1-2. SET — 제출 쪽은 동일, 완료 쪽이 다르다
+
+앵커: 진입·seal·CQE 관측·`ITEM_WFLIGHT` 해제. 제출 경로(①~⑥)는 두 버전이
+같고(pac), **⑦ 하나가 다르다.**
 
 ```text
-span v2  =  ⑪ ~ ⑭        span v3  =  ④ ~ ⑭        차이 = ④~⑪  (admit)
+v3 — 조건부 재개                                ret 173~2,372 µs
+ ① read · 값 수신 · 파싱
+ ② storage_store_item_pac() 진입    ◀ span v3 시작
+ ③ 원격 슬롯 확보 · stub 준비       ─ admit 0.5 µs
+ ④ pac_seal (봉인)                  ◀ span v2 시작
+ ⑤ stub 게시(WFLIGHT) → 그 자리에서 WRITE post
+ ⑥ CQE 관측 → 주차                  ▶ span v2 끝  (v2 8~15 µs)
+ ⑦ ── if(out) 이 참인 pass 가 올 때까지 ──      ← §2-3 의 결함
+ ⑧ WFLIGHT 해제                     ▶ span v3 끝
+ ⑨ 재개 → STORED                        (두 span 밖)
+
+v4 — 즉시 실현 (§4-2)                           ret 0.10~0.62 µs
+ ① read · 값 수신 · 파싱
+ ② storage_store_item_pac() 진입    ◀ span v3 시작
+ ③ 원격 슬롯 확보 · stub 준비          admit 0.5 µs
+ ④ pac_seal (봉인)
+ ⑤ stub 게시(WFLIGHT) → 그 자리에서 WRITE post
+ ⑥ CQE 관측 → 주차
+ ⑦ 같은 호출에서 trylock 프로브 (락-안전 확인)
+ ⑧ WFLIGHT 해제                     ▶ span v3 끝  (9.11 µs)
+ ⑨ 재개 → STORED                        (span 밖)
 ```
 
-### 1-2. SET
-
-```text
- ①  소켓 read() + 값 수신
- ②  명령 파싱
-                                                          ┌──────────┐
- ③  storage_store_item_pac() 진입    storage.c:904        │          │
- ④  hdr stub 할당                    :907                 │          │
- ⑤  loc 미보유 표시 (memset)         :912                 │  admit   │
- ⑥  **원격 슬롯 확보**               :915                 │          │
- ⑦  io_pending 확보, obj_io 구성     :920                 │          │
- ⑧  평문 원본 refcount               :946                 │          │  span
-                                                 ┌────────┴──────────┤   v3
- ⑨  pac_seal — AES-GCM 봉인          :951                 │  span    │
- ⑩  스텁 게시 (ITEM_WFLIGHT 설정)    :965                 │   v2     │
- ⑪  g_setq 삽입 → 제출               :978                 │          │
- ⑫  ibv_post_send (RDMA WRITE)                            │          │
- ⑬  ─── RDMA 왕복 ───                                     │          │
- ⑭  WRITE CQE 관측                                        │          │
-                                                 └────────┤   ret    │
- ⑮  ─── 락-안전 지점 대기 ───                             │          │
- ⑯  storage_set_return_cb → item_trylock  :871            │          │
- ⑰  **ITEM_WFLIGHT 해제**            :876                 │          │
-                                                          └──────────┘
- ⑱  STORED 조립 → sendmsg
-```
-
-```text
-span v2  =  ⑨ ~ ⑭        span v3  =  ③ ~ ⑰
-차이 = ③~⑨ (admit, 앞)  +  ⑭~⑰ (ret, 뒤)
-```
+v3 의 ⑦ 은 **대기 단계**였고(방출구가 조건문에 막혀 pass 를 넘긴다),
+v4 의 ⑦ 은 **프로브**다(같은 호출 안, 사실상 즉시). 같은 자리에 있지만
+같은 것이 아니다.
 
 ### 1-3. 그림에서 바로 읽히는 것 셋
 
@@ -83,11 +86,11 @@ span v2  =  ⑨ ~ ⑭        span v3  =  ③ ~ ⑰
 `WFLIGHT 해제` 로 밀렸다. **그래서 같은 재측정에서 SET 이 훨씬 크게 튀었다** —
 새로 들어온 구간이 하나가 아니라 둘이다.
 
-**② v2 가 재던 것은 "장치가 일한 시간" 이다.** GET ⑪~⑭, SET ⑨~⑭ — 전부
-post 이후다. **줄 서서 기다린 시간(⑨ 제출 대기)과 답을 돌려주기까지의
-시간(SET ⑮ 재개 대기)이 통째로 밖에 있었다.**
+**② v2 가 재던 것은 "장치가 일한 시간" 이다.** GET post→복호, SET
+seal→CQE — 전부 장치 활동이다. **줄 서서 기다린 시간(제출 대기)과 답을
+돌려주기까지의 시간(SET 의 해제 대기)이 통째로 밖에 있었다.**
 
-**③ 두 정의 다 ⑮~⑱ 을 안 잰다.** 완료를 주차하고, 재개를 기다리고, 응답을
+**③ 두 정의 다 재개 → 송신을 안 잰다.** 완료를 주차하고, 재개를 기다리고, 응답을
 조립해 내보내는 구간은 **v3 로 넓혀도 여전히 밖**이다. 2026-08-04 에 이 구간을
 따로 재기 시작했고(`post`), 운영점에서 **span v3 의 16 배**였다 —
 [`LATENCY_BREAKDOWN.md`](LATENCY_BREAKDOWN.md).
@@ -109,8 +112,8 @@ v2 로 계약(`< 30 µs`)은 통과했다 — **GET 7.8 µs, SET 7.8 µs.**
 그런데 같은 시각 memtier 가 보고한 SET 지연이 **7.45 ms** 였다. 서버는
 7.8 µs 라고 답하는데 클라이언트는 그 **955 배**를 기다리고 있었다.
 
-위 그림이 그 모순을 설명한다. **v2 는 ⑨~⑭ 만 보고 있었고, 클라이언트는
-①~⑱ 을 기다린다.** 전송은 실제로 7.8 µs 로 빨랐다. 느린 것은 그 앞뒤였다.
+위 그림이 그 모순을 설명한다. **v2 는 post→복호만 보고 있었고,
+클라이언트는 소켓 read 부터 송신까지 전부를 기다린다.** 전송은 실제로 7.8 µs 로 빨랐다. 느린 것은 그 앞뒤였다.
 
 **2026-08-01 에 정의를 v3 로 넓혔다.** 서버는 하나도 안 고쳤는데 계약이
 8~79 배로 깨졌다 — 원래 있던 대기가 계측 안으로 들어왔을 뿐이다.
@@ -296,8 +299,8 @@ if (!settings.ext_submit_inline)
 >
 > 고친 방식은 **그 조건이 놓인 경로를 안 쓰는 것**이다. 큐에 안 넣으니
 > "큐를 언제 비울까" 를 정하던 20 조건도, pass 끝 제출도 경로에서 사라진다.
-> §1-1 의 그림으로 치면 **⑧(io_queue 삽입)과 ⑨(제출 대기)가 통째로 빠지고
-> ⑦ 에서 ⑩ 으로 직행**한다.
+> §1-1 v3 그림의 ③④(io_queue 삽입, pass 대기)가
+> v4 그림에서 통째로 사라진다.
 
 큐를 없애면 **배칭 이득도 같이 사라진다.** 그래서 "그럼 어디서 모을 것인가"
 를 새 노브 둘로 다시 만들었다 — 기본값은 각각 1(= 모으지 않음)이고 측정으로

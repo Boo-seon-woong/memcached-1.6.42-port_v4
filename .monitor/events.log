@@ -366,3 +366,23 @@ b33e3fd Merge branch 'main' of https://github.com/Boo-seon-woong/memcached-1.6.4
 f9e63aa Merge branch 'main' of https://github.com/Boo-seon-woong/memcached-1.6.42-port_v4
 a437264 [ariel] Pin down the span definition: fix the version the server reports, and state it once
 
+2026-08-05 05:58:44 UTC
+6cc5579 md remodified
+
+2026-08-05 06:01:18 UTC
+13ce157 [genie] 6cc5579 committed build artifacts and .monitor state -- add .gitignore, do NOT use git rm --cached (that broke ariel's watcher in v3)
+
+2026-08-05 06:11:01 UTC
+6b1cf94 Merge branch 'main' of https://github.com/Boo-seon-woong/memcached-1.6.42-port_v4
+7a1dc89 [ariel] osdi-0804: add exp4, the batching axis
+
+2026-08-05 06:12:33 UTC
+35bb3cf [genie] exp4: client avg reconstructs from throughput within 3%, so the 10 configs need re-running for p99/breakdown only; item 3 is an identity, not a prediction
+
+2026-08-05 06:19:12 UTC
+77c86bb Merge branch 'main' of https://github.com/Boo-seon-woong/memcached-1.6.42-port_v4
+143d354 [ariel] ret is a probe, not a deferral -- fix the prose that said otherwise
+
+2026-08-05 07:10:19 UTC
+e30d08c [genie] KTC report contains its own validation of the L=N/X reconstruction (7.21 vs 7.45 ms); v3->v4 client-side improvement is statable: +11.0% throughput, -8.8% latency
+

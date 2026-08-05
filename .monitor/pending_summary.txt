@@ -1,2 +1,1 @@
-f9e63aa Merge branch 'main' of https://github.com/Boo-seon-woong/memcached-1.6.42-port_v4
-a437264 [ariel] Pin down the span definition: fix the version the server reports, and state it once
+e30d08c [genie] KTC report contains its own validation of the L=N/X reconstruction (7.21 vs 7.45 ms); v3->v4 client-side improvement is statable: +11.0% throughput, -8.8% latency

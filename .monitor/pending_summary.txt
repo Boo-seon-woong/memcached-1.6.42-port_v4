@@ -1,3 +1,2 @@
-e3b9b44 Merge branch 'main' of https://github.com/Boo-seon-woong/memcached-1.6.42_port_v2
-057b5af [ariel] record worker-count re-sweep after IO-thread removal (mcT=12 remains optimal)
-ad47c98 [genie] P3a load side confirmed: 48-core box, IPoIB 200G up, ready for stock-first calibration
+f9e63aa Merge branch 'main' of https://github.com/Boo-seon-woong/memcached-1.6.42-port_v4
+a437264 [ariel] Pin down the span definition: fix the version the server reports, and state it once

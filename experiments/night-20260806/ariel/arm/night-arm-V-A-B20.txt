@@ -1,1 +1,0 @@
-/tmp/night-run-frozen.sh: line 29: tools/night-arm.sh: No such file or directory

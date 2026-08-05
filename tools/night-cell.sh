@@ -39,7 +39,10 @@ wait_genie() {
 case ${1:?usage} in
   post)
     msg=${2:?msgfile}; shift 2
-    MATCH=${MATCH:-${1:-}}      # 첫 라벨을 기본 매치 문자열로 쓴다
+    # 첫 라벨에서 접미사(-b, -c 같은 내 편의 표기)를 떼고 매치한다. genie 는
+    # 셀 이름(BD2-GET-P1 …)으로 보고하지 라벨 그대로 쓰지 않는다 — 그대로
+    # 매치했다가 블록 5 가 70 분 대기 후 타임아웃했고 (c) 축을 통째로 잃었다.
+    MATCH=${MATCH:-$(printf '%s' "${1:-}" | sed 's/-[bc]$//')}
     mkdir -p "$(dirname "$MAN")"
     for label in "$@"; do printf '%s\t%s\n' "$label" "$(date -u +%s)" >> "$MAN"; done
     cat "$msg" >> conversation.md

@@ -37,17 +37,23 @@ y         클라이언트 지연 avg (ms, 로그)
 > A 패널에는 **각주가 필수**다: 이 워크로드는 메모리 배치와 `item_lock` 경합이
 > 겹쳐 있다(`stock-colocated/RESULTS.md §3-③`). 원격화 대가만 읽으면 안 된다.
 
-## F1b — exp1: 메모리 노드 CPU = 0
+## F1b — exp1: 메모리 노드 CPU ≈ 0  ✔ 그렸다
 
 ```text
-막대 2 개   genie CPU (user+sys jiffies, 부하 전후 차분)
-계열        PT-C-P256 / PT-A-P256
-비교 대상   같은 창의 guest busyCPU (30 코어 중)
+막대 3 개 (로그 축 — 선형이면 첫 막대가 안 보인다)
+  genie_memd        0.00006 코어   66.6 h 동안 15.3 s, prefill 포함, op 당 0.40 ns
+  genie 박스 전체    27.9 코어      memtier 부하 생성기 (48 코어의 58.2%)
+  guest memcached   29.9 코어      port 서버 (30 코어의 99.7%)
+출처  genie 채널 2026-08-06 (`/proc/$(pgrep genie_memd)/stat` utime+stime 누적)
 ```
 
-**주장**: one-sided READ 라 메모리 노드가 CPU 를 쓰지 않는다. XSTORE 가
-"DrTM-Tree 는 24 코어를 다 쓰는데 XSTORE 는 절반 이하" 를 주장한 자리에
-**0** 을 놓는다. 비용이 거의 0 인 그림이므로 반드시 넣는다.
+**주장**: one-sided READ 라 메모리 노드가 CPU 를 쓰지 않는다 — 서버보다
+**50 만 배 적다.** XSTORE 가 "DrTM-Tree 는 24 코어를 다 쓰는데 XSTORE 는
+절반 이하" 를 주장한 자리에 사실상 **0** 을 놓는다.
+
+> 처음에 받은 "genie CPU 58.2%" 는 **박스 전체**라 memtier 가 대부분이었다.
+> 두 수치는 다른 주장을 하므로 한 막대로 합치지 말 것 — 가운데 막대는
+> "부하를 만드는 비용", 첫 막대가 "메모리 노드 비용" 이다.
 
 ## F2a — exp2: pipeline 곡선 (throughput–latency)
 

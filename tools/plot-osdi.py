@@ -370,6 +370,39 @@ def f1(rows, out):
         s2.save(f"{out}/f1-{wl}.svg")
 
 
+# ── F1b: 메모리 노드 CPU = 0 ─────────────────────────────────────────────
+def f1b(rows, out):
+    """세 막대를 로그 축에 세운다. 0.00006 과 29.9 를 한 그림에 놓는 것이
+    이 그림의 전부다 — 선형 축이면 왼쪽 막대가 보이지 않는다."""
+    bars = [("genie_memd\n(메모리 노드)", 0.00006, C["set"],
+             "66.6 h 동안 CPU 15.3 s · op 당 0.40 ns · prefill 포함"),
+            ("genie 박스 전체\n(memtier 부하 생성기)", 27.9, C["mute"],
+             "48 코어 중 58.2% — 부하를 만드는 비용"),
+            ("guest memcached\n(port 서버)", 29.9, C["v4"],
+             "30 코어 중 99.7% — 일을 하는 쪽")]
+    s = Svg(h=400, title="F1b — one-sided READ: 메모리 노드는 CPU 를 쓰지 않는다")
+    l, r, t, b = axes(s, "", "CPU (코어, 로그)")
+    lo, hi = 1e-5, 60
+    for gv in (1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1, 10):
+        y = logmap(gv, lo, hi, b, t)
+        s.line(l, y, r, y, C["grid"])
+        lab = f"{gv:g}" if gv >= 0.01 else f"{gv:.0e}"
+        s.txt(l - 8, y + 4, lab, 10, C["mute"], "end")
+    bw = (r - l) / len(bars) * 0.42
+    for i, (nm, v, col, note) in enumerate(bars):
+        x = l + (r - l) * (i + 0.5) / len(bars) - bw / 2
+        y = logmap(v, lo, hi, b, t)
+        s.rect(x, y, bw, b - y, col)
+        s.txt(x + bw / 2, y - 8, (f"{v:g}" if v >= 1 else f"{v:.5f}") + " 코어",
+              11, C["ink"], "middle", 600)
+        for j, ln in enumerate(nm.split("\n")):
+            s.txt(x + bw / 2, b + 18 + j * 13, ln, 10, C["ink"], "middle")
+        s.txt(x + bw / 2, b + 46, note, 8.5, C["mute"], "middle")
+    s.txt(l + 10, t - 12, "메모리 노드가 서버보다 50 만 배 적게 쓴다 — 이것이 disaggregation 주장의 직접 증거다",
+          10, C["mute"])
+    s.save(f"{out}/f1b-memory-node-cpu.svg")
+
+
 # ── F2a: pipeline 곡선, 클라이언트 지연 vs span 이중축 ────────────────────
 def f2a(rows, out):
     cl = load_client()
@@ -421,7 +454,7 @@ def main():
     Path(a.out).mkdir(parents=True, exist_ok=True)
     rows = load(a.rows)
     print(f"rows={len(rows)} → {a.out}")
-    f1(rows, a.out); f2a(rows, a.out); f2b(rows, a.out); f2c(rows, a.out); f3(rows, a.out); f4(rows, a.out)
+    f1(rows, a.out); f1b(rows, a.out); f2a(rows, a.out); f2b(rows, a.out); f2c(rows, a.out); f3(rows, a.out); f4(rows, a.out)
 
 
 main()

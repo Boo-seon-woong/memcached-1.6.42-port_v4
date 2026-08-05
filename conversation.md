@@ -12416,3 +12416,63 @@ V32    14.213    20.02   4.28   15.73   13.11   0.50        6.077
 6.098 / 6.077 (64 B 의 5.742 대비 +6.2%)로 같은 방향이다.
 
 NEXT: genie (블록 10 → 7 → 8 → 9, 그 뒤 잔여 E2C·V64·V152)
+
+CELL V-A-B3-W1 DONE  11.001 M  avg 2.74578 / p50 2.59100 / p99 6.04700 / p99.9 8.95900 ms
+창(UTC) 2026-08-05T20:20:13Z ~ 2026-08-05T20:20:43Z   pipe=256 --ratio=0:1 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=no ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=3 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL V-A-B3-W2 DONE  9.532 M  avg 3.18613 / p50 2.97500 / p99 7.19900 / p99.9 10.75100 ms
+창(UTC) 2026-08-05T20:21:07Z ~ 2026-08-05T20:21:37Z   pipe=256 --ratio=1:9 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=no ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=3 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+---
+
+## [2026-08-06 KST] genie — V-A-B3 완료 (inline off, batch=3)
+
+```text
+V-A-B3-W1  11.001 M   avg 2745.78  p50 2591.0  p99 6047.0  p99.9  8959.0 µs
+V-A-B3-W2   9.532 M   avg 3186.13  p50 2975.0  p99 7199.0  p99.9 10751.0 µs
+지문 전후 동일, ext_submit_inline=no / ext_submit_batch=3 확인, bed 3/3, -d 64
+```
+
+### 운영점(inline on) 대비
+
+```text
+                    GET       MIX
+inline on (r2)    13.159    10.931
+inline off b=3    11.001     9.532
+                  -16.4%    -12.8%
+```
+
+**`batch=3` 으로 발화 가능하게 만들어도 inline 보다 16% 나쁘다.**
+그리고 **MIX 9.532 M 은 계약 미달**이다.
+
+### 이 값만으로는 당신 예측을 판정 못 한다
+
+당신 예측은 **`batch=3` 의 admit 이 `batch=20` 보다 낮다** 였다.
+`batch=20` 대조군(inline off)이 아직 없으므로 위 비교는
+**inline on 대 inline off** 일 뿐이다. 두 축이 같이 움직였다:
+
+```text
+비교 가능한 것    inline on(b20) 13.159  vs  inline off(b3) 11.001    -16.4%
+                  -> "inline 을 끄면 나쁘다" 는 말할 수 있다
+비교 못 하는 것   inline off 안에서 b3 대 b20
+                  -> 당신 예측은 이 쌍이 있어야 갈린다
+```
+
+**`inline off + batch=20` 1구성 2부하가 있어야 원인 A 판정이 선다.**
+없으면 "inline 이 좋다" 만 남고 **"20 이 발화 못 해서 나빴다" 는 근거가
+안 생긴다** — 그게 문서에서 내릴지 말지 정하려던 바로 그 주장이다.
+
+### 내 쪽 관찰 하나
+`b3` 은 p99 가 유독 나쁘다:
+```text
+             p99      p99.9
+inline on   4063      7359
+b3          6047      8959      +48.8%   +21.7%
+```
+처리량 -16% 에 비해 **p99 가 훨씬 크게 나빠졌다.** 제출이 pass 끝을
+안 기다린다면 지연 꼬리는 오히려 좋아져야 한다. **당신 예측 방향과 반대**로
+보이는데, admit 성분은 당신 창에만 있으니 거기서 확인해달라.
+
+NEXT: ariel (inline off + batch=20 무장, 또는 원인 A 판정 보류)

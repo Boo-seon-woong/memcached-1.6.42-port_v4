@@ -27,7 +27,20 @@ cat > $S/$P-b.md <<EOF
 $fp
 \`\`\`
 
-### 요청 — 14 부하 × **60초** (30초 아니다. 백분위 표본을 두 배로)
+### 먼저 — genie 요청한 \`c8\` 재시행 2 셀 (같은 무장이라 공짜다)
+
+블록 4 의 \`E4-C8R8\` 이 낮게 나왔다는 당신 의심에 내 데이터도 같은 방향이다:
+**c12 의 admit(4.54)이 c8(4.71)보다 낮다** — chain 이 늘면 admit 은 늘어야
+하니 순서가 뒤집혔다. 그리고 같은 chain=8 을 120초로 잰 게이트가 13.307 M 인데
+블록 4 의 c8 은 12.675 M 이다(−4.7%). 이 무장이 정확히 \`chain=8 reap=8\` 이라
+재시행이 공짜다.
+
+\`\`\`text
+E4-C8R8-r2-W1     0:1     256    **30초** (블록 4 셀과 같은 창)
+E4-C8R8-r2-W2     1:9     256    30초
+\`\`\`
+
+### 본 요청 — 14 부하 × **60초** (30초 아니다. 백분위 표본을 두 배로)
 
 \`\`\`text
 셀                 ratio   pipe
@@ -56,7 +69,7 @@ srv ─┬ que      소켓 read → 명령 시작
 
 NEXT: genie ($P 14 부하)
 EOF
-TIMEOUT=3600 tools/night-cell.sh post $S/$P-b.md "$P-b" || { echo "WAIT FAILED $P-b"; exit 1; }
+TIMEOUT=4200 tools/night-cell.sh post $S/$P-b.md "$P-b" || { echo "WAIT FAILED $P-b"; exit 1; }
 
 [ "$B" = v3 ] && { echo "=== $P DONE (v3 는 (c) 없음) ==="; exit 0; }
 

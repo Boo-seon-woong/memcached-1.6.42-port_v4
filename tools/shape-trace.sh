@@ -52,5 +52,22 @@ while true; do
         v["extstore_prof_write_xfer_avg_ns"], v["extstore_prof_write_crypto_avg_ns"], v["extstore_prof_write_sync_avg_ns"],
         v["extstore_prof_read_p50_ns"], v["extstore_prof_write_p50_ns"] }' >> "$OUT"
   fi
+  # 부하 시작마다 stats reset 을 한 번 낸다. p50/p99 는 히스토그램이라 차분이
+  # 안 되고 "리셋 이후 누적"이라, 리셋이 없으면 둘째 셀부터 앞 셀이 섞인다.
+  # 켤 때만 낸다(RESET_ON_LOAD=1). 리셋 지점은 카운터가 되돌아가므로
+  # 슬라이서의 평탄부가 그 자리에서 끊기고 바로 다음 표본부터 새로 시작한다.
+  if [ "${RESET_ON_LOAD:-0}" = 1 ]; then
+    C=$(echo "$S" | awk '$1=="STAT" && ($2=="cmd_get"||$2=="cmd_set"){t+=$3} END{print t+0}')
+    if [ -n "${PC:-}" ]; then
+      D=$((C - PC))
+      if [ "$D" -ge 50000 ] && [ "${ARMED:-0}" = 0 ]; then
+        printf 'stats reset\r\nquit\r\n' | timeout 3 nc "$HOST" "$PORT" >/dev/null 2>&1
+        ARMED=1; C=0
+      elif [ "$D" -lt 50000 ]; then
+        ARMED=0
+      fi
+    fi
+    PC=$C
+  fi
   sleep 1
 done

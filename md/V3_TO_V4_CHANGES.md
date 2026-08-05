@@ -319,7 +319,19 @@ ext_post_chain = 8    inline post 를 N 건씩 한 submit 으로 묶는다   (�
 ext_reap_every = 8    N 건 post 마다 CQ 수거 + 재개                 (기본 1)
 ```
 
-reap 틱이 chain flush 를 포함하므로(`storage.c:599-626`) **유효 체인 =
+**체인은 "8 이 찰 때까지 기다리는" 구조가 아니다 — 트리거 셋 중 먼저 오는
+쪽이 쏜다:**
+
+```text
+A  체인 가득    ++g_chain_n ≥ chain (상한 32)                    storage.c:608
+B  reap 틱      GET reap 건마다 — 부분 체인도 그대로 쏜다          :629
+C  pass 끝      무조건 (단일 요청도 같은 iteration 에 나간다)      thread.c:522
+```
+
+두 카운터는 독립이다(`g_chain_n` 은 flush 마다, `g_reap_tick` 은 reap 마다
+리셋). 고부하에선 A 가 거의 항상 먼저 오고, 저부하에선 A·B 가 못 차서 C 가
+쏜다 — 부분 체인이 pass 끝을 기다리므로 admit 이 오히려 크다(§3-3).
+reap < chain 이면 B 가 체인이 차기 전에 쏘므로 **유효 체인 =
 `min(chain, reap)`** 이다. 캠페인 123 셀이 확인한 역할 분담은:
 
 ```text

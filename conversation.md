@@ -10588,3 +10588,63 @@ W3(SET-only) 생략 금지. 셀마다 avg/p50/p99/p99.9.
 raw `experiments/night-20260806/genie/<cell>.txt`.
 
 NEXT: genie (E4-C4R8)
+
+CELL E4-C4R8-GET DONE  12.717 M  avg 2.36882 / p50 2.28700 / p99 4.25500 / p99.9 7.61500 ms
+창(UTC) 2026-08-05T18:09:55Z ~ 2026-08-05T18:10:25Z   pipe=256 --ratio=0:1 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=4 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL E4-C4R8-MIX DONE  10.591 M  avg 2.86044 / p50 2.78300 / p99 5.11900 / p99.9 8.63900 ms
+창(UTC) 2026-08-05T18:10:49Z ~ 2026-08-05T18:11:19Z   pipe=256 --ratio=1:9 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=4 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL E4-C4R8-SET DONE  5.708 M  avg 5.32235 / p50 4.31900 / p99 9.27900 / p99.9 14.27100 ms
+창(UTC) 2026-08-05T18:11:43Z ~ 2026-08-05T18:12:13Z   pipe=256 --ratio=1:0 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=4 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+---
+
+## [2026-08-06 KST] genie — E4-C4R8 완료. chain 스윕 3/6. **이득이 배가당 거의 일정하다**
+
+```text
+E4-C4R8-GET  12.717 M   avg 2368.82  p50 2287.0  p99 4255.0  p99.9  7615.0 µs
+E4-C4R8-MIX  10.591 M   avg 2860.44  p50 2783.0  p99 5119.0  p99.9  8639.0 µs
+E4-C4R8-SET   5.708 M   avg 5322.35  p50 4319.0  p99 9279.0  p99.9 14271.0 µs
+지문 전후 동일, chain=4 reap=8 확인, bed 3/3
+```
+
+```text
+c=1   GET 11.343 (-14.8%)   MIX  9.688 (-10.9%)   SET 5.734 (-0.3%)
+c=2   GET 12.113 ( -9.0%)   MIX 10.173 ( -6.5%)   SET 5.675 (-1.3%)
+c=4   GET 12.717 ( -4.4%)   MIX 10.591 ( -2.6%)   SET 5.708 (-0.7%)
+c=8   GET 13.309   기준      MIX 10.877   기준      SET 5.751   기준
+```
+
+### 내 직전 예상을 정정한다 — 포화가 아니라 로그 선형이다
+
+C2 보고에서 "초반 기울기가 급하고 곧 완만해진다" 고 적었는데, 세 점이 되니
+다른 그림이다:
+
+```text
+배가 한 칸당 GET 이득
+  1 -> 2   +6.79%
+  2 -> 4   +4.99%
+  4 -> 8   +4.66%
+```
+
+**배가당 약 +5% 로 거의 일정하다.** 1→2 만 조금 크고 그 뒤는 평평하다.
+즉 chain 은 이 구간에서 **포화하지 않고 log2(chain) 에 선형**이다.
+
+**그러면 c12·c16 예측이 갈린다:**
+
+```text
+로그 선형이 계속되면   c16 = c8 x 1.047 = 13.9 M   (한 칸 더)
+min(chain,reap) 모형   c16@r8 = c8@r8 = 13.3 M     (reap=8 이 묶는다)
+```
+
+**두 모형이 4.7% 벌어진다.** c16 한 셀이 이걸 가른다 — 설계가 사전 등록한
+`c16@r8 ≈ c8@r8 (2% 안)` 예측의 검정력이 생각보다 좋다. c12 는 그 중간이라
+`min` 모형이면 c8 과 같아야 하고, 로그 선형이면 +2.8% 다.
+
+**SET 은 세 점 전부 -1.3~-0.3% 로 평평하다.** 네 번째 축에서도 안 움직인다.
+
+NEXT: ariel (E4-C8R8 = 운영점 재확인 또는 E4-C12R8 무장)

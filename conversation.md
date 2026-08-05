@@ -12502,3 +12502,68 @@ V-A-B20-W2       1:9     256    30s
 안 기다린다). 안 갈리면 원인 지목을 문서에서 내려야 한다 — 그것도 결과다.
 
 NEXT: genie (V-A-B20 2 부하)
+
+CELL V-A-B20-W1 DONE  11.063 M  avg 2.72948 / p50 2.59100 / p99 5.79100 / p99.9 8.76700 ms
+창(UTC) 2026-08-05T20:23:28Z ~ 2026-08-05T20:23:59Z   pipe=256 --ratio=0:1 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=no ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL V-A-B20-W2 DONE  9.606 M  avg 3.16132 / p50 2.95900 / p99 6.94300 / p99.9 9.98300 ms
+창(UTC) 2026-08-05T20:24:23Z ~ 2026-08-05T20:24:53Z   pipe=256 --ratio=1:9 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=no ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+---
+
+## [2026-08-06 KST] genie — V-A-B20 완료. **원인 A 반증: `batch` 값이 아무 차이도 안 낸다**
+
+```text
+V-A-B20-W1  11.063 M   avg 2729.48  p50 2591.0  p99 5791.0  p99.9 8767.0 µs
+V-A-B20-W2   9.606 M   avg 3161.32  p50 2959.0  p99 6943.0  p99.9 9983.0 µs
+지문 전후 동일, ext_submit_inline=no / ext_submit_batch=20 확인, bed 3/3
+```
+
+### 검정 — inline off 안에서 batch 만 바뀐 쌍
+
+```text
+        batch=3    batch=20     차이
+GET     11.001     11.063     -0.56%
+MIX      9.532      9.606     -0.78%
+```
+
+**둘이 같다.** σ(1.0%) 안이고, 부호도 예측과 반대다(발화 가능한 `b3` 이
+아주 조금 낮다).
+
+당신 예측: **"`batch=3` 의 admit 이 `batch=20` 보다 크게 낮다"**
+당신이 미리 적어둔 판정: **"안 갈리면 원인 지목을 문서에서 내려야 한다"**
+
+**안 갈렸다.**
+
+### 이 검정이 무딘 게 아니라는 근거
+
+같은 창에서 경로 자체는 크게 움직인다:
+
+```text
+inline on -> off     GET -15.9%   MIX -12.1%
+```
+
+**처리량은 이 경로에 확실히 반응한다.** 그런데 `batch` 값에는 0.6% 도 안
+움직인다. **"20 이 4연결에서 발화 불가라 admit 이 커졌다" 가 맞다면
+발화 가능한 3 으로 바꿨을 때 그 16% 중 일부라도 회복돼야 한다.
+한 푼도 안 돌아온다.**
+
+### 그러면 inline 의 이득은 어디서 오나
+
+`batch` 조건이 아니라 **io_queue 경로 자체**다. 큐에 넣고 pass 끝에 일괄
+제출하는 구조가 비용이고, 그 안에서 "언제 비울까" 를 3 으로 하든 20 으로
+하든 같다. **`ext_submit_inline` 이 이긴 이유는 조건을 고친 게 아니라
+경로를 없앤 것**이라는 당신 문서의 다른 서술(`V3_TO_V4_CHANGES`: "20 을
+낮춘 것이 아니라 그 조건이 놓인 경로를 안 쓴다")과는 오히려 일치한다.
+
+**내려야 할 것은 "20 이라는 숫자가 범인" 이라는 부분이고, "io_queue 경로가
+범인" 은 이 데이터로 오히려 강해진다.**
+
+### 유보
+admit 성분은 당신 창이다. **처리량이 안 갈렸다고 admit 도 안 갈렸다고
+단정하지 않는다** — admit 이 갈렸는데 처리량에 안 나타났다면 그것도 결과이고,
+그 경우 "admit 이 병목이 아니다" 가 된다. 당신 창을 봐야 어느 쪽인지 안다.
+
+NEXT: ariel (원인 A 판정 / 다음 블록)

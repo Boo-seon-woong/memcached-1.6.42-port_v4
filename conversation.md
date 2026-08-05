@@ -13121,3 +13121,72 @@ NEXT: genie (V64 3 부하)
 > 그래서 구동기를 하나로 줄인 것이 유일한 방어다.
 
 NEXT: genie (PTZ → ST → BD3)
+
+CELL V64-W1 DONE  13.048 M  avg 2.30730 / p50 2.23900 / p99 4.12700 / p99.9 7.26300 ms
+창(UTC) 2026-08-05T21:03:09Z ~ 2026-08-05T21:03:39Z   pipe=256 --ratio=0:1 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL V64-W2 DONE  10.767 M  avg 2.81235 / p50 2.73500 / p99 4.89500 / p99.9 8.31900 ms
+창(UTC) 2026-08-05T21:04:03Z ~ 2026-08-05T21:04:33Z   pipe=256 --ratio=1:9 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL V64-W3 DONE  5.689 M  avg 5.34070 / p50 4.41500 / p99 9.40700 / p99.9 14.33500 ms
+창(UTC) 2026-08-05T21:04:58Z ~ 2026-08-05T21:05:28Z   pipe=256 --ratio=1:0 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+---
+
+## [2026-08-06 KST] genie — V64 완료. **계단이 확정됐고 세 워크로드 전부에 있다**
+
+```text
+V64-W1  13.048 M   avg 2307.30  p50 2239.0  p99 4127.0  p99.9  7263.0 µs
+V64-W2  10.767 M   avg 2812.35  p50 2735.0  p99 4895.0  p99.9  8319.0 µs
+V64-W3   5.689 M   avg 5340.70  p50 4415.0  p99 9407.0  p99.9 14335.0 µs
+지문 전후 동일 + 블록 기준선 일치, bed 3/3
+```
+
+### 재현성 확인 — 같은 조건 기존 셀과 대조
+
+`V64` 는 운영점·`-d 64`·pipe 256·30초라 `E4-C8R8-r2` 와 완전히 같은 구성이다:
+
+```text
+        V64      E4-C8R8-r2    차이
+GET   13.048      13.159      -0.84%
+MIX   10.767      10.931      -1.50%
+SET    5.689       5.714      -0.44%
+```
+**세 워크로드 전부 σ 안이다.** 약 40분 간격·재기동 사이에서 이만큼 맞는다.
+
+### 값 크기 축
+
+```text
+  -d      GET      MIX      SET
+  16   14.503   11.616    6.132
+  32   14.226   11.463    6.104
+  64   13.048   10.767    5.689
+
+16 -> 32   GET -1.91%   MIX -1.32%   SET -0.46%
+32 -> 64   GET -8.28%   MIX -6.07%   SET -6.80%
+```
+
+**계단이 확정됐다.** 같은 2배인데 뒤쪽이 4~15배 비싸고, **세 워크로드 전부**
+같은 자리에서 꺾인다. 워크로드 무관하게 32~64 사이에서 무언가를 넘는다.
+
+당신이 "crypto 가 16->32 에서 평평" 이라고 관찰한 것과 맞물린다 —
+**crypto 가 안 움직이는데 처리량이 8% 빠지면 그 비용은 crypto 밖**이다.
+
+### 계단 위치를 좁히는 값
+`-d 48` 이면 32~48 인지 48~64 인지 갈린다. 슬랩 클래스 가설이면
+`item = 헤더48 + 키9 + 값 + suffix` 라 `d=48` 은 약 105B, `d=64` 는 121B 로
+성장계수 1.25 기준 다른 클래스일 수 있다. **`-d 48` 3부하 2.5분이면 된다.**
+
+### 대기 중
+```text
+블록 5(c)   커넥션↔깊이 6부하   port 무장 상태라 지금 바로 가능
+ST zipf 3셀 / PT zipf 3셀       내 BASE 버그 재실행분
+블록 8      stock 재무장 후 24셀 처음부터 (4셀만 살아 있음)
+```
+**지금 port 가 떠 있으니 블록 5(c) 와 PT zipf 3셀을 이어서 돌 수 있다.**
+지시 주면 바로 잡는다.
+
+NEXT: ariel (순서 지정)

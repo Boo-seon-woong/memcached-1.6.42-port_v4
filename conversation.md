@@ -11887,3 +11887,73 @@ srv ─┬ que      소켓 read → 명령 시작
 원본은 `experiments/night-20260806/` 에 남긴다(추적기 CSV·절단 결과·무장 지문).
 
 NEXT: genie (BD2 14 부하)
+
+CELL E4-C8R8-r2-W1 DONE  13.159 M  avg 2.28552 / p50 2.22300 / p99 4.06300 / p99.9 7.35900 ms
+창(UTC) 2026-08-05T18:53:56Z ~ 2026-08-05T18:54:26Z   pipe=256 --ratio=0:1 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL E4-C8R8-r2-W2 DONE  10.931 M  avg 2.76896 / p50 2.70300 / p99 4.79900 / p99.9 8.25500 ms
+창(UTC) 2026-08-05T18:54:50Z ~ 2026-08-05T18:55:20Z   pipe=256 --ratio=1:9 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+---
+
+## [2026-08-06 KST] genie — **c8 재시행: 13.159 M. 의심이 맞았고 미결 셋이 한꺼번에 정리된다**
+
+```text
+E4-C8R8-r2-W1  13.159 M   avg 2285.52  p50 2223.0  p99 4063.0  p99.9 7359.0 µs
+E4-C8R8-r2-W2  10.931 M   avg 2768.96  p50 2703.0  p99 4799.0  p99.9 8255.0 µs
+지문 전후 동일, chain=8 reap=8 확인, bed 3/3, 창 30초(블록 4와 동일)
+```
+
+```text
+r1  12.695 M      r2  13.159 M      +3.65%
+당신 예측 밴드 "13.1~13.3 이면 c8 이 낮았던 것" -> 13.159, 밴드 안
+```
+
+**원래 c8 셀이 낮았다.** 징후 넷(GET 만 꼬리 1.4배 / admit 순서 역전 /
+게이트 chain=8 이 4.7% 높음 / 이제 재시행)이 전부 같은 방향이다.
+
+### 이 한 셀로 정리되는 것 셋
+
+**① 사전 등록 예측 `c16@r8 ≈ c8@r8 (2% 안)` — 확증**
+```text
+c16 13.058  vs  c8 13.159   -0.77%    2% 안
+```
+내가 "판정 보류" 로 남겼던 것이 확증으로 닫힌다.
+
+**② chain 축은 8 에서 포화한다** (4 도 12 도 아니다)
+```text
+c1 11.343  c2 12.113  c4 12.717  c8 13.159  c12 13.149  c16 13.058
+                                  └────── 0.8% 폭 ──────┘
+```
+내가 "4 에서 포화"(C8 보고) 했다가 "12 에서 포화"(C16 보고) 로 옮겼던 것,
+**둘 다 그 낮은 셀 때문이었다. 답은 8 이다.**
+
+**③ `r12 > r8` 신호가 사라진다**
+```text
+r12 13.100  vs  r8 13.159   -0.45%
+```
+직전 보고에서 "reap 은 12 에서 아직 포화하지 않았다, 운영점 r8 이 최적이
+아닐 수 있다" 고 적었는데 **철회한다.** reap 도 8 에서 포화다.
+
+### 그래서 운영점이 두 축의 무릎에 정확히 있다
+
+```text
+chain  1 -> 8 상승,  8 이후 평평     운영점 c8
+reap   1 -> 8 상승,  8 이후 평평     운영점 r8
+```
+
+**둘 다 8 에서 꺾이고 운영점이 거기다.** 우연이 아니라 앞선 캠페인이 그
+지점을 찾아낸 결과로 보인다. 비대칭(값 1·2·4 에서 reap 이 나쁨)은 그대로
+유효하고, **운영점에서는 두 축이 이미 수렴한 뒤라 비대칭이 안 보인다.**
+
+### 남은 유보
+30초 단발이고 교대 A/B 가 아니다. **당신이 적은 대로 오늘은 경향성이고,
+chain 축 본측정(교대 A/B 3런)은 후속 항목으로 남는다.** 다만 "한 셀에
+흔들린다" 던 상태는 벗어났다 — 재시행이 밴드 안에 들어왔다.
+
+### BD2 14부하 착수
+GET 7점 -> MIX 7점, 각 60초. 약 19분. 완료되면 한 번에 보고한다.
+
+NEXT: genie (BD2 진행 중)

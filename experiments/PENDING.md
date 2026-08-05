@@ -26,7 +26,7 @@ genie 복귀 시 **이 문서 순서대로** 실행한다. 실행 명세(셀 표
 | 6 | **osdi exp3 값 크기** | 탐침 ≤2 + 15부하 | ~25분 | 〃, 크기별 프리로드 | [exp3 PLAN](osdi-0804/exp3/PLAN.md) |
 | 7 | **osdi exp1 port 측** | 24부하 (곡선 21 + zipf 3) + genie CPU 2회 | ~25분 | v4 **PROF=0** 재기동 1 | [exp1 PLAN](osdi-0804/exp1/PLAN.md) |
 | 8 | **osdi exp1 stock 측** | 24부하 | ~25분 | **stock 97ceee04** 교체 | 〃 off-box 재측정 (co-located −31.7% 보정 검증) |
-| 9 | **v3 지연 분해 (블록 5 와 같은 격자)** | 14부하 × 60초 | ~45분 | **v3+계층3 `86da4222`** 교체 | 관리자 지시(2026-08-06): port_v3 ↔ port_v4 를 **같은 세분도로** 비교. KTC §5-①②를 덮고 **§5-⑤(소급 불가로 적어둔 항목)까지 측정으로 바뀐다** |
+| 9 | **v3 소급 블록** | 3×100s + 15×30s | ~35분 | **v3 c8aeae5b** 교체 | KTC §5-①(새 운영점 GET·혼합 span v2) + §5-②(EXP-0 재실행, 수집열 sync/xfer/crypto 추가) |
 | 10 | **검증 소셀** | 2부하×30s | ~5분 | v4, inline off | 원인 A 소급 검증: `ext_submit_inline=off ext_submit_batch=3` (스레드당 4연결에서 3은 발화 가능) vs `batch=20` — admit 붕괴 여부. `EXP1_FINDINGS` no-op 시험 주석 근거 |
 
 총 ~6.5 h. 블록 2 이후는 순서 조정 가능하나 **1(E0)이 항상 먼저**고,
@@ -41,7 +41,7 @@ v3 100초)을 따른다.
 
 ```text
 real-world dataset 셀 (exp1)    키 분포 자산(DPA-Store 사용분) 확보 필요
-(해소됨) KTC §5-⑤ v3 클라측 분해   2026-08-06 이식 완료 — 아래 참조
+KTC §5-⑤ v3 클라측 분해         v3 빌드에 srv/que/bk 계측 이식 필요 (소급 불가)
 ```
 
 ## 결과 기입처

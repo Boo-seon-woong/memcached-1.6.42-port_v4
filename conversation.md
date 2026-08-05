@@ -10679,3 +10679,77 @@ W3(SET-only) 생략 금지. 셀마다 avg/p50/p99/p99.9.
 raw `experiments/night-20260806/genie/<cell>.txt`.
 
 NEXT: genie (E4-C8R8)
+
+CELL E4-C8R8-GET DONE  12.695 M  avg 2.37287 / p50 2.25500 / p99 5.79100 / p99.9 11.64700 ms
+창(UTC) 2026-08-05T18:14:02Z ~ 2026-08-05T18:14:32Z   pipe=256 --ratio=0:1 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL E4-C8R8-MIX DONE  10.794 M  avg 2.80539 / p50 2.71900 / p99 4.95900 / p99.9 8.63900 ms
+창(UTC) 2026-08-05T18:14:56Z ~ 2026-08-05T18:15:26Z   pipe=256 --ratio=1:9 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL E4-C8R8-SET DONE  5.714 M  avg 5.31727 / p50 4.35100 / p99 9.34300 / p99.9 14.78300 ms
+창(UTC) 2026-08-05T18:15:50Z ~ 2026-08-05T18:16:20Z   pipe=256 --ratio=1:0 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+---
+
+## [2026-08-06 KST] genie — E4-C8R8 완료. **정정: 내 앞선 두 보고가 잘못된 기준을 썼다. chain 은 c4 에서 포화한다**
+
+```text
+E4-C8R8-GET  12.695 M   avg 2372.87  p50 2255.0  p99 5791.0  p99.9 11647.0 µs
+E4-C8R8-MIX  10.794 M   avg 2805.39  p50 2719.0  p99 4959.0  p99.9  8639.0 µs
+E4-C8R8-SET   5.714 M   avg 5317.27  p50 4351.0  p99 9343.0  p99.9 14783.0 µs
+지문 전후 동일, chain=8 reap=8 확인, bed 3/3
+```
+
+### 내 오류 — 30초 셀을 120초 게이트와 비교했다
+
+```text
+같은 chain=8    게이트 120초  13.309 M
+                E4    30초    12.695 M      -4.6%
+```
+
+**당신이 공통 규약에 "라운드 내 비교" 를 명시했는데 내가 그걸 어겼다.**
+C1·C2·C4 보고의 백분율은 전부 이 잘못된 기준(13.309) 위에 있다. 폐기한다.
+
+### 올바른 표 — 전부 30초, 전부 재기동 후 첫 셀
+
+```text
+c=1   GET 11.343 (-10.6%)   MIX  9.688 (-10.2%)   SET 5.734
+c=2   GET 12.113 ( -4.6%)   MIX 10.173 ( -5.8%)   SET 5.675
+c=4   GET 12.717 ( +0.2%)   MIX 10.591 ( -1.9%)   SET 5.708
+c=8   GET 12.695   기준      MIX 10.794   기준      SET 5.714
+```
+
+```text
+배가당 GET 이득 (라운드 내)
+  1 -> 2   +6.79%
+  2 -> 4   +4.99%
+  4 -> 8   -0.17%      <- 멈춘다
+```
+
+**`c4` 와 `c8` 이 0.17% 차이 — 같은 값이다. chain 은 4 에서 포화한다.**
+
+### 그러면 직전 보고의 "로그 선형" 도 철회다
+
+C4 보고에서 "배가당 +5% 로 일정, 포화하지 않는다" 고 적고 그 위에
+`c16 = 13.9 M` 예측까지 세웠다. **틀렸다.** 그 +4.66%(4→8) 자체가
+30초 셀을 120초 게이트로 나눈 값이었고, 라운드 내로 다시 재면 −0.17% 다.
+
+**바로잡힌 예측**: `c4` 에서 이미 포화했으므로 `c12`·`c16` 은 `c8` 과 같아야
+한다. 이는 `min(chain,reap)` 모형과도 일치한다 — reap=8 이 묶는다는 설명과,
+chain 자체가 4 에서 포화한다는 설명이 **같은 관측을 낸다.** 두 설명은
+`r` 축(블록 4 축 2)에서 갈린다: `min` 모형이면 `c8@r16` 이 `c8@r8` 보다
+나아야 하고, chain 포화 모형이면 안 나아진다.
+
+### 회랑 하한도 다시 읽는다
+`MIX` 가 c1 에서 9.688(계약 미달), c2 에서 10.173(통과). **회랑 하한이 1과 2
+사이**라는 결론은 절대값 비교라 기준 변경과 무관하게 유효하다.
+
+### 재발 방지
+러너가 셀마다 지문을 찍지만 **창 길이는 비교 대상 선택의 문제**라 지문이
+못 잡는다. 앞으로 스윕 표에는 **같은 창 길이 셀만** 넣고, 다른 창 값은
+"참고" 로 분리해 적겠다.
+
+NEXT: ariel (E4-C12R8 무장)

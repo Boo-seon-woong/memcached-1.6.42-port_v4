@@ -11714,3 +11714,68 @@ c8 r1             5.69          698.23          10.561
 블록 5(지연 분해 정밀 + 당신이 요청한 c8 재시행 2셀)로 넘어간다.
 
 NEXT: genie (r12 → 블록 5)
+
+CELL E4-C8R12-GET DONE  13.100 M  avg 2.29773 / p50 2.22300 / p99 4.04700 / p99.9 7.16700 ms
+창(UTC) 2026-08-05T18:48:52Z ~ 2026-08-05T18:49:22Z   pipe=256 --ratio=0:1 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=12 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL E4-C8R12-MIX DONE  10.721 M  avg 2.82487 / p50 2.75100 / p99 4.92700 / p99.9 8.19100 ms
+창(UTC) 2026-08-05T18:49:46Z ~ 2026-08-05T18:50:16Z   pipe=256 --ratio=1:9 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=12 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL E4-C8R12-SET DONE  5.721 M  avg 5.31022 / p50 4.54300 / p99 9.59900 / p99.9 14.59100 ms
+창(UTC) 2026-08-05T18:50:40Z ~ 2026-08-05T18:51:11Z   pipe=256 --ratio=1:0 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=12 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+---
+
+## [2026-08-06 KST] genie — E4-C8R12 완료. **블록 4 축 2 끝. 두 축이 12 에서 만난다**
+
+```text
+E4-C8R12-GET  13.100 M   avg 2297.73  p50 2223.0  p99 4047.0  p99.9  7167.0 µs
+E4-C8R12-MIX  10.721 M   avg 2824.87  p50 2751.0  p99 4927.0  p99.9  8191.0 µs
+E4-C8R12-SET   5.721 M   avg 5310.22  p50 4543.0  p99 9599.0  p99.9 14591.0 µs
+지문 전후 동일, chain=8 reap=12 확인, bed 3/3
+```
+
+### 블록 4 완결 — 두 축 나란히 (GET)
+
+```text
+  값    chain@r8    reap@c8     격차
+   1     11.343     10.554    -6.96%
+   2     12.113     11.619    -4.08%
+   4     12.717     12.491    -1.78%
+   8     12.695     12.695     0.00%
+  12     13.149     13.100    -0.37%
+  16     13.058        —
+```
+
+**격차가 -6.96 -> -4.08 -> -1.78 -> 0 -> -0.37 로 12 에서 사실상 0 이다.**
+두 노브가 큰 값에서 수렴한다 — 당신의 "reap tick 이 드물어지면 두 경로가
+같아진다" 와 정확히 맞는다.
+
+### 다만 축별 포화 시점이 다르다
+
+```text
+chain   c12 13.149 -> c16 13.058   -0.69%   포화 (12 에서 멈춤)
+reap    r8  12.695 -> r12 13.100   +3.19%   아직 오른다
+```
+
+**reap 은 12 에서 아직 포화하지 않았다.** chain 은 12 에서 멈췄는데 reap 은
+계속 오른다. 설계에 r16 이 없어 여기서 끊기는데, **운영점이 r8 인 것이
+최적이 아닐 수 있다는 신호**다 — r12 가 r8 보다 +3.19% 다.
+
+**단 r8 은 의심 셀이다.** c8 추정치(12.933)를 쓰면 r12 는 +1.29% 로 줄어
+σ 근처가 된다. **블록 5 의 c8 재측정이 이 판단도 같이 정한다** — 재측정이
+12.9~13.1 이면 "r8 이 이미 충분" 이고, 12.7 이 재현되면 "r 을 12 로 올릴
+근거" 가 생긴다.
+
+### MIX·SET
+```text
+MIX   r1 9.364 (계약 미달)  r2 10.026  r4 10.614  r8 10.794  r12 10.721
+SET   아홉 구성 전부 5.675~5.736  (1.1% 폭)
+```
+MIX 는 r4 부터 평평하고 **r1 만 계약 미달**이다. SET 은 chain·reap 어느
+쪽도 안 탄다 — **배칭 축 둘 다 GET 전용**이라는 결론이 아홉 구성에서 선다.
+
+NEXT: ariel (블록 5, c8 재측정 포함)

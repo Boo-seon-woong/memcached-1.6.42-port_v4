@@ -12884,3 +12884,66 @@ RDMA 를 안 쓰므로 HCA 점유가 없어야 정상이다. co-located 13셀(60
 셀마다 avg/p50/p99/p99.9. raw `experiments/night-20260806/genie/<cell>.txt`.
 
 NEXT: genie (exp1 ST 24셀)
+
+CELL ST-C-P1 DONE  0.612 M  avg 0.19407 / p50 0.17500 / p99 0.49500 / p99.9 0.79100 ms
+창(UTC) 2026-08-05T20:55:26Z ~ 2026-08-05T20:55:56Z   pipe=1 --ratio=0:1 --test-time=30
+지문    maxconns=16384 num_threads=30 reqs_per_event=1024 ext_item_age=4294967295 ext_wbuf_size=4194304 
+
+CELL ST-C-P8 DONE  4.072 M  avg 0.22454 / p50 0.19100 / p99 0.65500 / p99.9 1.03100 ms
+창(UTC) 2026-08-05T20:56:18Z ~ 2026-08-05T20:56:48Z   pipe=8 --ratio=0:1 --test-time=30
+지문    maxconns=16384 num_threads=30 reqs_per_event=1024 ext_item_age=4294967295 ext_wbuf_size=4194304 
+
+CELL ST-C-P32 DONE  9.935 M  avg 0.35157 / p50 0.27900 / p99 1.15100 / p99.9 1.80700 ms
+창(UTC) 2026-08-05T20:57:10Z ~ 2026-08-05T20:57:40Z   pipe=32 --ratio=0:1 --test-time=30
+지문    maxconns=16384 num_threads=30 reqs_per_event=1024 ext_item_age=4294967295 ext_wbuf_size=4194304 
+
+---
+
+## [2026-08-06 KST] genie — **zipf 가 균등으로 돈 것은 내 버그다. memtier 탓이 아니다**
+
+당신 `badcrc 3 vs 251,856` 로 (b)"skew 가 서버에 도달 안 함"이 확정됐고,
+원인은 내 러너다.
+
+```sh
+BASE="... ${KP:---key-pattern=R:R} ..."     # 스크립트 시작 시 1회 확장
+...
+KP="--key-pattern=Z:Z --key-zipf-exp=0.99" run ...   # 이미 늦었다
+```
+
+**`BASE` 는 문자열 변수라 대입 시점에 확장이 끝난다.** 그때 `KP` 가 비어
+있었으므로 `R:R` 이 박혔고, 나중에 `KP` 를 넘겨도 아무 효과가 없다.
+재현·검증했다:
+
+```text
+문자열 BASE   실제 인가: --key-pattern=R:R          <- 내가 돌린 것
+함수 base()   실제 인가: --key-pattern=Z:Z --key-zipf-exp=0.99
+```
+
+`BASE` 를 함수로 바꿔 고쳤다(`night.sh`, `night-stock.sh` 둘 다).
+
+### 무효 처리할 셀
+
+```text
+PT-C-Z256  13.712    PT-B-Z256  12.349    PT-A-Z256  7.244     -> 전부 무효
+```
+**균등 셀의 중복 측정일 뿐이다.** 실제로 균등값과 0.04~0.83% 차이였던 것이
+그 증거다 — 같은 부하를 두 번 잰 셈이라 오히려 재현성 확인이 됐다
+(`C-P256 13.827 vs Z256 13.712`, 0.83%).
+
+**그리고 기존 θ 스윕의 -33.98% 는 그대로 유효하다.** 내가 "기존 수치를
+다시 봐야 한다" 고 적었던 것은 철회한다 — 어긋난 쪽은 내 셀이었다.
+
+### 블록 8 도 같은 버그를 안고 돈다
+지금 실행 중인 stock 24셀은 **시작 시점에 옛 정의를 읽었으므로** 그 프로세스
+안에서는 여전히 `R:R` 이다. **`ST-*-Z256` 3셀도 무효가 된다.**
+곡선 21셀은 원래 균등이라 영향 없다.
+
+### 재실행 계획
+```text
+ST zipf 3셀   블록 8 완주 직후, 지금 stock 무장 그대로   2.5분
+PT zipf 3셀   port 재무장 필요                          2.5분
+```
+**stock 쪽은 이 블록 끝나면 바로 돌린다.** port 쪽은 다음에 port 를 띄울 때
+끼워달라 — 3셀이라 어느 블록에든 얹힌다.
+
+NEXT: genie (블록 8 진행 → ST zipf 재실행)

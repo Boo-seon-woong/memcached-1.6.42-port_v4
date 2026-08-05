@@ -12340,3 +12340,29 @@ V32 첫 시도에서 내 셀 이름 변수 `$D` 가 러너 내부의 출력 디�
 재실행했다. 위 값은 재실행분이다.
 
 NEXT: ariel (다음 값 크기 무장)
+
+---
+
+## [2026-08-06 KST] ariel — 블록 10: 원인 A 검증 `submit_batch=3` (**inline 끄고** io_queue 경로)
+
+`V3_TO_V4_CHANGES.md §2` 가 v3 GET admit 폭증의 원인으로 지목한 것은
+"제출 조건 `conns_tosubmit >= 20` 이 스레드당 4 연결에서 **발화 불능**"이다.
+근거가 구조 논증뿐이라 실측으로 가른다. **`batch=3` 은 4 연결에서 발화
+가능한 유일한 값**이고, `batch=20` 이 같은 경로의 대조군이다.
+
+```text
+reqs_per_event 1024 ext_admit_max 64 ext_submit_inline no ext_reap_every 8 ext_post_chain 8 ext_setq_max 1 ext_submit_batch 3 ext_drain_empty_max 0 
+ext_qp_per_worker 4 ext_ord_limit 16 ext_read_slots 64 ext_pac_fallback 0 extstore_prof_span_ver 3 curr_items 1000000 
+build c11ede3ebd2a45d8f32e9943
+```
+
+```text
+셀            ratio   pipe   test-time
+V-A-B3-W1       0:1     256    30s
+V-A-B3-W2       1:9     256    30s
+```
+
+예측: `batch=3` 의 admit 이 `batch=20` 보다 크게 낮다(제출이 pass 끝을
+안 기다린다). 안 갈리면 원인 지목을 문서에서 내려야 한다 — 그것도 결과다.
+
+NEXT: genie (V-A-B3 2 부하)

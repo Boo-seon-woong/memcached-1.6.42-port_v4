@@ -12567,3 +12567,54 @@ admit 성분은 당신 창이다. **처리량이 안 갈렸다고 admit 도 안 
 그 경우 "admit 이 병목이 아니다" 가 된다. 당신 창을 봐야 어느 쪽인지 안다.
 
 NEXT: ariel (원인 A 판정 / 다음 블록)
+
+---
+
+## [2026-08-06 KST] ariel — 블록 7: exp1 port (원격 메모리, EXT_RDMA_PROF=0) 무장, 24 셀
+
+DPA-Store Fig.15 형태(워크로드별 latency-throughput)라 **세 워크로드 각각
+pipeline 스윕**이다. GET-only 만 스윕하고 나머지를 단일점으로 두면 A/B 곡선이
+안 나온다.
+
+### 서버 지문
+
+```text
+reqs_per_event 1024 ext_admit_max 64 ext_submit_inline yes ext_reap_every 8 ext_post_chain 8 ext_setq_max 1 ext_submit_batch 20 ext_drain_empty_max 0 
+ext_qp_per_worker 4 ext_ord_limit 16 ext_read_slots 64 ext_pac_fallback 0 extstore_prof_span_ver 3 curr_items 1000000 
+build c11ede3ebd2a45d8f32e9943
+EXT_RDMA_PROF 미설정 — 계측 없음 (exp1 은 클라 지표만 쓴다)
+```
+
+### 요청 — 24 셀, 각 30초 (사이 20초)
+
+```text
+곡선 (uniform, R:R)      ratio        pipe
+PT-A-P{1,8,32,64,128,256,384}    1:1     ← YCSB A (50 read / 50 update)
+PT-B-P{1,8,32,64,128,256,384}    1:19    ← YCSB B (95/5)
+PT-C-P{1,8,32,64,128,256,384}    0:1     ← YCSB C (100 read)
+보조 (zipf θ=0.99, Z:Z)
+PT-A-Z256  1:1  /  PT-B-Z256  1:19  /  PT-C-Z256  0:1   pipe=256
+
+memtier -s 10.99.0.3 -p 11411 -P memcache_text -d 64 \
+  --key-prefix=m- --key-minimum=1 --key-maximum=1000000 \
+  --key-pattern=R:R --distinct-client-seed --hide-histogram \
+  -t 30 -c 4 --pipeline=<pipe> --test-time=30 --ratio=<ratio>
+
+zipf 셀만:  --key-pattern=Z:Z --key-zipf-exp=0.99
+```
+
+`--ratio` 는 **SET:GET** 순서다 — B 의 update 5% 가 `1:19` 인 이유다.
+
+### genie CPU 증거 2회 (XSTORE 의 CPU 주장 대응)
+
+```sh
+awk '{print $14, $15}' /proc/$(pgrep genie_memd)/stat
+```
+
+`PT-C-P256` 과 `PT-A-P256` **각각 직전·직후**로 부탁한다. one-sided READ 라
+**genie CPU 가 0** 이어야 하고, 그 0 이 disaggregation 주장의 직접 증거다.
+`MANUAL_TEST_PROCEDURE §F-3` 에 절차가 있다.
+
+셀마다 avg/p50/p99/p99.9. raw `experiments/night-20260806/genie/<cell>.txt`.
+
+NEXT: genie (exp1 PT 24셀)

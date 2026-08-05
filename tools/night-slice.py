@@ -41,6 +41,26 @@ def plateaus(rows):
     if run: out.append(run)
     return [p for p in out if p[-1]["ts"] - p[0]["ts"] >= MINSPAN]
 
+def trim(run):
+    """평탄부 양끝의 부분 표본을 버린다.
+
+    부하 시작 직후 stats reset 이 한 번 들어가고(그 초는 카운터가 거의 0),
+    부하 끝 초는 창의 일부만 부하다. 둘 다 평탄부 판정(THRESH)은 통과하는데
+    평균을 끌어내린다 — 실측으로 30초 창이 7.88 → 7.38 M(−6%)로 찍혔고,
+    그것을 bed 변동으로 오독할 뻔했다. 중앙값의 60% 미만인 양끝을 깎는다.
+    """
+    if len(run) < 4:
+        return run
+    rate = []
+    for a, b in zip(run, run[1:]):
+        dt = b["ts"] - a["ts"]
+        rate.append(((b["cmd_get"] - a["cmd_get"]) + (b["cmd_set"] - a["cmd_set"])) / dt if dt > 0 else 0)
+    med = sorted(rate)[len(rate) // 2]
+    lo, hi = 0, len(rate) - 1
+    while lo < hi and rate[lo] < med * 0.6: lo += 1
+    while hi > lo and rate[hi] < med * 0.6: hi -= 1
+    return run[lo:hi + 2]
+
 def davg(a, b, avg, cnt):
     """옛 26열 추적기 파일도 읽을 수 있게 없는 열은 0 으로 본다."""
     if avg not in b or cnt not in b: return 0.0
@@ -70,6 +90,7 @@ def main():
         t1 = marks[i + 1][1] if i + 1 < len(marks) else float("inf")
         seg = [r for r in rows if t0 <= r["ts"] < t1]
         for n, run in enumerate(plateaus(seg), 1):
+            run = trim(run)
             a, b = run[0], run[-1]
             dt = b["ts"] - a["ts"]
             if dt <= 0: continue

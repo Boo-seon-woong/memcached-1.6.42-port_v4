@@ -1,2 +1,1 @@
-── 무장: submit_batch=3 W=24 nqp=4 READ_SLOTS=64 -R 1024 admit=64 reap=8 chain=8 setq=1 dem=0 mcT=30 ilp=0 hp=22 ord=0 cpu=0-29 (총 QP = 30 × 4)
-── coherent MR 게이트 (2 여야 한다): 0
+/tmp/night-run-frozen.sh: line 29: tools/night-arm.sh: No such file or directory

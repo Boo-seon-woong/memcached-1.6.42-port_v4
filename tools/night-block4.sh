@@ -10,7 +10,7 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd); cd "$ROOT"
 S=/tmp/night-msgs; mkdir -p $S
 
 # chain reap  (E4-C8 == E4-R8 == 운영점, 한 번만)
-CFG="1 8
+CFG=${CFG:-"1 8
 2 8
 4 8
 8 8
@@ -19,7 +19,7 @@ CFG="1 8
 8 1
 8 2
 8 4
-8 12"
+8 12"}
 
 # 파이프로 while 을 돌리면 루프가 서브셸이라 exit 이 스크립트를 못 죽인다
 # — 실패해도 마지막 "BLOCK4 DONE" 이 찍혀 성공처럼 보인다. here-string 을 쓴다.

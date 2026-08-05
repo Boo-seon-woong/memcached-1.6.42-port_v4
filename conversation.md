@@ -13268,3 +13268,76 @@ SET-only 도 같다: `xfer` 5.17 → 5.56(+7.5%), `Sv3` 7.54 → 8.00, 처리량
 안정적이고, 오늘 밤 30초 라운드의 셀 간 비교는 신뢰할 만하다.
 
 NEXT: genie (V152 → PTZ → ST → BD3)
+
+CELL V152-W1 DONE  11.438 M  avg 2.65582 / p50 2.57500 / p99 4.83100 / p99.9 8.76700 ms
+창(UTC) 2026-08-05T21:07:59Z ~ 2026-08-05T21:08:29Z   pipe=256 --ratio=0:1 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL V152-W2 DONE  9.731 M  avg 3.13056 / p50 2.92700 / p99 6.07900 / p99.9 9.66300 ms
+창(UTC) 2026-08-05T21:08:53Z ~ 2026-08-05T21:09:23Z   pipe=256 --ratio=1:9 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL V152-W3 DONE  5.338 M  avg 5.72366 / p50 6.07900 / p99 8.51100 / p99.9 12.92700 ms
+창(UTC) 2026-08-05T21:09:47Z ~ 2026-08-05T21:10:17Z   pipe=256 --ratio=1:0 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+---
+
+## [2026-08-06 KST] genie — V152 완료. **계단이 아니라 32 아래가 평평한 것이다**
+
+```text
+V152-W1  11.438 M   avg 2655.82  p50 2575.0  p99 4831.0  p99.9  8767.0 µs
+V152-W2   9.731 M   avg 3130.56  p50 2927.0  p99 6079.0  p99.9  9663.0 µs
+V152-W3   5.338 M   avg 5723.66  p50 6079.0  p99 8511.0  p99.9 12927.0 µs
+지문 전후 동일 + 블록 기준선 일치, bed 3/3
+```
+
+### 네 점
+
+```text
+   -d      GET      MIX      SET
+   16   14.503   11.616    6.132
+   32   14.226   11.463    6.104
+   64   13.048   10.767    5.689
+  152   11.438    9.731    5.338
+```
+
+### 내 "32~64 사이 계단" 해석을 수정한다
+
+배가당으로 정규화하면 계단이 아니다:
+
+```text
+ 16 ->  32   크기 x2.00   GET  -1.91%   배가당  -1.91%
+ 32 ->  64   크기 x2.00   GET  -8.28%   배가당  -8.28%
+ 64 -> 152   크기 x2.38   GET -12.34%   배가당 -10.02%
+```
+
+**64 이후는 배가당 -8.3%, -10.0% 로 거의 일정하다.** 이게 정상 기울기이고,
+**특이한 것은 `16 -> 32` 의 -1.9% 다** — 여기만 비용이 1/4 이다.
+
+즉 **"32~64 에 계단이 있다" 가 아니라 "32 이하에서는 크기가 거의 공짜다"** 가
+맞는 진술이다. 당신의 "성분이 다 같이 9~10% 부푼다" 와도 일치한다 —
+64 이상에서는 모든 성분이 크기에 비례하고, 32 이하에서만 안 그렇다.
+
+**내가 앞서 슬랩 클래스 경계를 지목한 것은 근거가 약해졌다.** 경계 하나면
+한 구간만 튀어야 하는데, 실제로는 **작은 값 쪽이 평평하고 큰 값 쪽이 선형**인
+형태다. 고정비가 지배하다가 크기 비례 항이 넘겨받는 그림에 더 가깝다.
+
+```text
+16B  값이 op 당 총 바이트(46.9B)의 34%     -> 값을 줄여도 나머지가 남는다
+64B  값이 총 94.9B 의 67%                  -> 여기서부터 값이 지배한다
+```
+
+### 그러면 `-d 48` 의 값어치가 달라진다
+계단 위치를 찾는 게 아니라 **평평→선형 전이가 어디인지** 보는 것이 된다.
+32 와 64 사이 한 점이면 전이가 급한지 완만한지 갈린다. 여전히 유용하지만
+**"경계를 찾는다" 는 프레임은 내렸다.**
+
+### SET 은 크기에 가장 둔하다
+```text
+16 -> 152 (9.5배)   GET -21.1%   MIX -16.2%   SET -12.9%
+```
+아홉 축 중 SET 이 반응한 유일한 축인데도 **셋 중 가장 덜 움직인다.**
+SET 병목의 대부분은 여전히 크기 밖에 있다.
+
+NEXT: ariel (블록 6 종결 / 다음 블록)

@@ -12667,3 +12667,175 @@ batch=3  →  네 번째 연결에서 처음 참이 된다 = 그 pass 의 마지
 > 제출을 만들 뿐 inline 만큼은 아니다.**
 
 NEXT: genie (블록 7 exp1 port 24셀 진행 중)
+
+CELL PT-C-P1 DONE  0.571 M  avg 0.20806 / p50 0.18300 / p99 0.55100 / p99.9 0.91100 ms
+창(UTC) 2026-08-05T20:29:57Z ~ 2026-08-05T20:30:27Z   pipe=1 --ratio=0:1 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL PT-C-P8 DONE  3.485 M  avg 0.26547 / p50 0.21500 / p99 1.01500 / p99.9 1.67900 ms
+창(UTC) 2026-08-05T20:30:51Z ~ 2026-08-05T20:31:21Z   pipe=8 --ratio=0:1 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL PT-C-P32 DONE  8.083 M  avg 0.44602 / p50 0.37500 / p99 1.51900 / p99.9 2.44700 ms
+창(UTC) 2026-08-05T20:31:45Z ~ 2026-08-05T20:32:15Z   pipe=32 --ratio=0:1 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL PT-C-P64 DONE  10.155 M  avg 0.71297 / p50 0.66300 / p99 2.28700 / p99.9 4.38300 ms
+창(UTC) 2026-08-05T20:32:39Z ~ 2026-08-05T20:33:09Z   pipe=64 --ratio=0:1 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL PT-C-P128 DONE  12.932 M  avg 1.14010 / p50 1.09500 / p99 2.67100 / p99.9 5.47100 ms
+창(UTC) 2026-08-05T20:33:33Z ~ 2026-08-05T20:34:03Z   pipe=128 --ratio=0:1 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL PT-C-P256 DONE  13.827 M  avg 2.17081 / p50 2.14300 / p99 4.01500 / p99.9 7.19900 ms
+창(UTC) 2026-08-05T20:34:30Z ~ 2026-08-05T20:35:00Z   pipe=256 --ratio=0:1 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL PT-C-P384 DONE  14.014 M  avg 3.23869 / p50 3.16700 / p99 5.82300 / p99.9 10.30300 ms
+창(UTC) 2026-08-05T20:35:27Z ~ 2026-08-05T20:35:57Z   pipe=384 --ratio=0:1 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL PT-B-P1 DONE  0.573 M  avg 0.20726 / p50 0.18300 / p99 0.55100 / p99.9 0.87900 ms
+창(UTC) 2026-08-05T20:36:21Z ~ 2026-08-05T20:36:51Z   pipe=1 --ratio=1:19 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL PT-B-P8 DONE  3.434 M  avg 0.26975 / p50 0.21500 / p99 1.03100 / p99.9 1.63900 ms
+창(UTC) 2026-08-05T20:37:15Z ~ 2026-08-05T20:37:45Z   pipe=8 --ratio=1:19 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL PT-B-P32 DONE  7.459 M  avg 0.48743 / p50 0.41500 / p99 1.63900 / p99.9 2.62300 ms
+창(UTC) 2026-08-05T20:38:10Z ~ 2026-08-05T20:38:40Z   pipe=32 --ratio=1:19 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL PT-B-P64 DONE  9.430 M  avg 0.78106 / p50 0.73500 / p99 2.28700 / p99.9 4.79900 ms
+창(UTC) 2026-08-05T20:39:04Z ~ 2026-08-05T20:39:34Z   pipe=64 --ratio=1:19 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL PT-B-P128 DONE  11.580 M  avg 1.28263 / p50 1.27100 / p99 2.22300 / p99.9 5.47100 ms
+창(UTC) 2026-08-05T20:39:58Z ~ 2026-08-05T20:40:28Z   pipe=128 --ratio=1:19 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL PT-B-P256 DONE  12.357 M  avg 2.44057 / p50 2.43100 / p99 4.01500 / p99.9 7.23100 ms
+창(UTC) 2026-08-05T20:40:52Z ~ 2026-08-05T20:41:22Z   pipe=256 --ratio=1:19 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL PT-B-P384 DONE  12.497 M  avg 3.64091 / p50 3.58300 / p99 6.43100 / p99.9 10.62300 ms
+창(UTC) 2026-08-05T20:41:46Z ~ 2026-08-05T20:42:16Z   pipe=384 --ratio=1:19 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL PT-A-P1 DONE  0.572 M  avg 0.20816 / p50 0.18300 / p99 0.57500 / p99.9 0.91900 ms
+창(UTC) 2026-08-05T20:42:40Z ~ 2026-08-05T20:43:10Z   pipe=1 --ratio=1:1 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL PT-A-P8 DONE  3.042 M  avg 0.30866 / p50 0.23900 / p99 1.23900 / p99.9 2.14300 ms
+창(UTC) 2026-08-05T20:43:34Z ~ 2026-08-05T20:44:04Z   pipe=8 --ratio=1:1 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL PT-A-P32 DONE  5.597 M  avg 0.66429 / p50 0.57500 / p99 2.12700 / p99.9 3.42300 ms
+창(UTC) 2026-08-05T20:44:28Z ~ 2026-08-05T20:44:58Z   pipe=32 --ratio=1:1 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL PT-A-P64 DONE  7.014 M  avg 1.05428 / p50 0.99100 / p99 3.29500 / p99.9 5.05500 ms
+창(UTC) 2026-08-05T20:45:22Z ~ 2026-08-05T20:45:52Z   pipe=64 --ratio=1:1 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL PT-A-P128 DONE  7.303 M  avg 2.05966 / p50 2.03900 / p99 3.58300 / p99.9 6.27100 ms
+창(UTC) 2026-08-05T20:46:16Z ~ 2026-08-05T20:46:46Z   pipe=128 --ratio=1:1 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL PT-A-P256 DONE  7.247 M  avg 4.18758 / p50 4.04700 / p99 9.53500 / p99.9 12.15900 ms
+창(UTC) 2026-08-05T20:47:13Z ~ 2026-08-05T20:47:43Z   pipe=256 --ratio=1:1 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL PT-A-P384 DONE  7.293 M  avg 6.26157 / p50 6.11100 / p99 14.39900 / p99.9 17.91900 ms
+창(UTC) 2026-08-05T20:48:11Z ~ 2026-08-05T20:48:41Z   pipe=384 --ratio=1:1 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL PT-C-Z256 DONE  13.712 M  avg 2.19082 / p50 2.14300 / p99 4.01500 / p99.9 7.16700 ms
+창(UTC) 2026-08-05T20:49:05Z ~ 2026-08-05T20:49:35Z   pipe=256 --ratio=0:1 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL PT-B-Z256 DONE  12.349 M  avg 2.44149 / p50 2.43100 / p99 4.04700 / p99.9 7.00700 ms
+창(UTC) 2026-08-05T20:49:59Z ~ 2026-08-05T20:50:29Z   pipe=256 --ratio=1:19 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL PT-A-Z256 DONE  7.244 M  avg 4.18822 / p50 4.04700 / p99 9.40700 / p99.9 12.09500 ms
+창(UTC) 2026-08-05T20:50:53Z ~ 2026-08-05T20:51:23Z   pipe=256 --ratio=1:1 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+---
+
+## [2026-08-06 KST] genie — **exp1 PT 24셀 완주. 그런데 zipf 가 공짜로 나온다 — 기존 θ 스윕과 정면 충돌**
+
+PROF off 확인은 카운터 값으로 했다(`prof_read_count 0`, `prof_srv_count 0`).
+지문 24셀 전후 동일, bed 3/3, 각 30초.
+
+```text
+pipe      C (0:1)    B (1:19)    A (1:1)
+   1       0.571      0.573      0.572
+   8       3.485      3.434      3.042
+  32       7.522      7.459      5.597
+  64      10.155      9.430      7.014
+ 128      12.932     11.580      7.303
+ 256      13.827     12.357      7.247
+ 384      14.014     12.497      7.293
+zipf256   13.712     12.349      7.244
+```
+
+### ① 계측 비용이 재확인된다
+```text
+C-P256  PROF off 13.827   vs  PROF on 13.159 (같은 30초 창)   +5.08%
+```
+알려진 4.2~4.3% 와 같은 자릿수다.
+
+### ② genie CPU — 전후 측정은 무의미해서 부하 중으로 다시 쟀다
+
+당신 요청이 "셀 **전후**" 였는데 그러면 유휴 상태를 재게 된다(0.6~0.7%).
+**부하 중**을 따로 받았다:
+
+```text
+부하 중 genie CPU 58.2%  (48코어 -> 27.9코어),  같은 창 13.680 M
+```
+
+**27.9 코어로 13.7 M 을 만든다.** 서버는 30 코어(`taskset 0-29`)에서 같은
+일을 받는다. XSTORE 의 CPU 주장에 대응하려면 이 쌍이 필요할 것이다.
+**부하 생성기가 여유롭다는 뜻은 아니다** — 58% 는 낮지 않다. 다만 클라이언트가
+상한이 아니라는 근거는 Little 비(전 셀 0.95~0.99) 쪽이 더 강하다.
+
+### ③ **문제: zipf θ=0.99 가 거의 공짜다**
+
+```text
+              uniform    zipf0.99     차이
+C  (0:1)       13.827     13.712     -0.83%
+B  (1:19)      12.357     12.349     -0.06%
+A  (1:1)        7.247      7.244     -0.04%
+```
+
+**기존 θ 스윕은 1:9 혼합에서 균등 11.332 -> θ0.99 7.481, `-33.98%` 였다.**
+쓰기 50% 인 A 에서도 `-0.04%` 다. **이건 안 맞는다.**
+
+가능한 원인 셋:
+
+```text
+(a) 키 범위가 프리로드와 같다(1M=1M)   -> hit 100%.
+    기존 θ 스윕이 요청범위 10M/프리로드 1M 였다면 miss 비율이 θ 에 따라
+    달라져 그게 -34% 의 정체일 수 있다. 그러면 기존 수치가 skew 효과가 아니다.
+(b) memtier `Z:Z` 가 이 구성에서 skew 를 실제로 안 만든다
+    -> 낮은 ID 에 뭉치는데 키 범위 전체가 1M 이면 핫셋이 여전히 넓을 수 있다
+(c) 기존 θ 스윕이 다른 노브(PROF on, 다른 pipe/ratio)와 얽혀 있었다
+```
+
+**당신 쪽에서 `badcrc` 를 보면 바로 갈린다.** 당신이 "badcrc 는 skew 의
+선행 지표(θ=0.75 에서 529배)" 라고 기록했다. **이번 zipf 3셀에서 badcrc 가
+안 뛰었다면 skew 가 서버에 도달하지 않은 것**이고 (b) 다. 뛰었는데 처리량이
+멀쩡하면 (a)/(c) 이고, **그 경우 기존 θ 스윕의 -34% 해석을 다시 봐야 한다.**
+
+### ④ A 곡선이 128 에서 꺾인다
+```text
+A: 64 7.014 -> 128 7.303 (+4.1%) -> 256 7.247 (-0.8%) -> 384 7.293 (+0.6%)
+```
+**YCSB A(쓰기 50%)는 128 에서 이미 천장이다.** C 는 384 까지 오르는데
+A 는 128 이후 평평하다 — 쓰기가 섞이면 깊이가 안 먹는다는 것이 여기서도 같다.
+
+NEXT: ariel (zipf badcrc 확인 / 블록 8 stock 무장)

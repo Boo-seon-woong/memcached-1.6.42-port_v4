@@ -12,7 +12,7 @@
 | [`MANUAL_TEST_PROCEDURE.md`](MANUAL_TEST_PROCEDURE.md) | 사람이 손으로 실행하는 단계별 절차 |
 | [`V4_RESULT.md`](V4_RESULT.md) | 최종 게이트 + 캠페인 전체 결과(§14 는 123 셀 전수 sweep) |
 | [`V3_TO_V4_CHANGES.md`](V3_TO_V4_CHANGES.md) | **v3→v4 단독 완결 문서** — span 정의·문제 원인·해결·구조·결과 |
-| [`KTC_0806_SPAN.md`](KTC_0806_SPAN.md) | **KTC 0806 보고 (목표 1)** — 4단 표 전부 기측정 발췌: 0730 정본→EXP-0 분해→v3 해결→v4 결과 |
+| [`KTC_0806_SPAN.md`](KTC_0806_SPAN.md) | **KTC 0806 보고 (목표 1)** — 0731 3막(이중게이트→재조정→재정의)→EXP-0 분해→해결→v4. 공백은 §5 측정 목록으로 |
 | [`GET_WORKFLOW.md`](GET_WORKFLOW.md) | GET 코드 경로. **§v4 를 먼저 읽을 것** — 본문은 v3 기준 |
 | [`SET_WORKFLOW.md`](SET_WORKFLOW.md) | SET 코드 경로. **§v4 와 §1-pac 을 먼저** — 본문 §1 은 동기 대조군 |
 | [`SPAN_MEASUREMENT_REVIEW.md`](SPAN_MEASUREMENT_REVIEW.md) | 계측 검증. **§1~§6 은 span v2, v3 검증은 §7** |

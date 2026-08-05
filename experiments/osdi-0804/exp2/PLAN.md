@@ -32,7 +32,7 @@ throughput-latency 곡선의 offered-load 축은 `pipeline` 이고, `mcT`/`nqp` 
 post 가 xfer 의 2.9 배). 운영점 2,277.58 분해는 보조 그림.
 
 ```text
-추가 1셀  BD-PIPE-1-r2: E0 확정값으로 pipe=1 재측정 (PROF=1, 100초)
+추가 1셀  BD-PIPE-1-r2: E0 확정값으로 pipe=1 재측정 (PROF=1, 30초)
           — 스핀 정책이 저부하 분해를 바꾸는지 확인. 바뀌면 r2 가 정본
 ```
 
@@ -41,7 +41,7 @@ post 가 xfer 의 2.9 배). 운영점 2,277.58 분해는 보조 그림.
 전 캠페인이 `-c 4` 단일이라 이 축은 데이터가 0 이다.
 
 ```text
-셀    E2C-{c4p256*, c16p64, c64p16} × {GET-only, 1:9}     60초
+셀    E2C-{c4p256*, c16p64, c64p16} × {GET-only, 1:9}     30초
       * c4p256 은 기존 운영점 값 재사용 가능하면 생략
 서버  운영값 불변 (클라이언트만 변경)
 판정  memtier 실측 latency 로만 — 커넥션을 늘리면 대기가 read() 이전(커널

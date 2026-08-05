@@ -13,7 +13,8 @@ DPA-Store Fig.15 형태(워크로드별 latency-throughput). span 은 exp2 소�
           집중도 동일·배치 상이(핫키가 낮은 ID 에 뭉침) — 결과에 각주 1줄로
           처리하고 우회 조치는 하지 않는다
 real-world dataset  이번 라운드 제외 — 자산 없음 (PENDING 차단 목록)
-지속      셀당 60초, 사이 20초 — co-located 13셀(기측정)과 동일 조건으로 대조
+지속      셀당 30초 (경향성 라운드 — 공통 규약). co-located 13셀(기측정)은
+          60초였으므로 절대값 대조에는 창 길이 차이를 각주로 단다
 ```
 
 ## YCSB ↔ memtier

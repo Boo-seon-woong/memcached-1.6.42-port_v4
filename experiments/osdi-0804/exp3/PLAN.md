@@ -7,7 +7,7 @@
 `rlen = ITEM_ntotal + 28(crypto) ≤ 256` (extstore.c:416). 키 12 B 기준 155 B.
 
 ```text
-탐침 (본 셀 전, 각 60초 GET-only)
+탐침 (본 셀 전, 각 30초 GET-only)
   V-PROBE-144:  -d 144 프리로드+부하 → stats ext_pac_fallback
   == 0 이면 V-PROBE-152 한 번 더.  상한 CAP = fallback=0 인 최대 실측값
 ```
@@ -16,7 +16,7 @@
 > (`g_pac_fallback++` 후 동기 저장). 죽지 않으므로 **셀마다 fallback=0
 > 확인이 게이트다** — 빠뜨리면 RDMA 를 안 타고 좋은 수치가 나온다.
 
-## 셀 — 5 크기 × 3 워크로드 = 15 부하 (각 60초)
+## 셀 — 5 크기 × 3 워크로드 = 15 부하 (각 30초)
 
 ```text
 V{16,32,64,128,CAP}-{GET,MIX,SET}     MIX=1:9

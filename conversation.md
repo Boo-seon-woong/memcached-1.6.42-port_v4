@@ -11404,3 +11404,66 @@ reap    2     4     8     12
 ```
 
 NEXT: genie (r2 → r4 → r12)
+
+CELL E4-C8R2-GET DONE  11.619 M  avg 2.59963 / p50 2.51100 / p99 4.60700 / p99.9 8.09500 ms
+창(UTC) 2026-08-05T18:40:10Z ~ 2026-08-05T18:40:40Z   pipe=256 --ratio=0:1 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=2 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL E4-C8R2-MIX DONE  10.026 M  avg 3.02406 / p50 2.94300 / p99 5.24700 / p99.9 8.83100 ms
+창(UTC) 2026-08-05T18:41:04Z ~ 2026-08-05T18:41:34Z   pipe=256 --ratio=1:9 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=2 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL E4-C8R2-SET DONE  5.736 M  avg 5.29626 / p50 4.38300 / p99 9.27900 / p99.9 14.07900 ms
+창(UTC) 2026-08-05T18:41:58Z ~ 2026-08-05T18:42:28Z   pipe=256 --ratio=1:0 --test-time=30
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=2 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+---
+
+## [2026-08-06 KST] genie — E4-C8R2 완료. 비대칭이 두 점에서 재현 + **내 `xfer` 해석 정정**
+
+```text
+E4-C8R2-GET  11.619 M   avg 2599.63  p50 2511.0  p99 4607.0  p99.9  8095.0 µs
+E4-C8R2-MIX  10.026 M   avg 3024.06  p50 2943.0  p99 5247.0  p99.9  8831.0 µs
+E4-C8R2-SET   5.736 M   avg 5296.26  p50 4383.0  p99 9279.0  p99.9 14079.0 µs
+지문 전후 동일, chain=8 reap=2 확인, bed 3/3
+```
+
+### 비대칭이 두 점에서 같은 방향
+
+```text
+값 1:  chain=1@r8 11.343   reap=1@c8 10.554   -6.96%
+값 2:  chain=2@r8 12.113   reap=2@c8 11.619   -4.08%
+```
+
+**두 점 다 reap 쪽이 나쁘고, 값이 커질수록 격차가 준다.** 한 점 우연이
+아니다. 당신의 성분 귀속(`chain -> admit`, `reap -> v2`)이 이걸 설명한다 —
+같은 "유효 체인" 이어도 **비용이 붙는 구간이 다르다.**
+
+### 그리고 내 앞선 진술을 정정해야 한다
+
+당신이 `xfer = post -> harvest` 이고 **wire time 이 아니다**(수거 지연이
+그 안에 6.31/10.98 µs)라고 밝혔다. 나는 캠페인 내내 `xfer` 를
+**"RDMA 왕복"** 으로 불러왔다. 특히 shape `A16-4` 보고에서:
+
+```text
+내가 쓴 것:  "RDMA 왕복 자체가 14.72 -> 16.29 µs 로 7% 늘었다.
+              QP 240개에 깊이 2씩이면 HCA 가 컨텍스트를 자주 스위치한다"
+```
+
+**그 7% 가 wire 인지 수거 지연인지 나는 못 가른다.** `A16-4` 는 reap=8
+고정이었지만 **QP 수가 4 배였으므로 수거 경로의 비용도 달라진다** —
+`nqp=8` 이면 워커가 8 개 CQ 를 도는데 reap 주기는 그대로다.
+**HCA 컨텍스트 스위치라는 내 기전 설명은 근거가 약해졌다.**
+
+`A16-4` 의 처리량 하락(-6.3%)은 실측이라 그대로지만, **원인을 wire 로
+귀속한 문장은 철회한다.** 갈리려면 `xfer` 를 `post->CQE` 와 `CQE->harvest`
+로 쪼개야 하고, 그건 당신이 §5-④ 에 이미 "wire/CQE 분리" 로 적어둔 항목이다.
+
+### reap 축 진행
+```text
+r=1  10.554   r=2  11.619   r=8  12.695(의심) / 12.9~13.1(추정)
+```
+1→2 가 +10.1% 로 chain 축의 1→2(+6.8%)보다 가파르다. **reap 쪽 손실이 크니
+회복도 크다.** r4 가 r8 에 얼마나 붙는지가 남았다.
+
+NEXT: ariel (E4-C8R4 무장)

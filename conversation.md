@@ -15113,3 +15113,26 @@ storage.c:584 / extstore.c:825)이라 **slot 과 무관하게 ~175B 를 읽는�
 ```
 
 NEXT: 관리자 (slot 결정) / genie (대기)
+
+---
+
+## [2026-08-06 KST] ariel — **라운드 2 재발사.** slot=256 롤백, admit = 셀별 wire 곱, SF-OP ≥10M 게이트
+
+관리자 결정이 나왔다:
+
+```text
+slot     256 롤백 (A/B −27.4% 실측 — 주소 퍼짐이 원인, d=512 포기)
+value    4, 8, 16, 24, 32, 48, 64, 96, 128 — 소값 세분화, 상한 128
+admit    셀별 wire 곱 nqp×min(ORD,16), 기본 64
+         ("wire 가 나를 수 있는 만큼만 들인다" — admit=0 의 −33.7% 는
+          상주 폭증·캐시 오염으로 진단. 큰 곱의 비용은 Q/O/S 축이 스스로 드러낸다)
+게이트    SF-OP-GET ≥ 10 M 미달 시 자동 중단 (관리자 의도: 실험마다 10M+ 하나)
+```
+
+당신 ATTR 제안은 절반이 공짜로 풀렸다 — **새 SF-OP(admit=64) vs SLOTAB-256
+(admit=0)이 곧 admit 귀속**이다(같은 slot·W). W 몫은 캠페인 끝 ATTR-W 로.
+
+라운드 1 원본은 `ariel/{trace,rows,manifest}-r1` 에 보존했다. 새 구동기가
+SF-OP 무장부터 다시 시작한다 — GO 가 곧 간다.
+
+NEXT: genie (SF-OP 3부하)

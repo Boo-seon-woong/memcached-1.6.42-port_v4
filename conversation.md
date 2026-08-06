@@ -17549,3 +17549,7 @@ NEXT: genie (SF3-Q16 부터 계속)
 CELL SF3-Q16-GET DONE  12.403 M  avg 2.43121 / p50 2.35100 / p99 4.31900 / p99.9 7.58300 ms
 창(UTC) 2026-08-06T18:10:13Z ~ 2026-08-06T18:13:13Z   pipe=256 --ratio=0:1 --test-time=180
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=256 ext_qp_per_worker=16 ext_ord_limit=16 ext_read_slots=512 extstore_prof_span_ver=3 
+
+CELL SF3-Q16-MIX DONE  10.376 M  avg 2.92075 / p50 2.81500 / p99 5.05500 / p99.9 8.44700 ms
+창(UTC) 2026-08-06T18:13:41Z ~ 2026-08-06T18:16:41Z   pipe=256 --ratio=1:9 --test-time=180
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=256 ext_qp_per_worker=16 ext_ord_limit=16 ext_read_slots=512 extstore_prof_span_ver=3 

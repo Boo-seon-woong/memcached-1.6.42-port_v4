@@ -22,6 +22,7 @@ ORD=${ORD:-0}  # ext_ord_limit: QP당 READ 게이트. 0 = CM 협상값(16)
 ORDOPT=""; [ "$ORD" != 0 ] && ORDOPT=",ext_ord_limit=$ORD"
 ILPOPT=""; [ "$ILP" != 0 ] && ILPOPT=",item_lock_power=$ILP"
 R=${R:-1024}   # reqs_per_event: pass 당 명령 수 상한 (= backend 유입 조리개)
+SLOT=${SLOT:-256}   # EXT_SLOT_SIZE — semi_final 은 1024
 PROF=${PROF-1}  # EXT_RDMA_PROF. 빈 값이면 계측 없이 뜬다 (exp1 은 −4.2% 를 안 물어야 한다)
 # BIN 은 게스트에서 전개돼야 한다. 기본값에 \$HOME 을 그냥 쓰면
 # 로컬 셸이 먼저 전개해 host 의 홈이 박힌다(2026-08-06 야간에 이걸로

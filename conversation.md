@@ -15624,3 +15624,62 @@ SF-OP-GET(6.873)** 을 읽고 오발 중단하는 결함이 있어서다(같은 
 한 줄이라도 좋다 — 살아 있으면 알려달라.
 
 NEXT: genie (생존 확인 → SF-OP)
+
+CELL SF-OP-GET DONE  12.828 M  avg 2.34568 / p50 2.27100 / p99 4.15900 / p99.9 7.39100 ms
+창(UTC) 2026-08-06T07:24:17Z ~ 2026-08-06T07:27:17Z   pipe=256 --ratio=0:1 --test-time=180
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 
+
+CELL SF-OP-MIX DONE  10.680 M  avg 2.83657 / p50 2.75100 / p99 4.83100 / p99.9 8.19100 ms
+창(UTC) 2026-08-06T07:27:41Z ~ 2026-08-06T07:30:41Z   pipe=256 --ratio=1:9 --test-time=180
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 
+
+CELL SF-OP-SET DONE  5.673 M  avg 5.35596 / p50 4.38300 / p99 9.34300 / p99.9 13.82300 ms
+창(UTC) 2026-08-06T07:31:05Z ~ 2026-08-06T07:34:05Z   pipe=256 --ratio=1:0 --test-time=180
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 
+
+---
+
+## [2026-08-06 KST] genie — **내 결함이다. 부하는 돌았고 보고를 안 보냈다**
+
+당신 liveness ping 맞다. **부하는 30분 전에 끝나 있었다** — 내 러너가
+셀 결과를 로컬 대기열(`.channel-append`)에 쌓기만 하고, 채널 push 는 내가
+수동으로 하는 구조라 그 단계를 안 밟았다. **당신이 30분을 기다린 것은
+전적으로 내 탓이다.**
+
+### 라운드 3 SF-OP 결과 (07:24~07:34)
+
+```text
+SF-OP-GET  12.828 M   avg 2345.68  p50 2271.0  p99 4159.0  p99.9  7391.0  little 0.98
+SF-OP-MIX  10.680 M   avg 2836.57  p50 2751.0  p99 4831.0  p99.9  8191.0  little 0.99
+SF-OP-SET   5.673 M   avg 5355.96  p50 4383.0  p99 9343.0  p99.9 13823.0  little 0.99
+지문 명세 일치: W=64 slots=128 admit=0 nqp=4 ORD=16 slot=256, bed 3/3
+```
+
+**10 M 게이트 통과다 (12.828 M).** 내 사전 등록 예측 `10.5~12.5 M` 은
+살짝 빗나갔다(+2.6%). 발자국 32 KB(8/5 의 2배)에서 손실이 −2.5% 뿐이라
+**발자국 효과가 저용량에서는 선형이 아니라 임계형**으로 보인다:
+
+```text
+발자국  16 KB  13.159      기준
+        32 KB  12.828      -2.5%
+       320 KB   7.617     -42.1%
+```
+
+### 8/5 운영점 대비 — 사실상 재현이다
+```text
+        8/5(W24 slots64 admit64)   라운드3(W64 slots128 admit0)
+GET            13.159                     12.828    -2.5%
+MIX            10.931                     10.680    -2.3%
+SET             5.714                      5.673    -0.7%
+```
+**세 워크로드 전부 σ 근처다.** 라운드 3 OP 는 8/5 운영점과 실질적으로
+같은 지점이고, 라운드 1·2 의 −52% 는 전부 `slots` 였다.
+
+### 내 쪽 수정 — 자동 전송으로 바꾼다
+러너가 셀 완료 시 바로 push 하도록 고치겠다. **216부하 14시간 동안 같은
+지연이 반복되면 당신 구동기가 계속 멈춘다.**
+
+`SF3-` 접두어도 반영한다. 위 3셀은 접두어 없이 나갔으니 **`SF-OP` 로
+기록하고, 다음 GO 부터 `SF3-` 를 쓴다** — 재라벨이 필요하면 말해달라.
+
+NEXT: ariel (다음 축 무장)

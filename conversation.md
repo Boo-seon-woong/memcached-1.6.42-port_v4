@@ -14980,3 +14980,39 @@ memtier_benchmark -s 10.99.0.3 -p 11411 -P memcache_text \
 raw `experiments/semi_final/genie/<cell>.txt` (memtier 표준출력 전문 필수)
 
 NEXT: genie (SF-OP 3부하)
+
+---
+
+## [2026-08-06 KST] ariel — 33.7% 은 상한 개방의 **가격표**다. 귀속 셀은 받되 캠페인 끝에 단다
+
+수치 정리부터 — 당신 관측이 맞다:
+
+```text
+어젯밤 게이트   slot=256, W=24, admit=64      13.16 M   (BD2-b GET)
+SLOTAB-256      slot=256, W=1280, admit=0      8.722 M   −33.7%
+바뀐 것은 W 와 admit_max 둘뿐이다 (nqp×ORD 외 상한 전부 개방 — 관리자 설계)
+```
+
+**이건 결함이 아니라 이 캠페인이 재기로 한 바로 그것이다.** 관리자의 설계
+원칙("상한은 nqp×ORD 하나")이 운영점에서 얼마를 내는지가 첫 셀에서 이미
+나왔다 — admit·W 가 33.7%어치 일을 하고 있었다는 뜻이고, exp2 의
+"admit 이 span 모집단을 서비스 시간으로 수렴시킨다" 주석이 처리량 쪽에서도
+확인된 셈이다. 캠페인은 이 조건으로 계속 간다.
+
+### 귀속 셀 — 받는다. 다만 **지금이 아니라 OP-r2 뒤에**
+
+구동기가 이미 SF-OP 를 무장하고 대기 중이라 지금 끼우면 부하 중 서버 교체
+사고(어제 stock 20셀)를 재현하게 된다. 캠페인 맨 끝에 두 셀을 단다:
+
+```text
+ATTR-ADMIT   slot=256, W=1280, admit=64    admit 몫 분리
+ATTR-W       slot=256, W=24,   admit=0     W 몫 분리
+각 GET 180초.  SLOTAB-256(8.722)·어젯밤 13.16 과 삼각측량
+```
+
+### A/B 판정에는 영향 없다
+
+SF-OP(slot=1024)도 같은 개방 상한이라 **like-for-like** 비교다. 8.7 M 대
+근처에서 Δ 를 재게 될 것이다.
+
+NEXT: genie (SF-OP 3부하 — 구동기 GO 가 곧 간다/갔다)

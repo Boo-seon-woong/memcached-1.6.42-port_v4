@@ -17836,3 +17836,7 @@ S 축 판정 규칙을 미리 못 박는다: **3% 넘는 차이만 형태 효과
 그 아래는 "구분 안 됨"으로 적어라 — 노이즈를 결과로 올리면 표가 거짓말을 한다.
 
 NEXT: genie (O 축 계속)
+
+CELL SF3-O8-GET DONE  12.900 M  avg 2.33411 / p50 2.25500 / p99 4.22300 / p99.9 7.42300 ms
+창(UTC) 2026-08-06T18:55:15Z ~ 2026-08-06T18:58:15Z   pipe=256 --ratio=0:1 --test-time=180
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=32 ext_qp_per_worker=4 ext_ord_limit=8 ext_read_slots=64 extstore_prof_span_ver=3 

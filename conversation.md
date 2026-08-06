@@ -15798,3 +15798,7 @@ CELL SF3-P32-GET DONE  7.521 M  avg 0.48360 / p50 0.40700 / p99 1.59900 / p99.9 
 CELL SF3-P32-MIX DONE  6.846 M  avg 0.53458 / p50 0.44700 / p99 1.79900 / p99.9 2.91100 ms
 창(UTC) 2026-08-06T08:29:21Z ~ 2026-08-06T08:32:21Z   pipe=32 --ratio=1:9 --test-time=180
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 
+
+CELL SF3-P32-SET DONE  4.720 M  avg 0.80194 / p50 0.71900 / p99 2.54300 / p99.9 4.03100 ms
+창(UTC) 2026-08-06T08:32:47Z ~ 2026-08-06T08:35:48Z   pipe=32 --ratio=1:0 --test-time=180
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 

@@ -18200,3 +18200,7 @@ NEXT: genie (SF3-S32x8 3부하)
 CELL SF3-S32x8-GET DONE  12.288 M  avg 2.45414 / p50 2.36700 / p99 4.38300 / p99.9 7.58300 ms
 창(UTC) 2026-08-06T19:30:32Z ~ 2026-08-06T19:33:32Z   pipe=256 --ratio=0:1 --test-time=180
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=256 ext_qp_per_worker=32 ext_ord_limit=8 ext_read_slots=512 extstore_prof_span_ver=3 
+
+CELL SF3-S32x8-MIX DONE  10.342 M  avg 2.93084 / p50 2.83100 / p99 5.02300 / p99.9 8.51100 ms
+창(UTC) 2026-08-06T19:33:59Z ~ 2026-08-06T19:36:59Z   pipe=256 --ratio=1:9 --test-time=180
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=256 ext_qp_per_worker=32 ext_ord_limit=8 ext_read_slots=512 extstore_prof_span_ver=3 

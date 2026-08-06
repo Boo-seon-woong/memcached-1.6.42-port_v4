@@ -54,6 +54,10 @@ flush_preload(){ # flush_preload <d>
 }
 
 sfsave(){
+  # 게스트 디스크 가드 — 150MB 아래로 내려가면 저널·syslog 를 걷는다
+  $G 'a=$(df --output=avail /|tail -1); if [ "$a" -lt 153600 ]; then
+        sudo journalctl --vacuum-size=30M >/dev/null 2>&1
+        sudo truncate -s 0 /var/log/syslog /var/log/auth.log 2>/dev/null; fi' 2>/dev/null
   scp -q -i "$HOME/.ssh/snp_guest" -P 2222 ubuntu@localhost:/tmp/semifinal/trace.csv "$SF/ariel/trace.csv" 2>/dev/null
   python3 tools/night-slice.py "$SF/ariel/trace.csv" "$MAN" > "$SF/rows.tsv" 2>/dev/null
   python3 tools/parse-client.py > "$SF/client.tsv" 2>/dev/null

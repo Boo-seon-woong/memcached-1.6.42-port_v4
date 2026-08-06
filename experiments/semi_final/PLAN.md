@@ -28,10 +28,11 @@ ORD)를 운영점에서 **하나씩만** 흔들고, 7번은 곱(nqp×ORD)을 256
 부하    genie off-box. memtier -s 10.99.0.3 -p 11411 -P memcache_text
         -t 30 -c 4 --pipeline=256 -d 64 --key-prefix=m-
         --key-minimum=1 --key-maximum=1000000 --key-pattern=R:R
-        --distinct-client-seed --hide-histogram --test-time=60
+        --distinct-client-seed --hide-histogram --test-time=180
 키공간  1,000,000 × d.  프리로드: 재기동·크기 변경 직후 매번
         (memtier 로컬 P:P 1:0, threads=8 clients=16 pipe=8 -n 7813)
-시간    부하 60초, 사이 20초.  구성마다 워크로드 3종: -GET(0:1) -MIX(1:9) -SET(1:0)
+시간    부하 **180초**, 사이 20초 (본 실험 — 관리자 결정 2026-08-06).
+        구성마다 워크로드 3종: -GET(0:1) -MIX(1:9) -SET(1:0)
 채널    conversation.md 에 GO/DONE. GO 맨 위에 SERVER: 줄(판별자 포함) 필수
 기록    guest 추적기 42열 1초(/tmp/semifinal/trace.csv, RESET_ON_LOAD=1)
         + manifest.tsv(라벨, GO 직전 epoch) + genie DONE 줄(avg/p50/p99/p99.9)
@@ -105,12 +106,13 @@ OP 재시행 판정: |OP − OP-r2| ≤ 3%(재기동 편차) 면 정상. 초과�
 ## 3. 규모
 
 ```text
-부하    (1+7+7+5+15+5+6+5+8+1) = 60 구성 × 3 = 180 부하 × 80초  ≈ 240분
-        + SLOTAB-256 1부하(30초)
-재기동  41회 (+프리로드)                                       ≈ 102분
-value flush/프리로드 5회                                       ≈ 6분
-합계                                                           ≈ 5.8 h
+부하    (1+7+7+5+15+5+6+5+8+1) = 60 구성 × 3 = 180 부하 × 200초  ≈ 600분
+        + SLOTAB-256 1부하(30초 — 전제 검증용, 데이터 아님)
+재기동  41회 (+프리로드)                                        ≈ 102분
+value flush/프리로드 5회                                        ≈ 6분
+합계                                                            ≈ 11.8 h
 ```
 
-주: 재기동 간 처리량 편차 ±3% 실측 — 축 안에서는 형태·방향을 읽고, 절대값
-주장은 본측정(60초×3런 교대)으로 넘긴다.
+주: 이것이 본 실험이다(180초 단발). 재기동 간 처리량 편차 ±3% 실측 —
+구성 간 절대값 비교는 그 폭을 감안해 읽고, OP 재시행(§2-11)이 캠페인 전체의
+드리프트 가드다.

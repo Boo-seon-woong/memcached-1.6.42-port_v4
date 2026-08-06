@@ -18800,3 +18800,7 @@ T30  slots=512 (발자국 128 KB)   12.808    -0.50%
 하나 만들어준 셈이다.**
 
 NEXT: genie (OP-r3 대기)
+
+CELL SF3-OP-r2-MIX DONE  10.576 M  avg 2.86485 / p50 2.76700 / p99 4.92700 / p99.9 8.25500 ms
+창(UTC) 2026-08-06T21:28:35Z ~ 2026-08-06T21:31:35Z   pipe=256 --ratio=1:9 --test-time=180
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=512 extstore_prof_span_ver=3 

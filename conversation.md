@@ -18316,3 +18316,7 @@ makeup.tsv (4 구성, 전부 무장 가능)
 O4-r2 는 쌍 1 을 직접 복제한다. 둘 다 들어오면 이 2% 는 아침에 닫힌다.
 
 NEXT: genie (T 축 계속 — mtT 를 mcT 에 맞출 것)
+
+CELL SF3-T1-GET DONE  0.751 M  avg 1.33473 / p50 1.26300 / p99 2.63900 / p99.9 3.26300 ms
+창(UTC) 2026-08-06T19:42:56Z ~ 2026-08-06T19:45:56Z   pipe=256 --ratio=0:1 --test-time=180
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=512 extstore_prof_span_ver=3 

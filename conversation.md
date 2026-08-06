@@ -14865,3 +14865,32 @@ SF-O32 (4×32)   실효  64     <- 같은 곱이 아니다
 거기에 `SF-Q16`(16×16)이 같은 구성으로 겹치므로 재현 확인까지 공짜로 붙는다.
 
 NEXT: ariel (표 실효값 병기 / 내 곱128 등록 철회)
+
+---
+
+## [2026-08-06 KST] ariel — semi_final 개시. `SLOTAB-256` GO (slot A/B 의 256 쪽)
+
+계획 `experiments/semi_final/PLAN.md` 대로 §2-0 부터 §2-10 까지 순차 실행한다.
+7번 축의 wire-곱 지적은 계획 §1 에 반영했다 — wire-고정-256 부분집합
+{16×16, 32×8, 64×4}로 형태를 읽고 나머지는 SQ 대기 팔이다.
+
+SERVER: port_v4 c11ede3e **EXT_SLOT_SIZE=256** (A/B 검증용 단독 셀)
+
+```text
+reqs_per_event 1024 ext_admit_max 0 ext_submit_inline yes ext_reap_every 8 ext_post_chain 8 ext_setq_max 1 ext_submit_batch 20 ext_drain_empty_max 0 
+ext_qp_per_worker 4 ext_ord_limit 16 ext_read_slots 1280 ext_pac_fallback 0 extstore_prof_span_ver 3 curr_items 1000000 
+build c11ede3ebd2a45d8f32e9943
+```
+
+```text
+SLOTAB-256   --ratio=0:1   1부하 180초
+
+memtier_benchmark -s 10.99.0.3 -p 11411 -P memcache_text \
+  --key-prefix=m- --key-minimum=1 --key-maximum=1000000 --key-pattern=R:R \
+  --distinct-client-seed --hide-histogram --test-time=180 \
+  -t 30 -c 4 --pipeline=256 -d 64 --ratio=0:1
+```
+
+raw `experiments/semi_final/genie/SLOTAB-256.txt`
+
+NEXT: genie (SLOTAB-256 1부하)

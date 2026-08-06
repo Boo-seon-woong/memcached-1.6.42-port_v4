@@ -15247,3 +15247,70 @@ NEXT: ariel (W 결정)
 admit=64 복원으로 13M대 복귀를 예상했는데 미달이다. 관리자 판단 대기.
 
 NEXT: (중단)
+
+CELL SF-OP-MIX DONE  6.099 M  avg 4.99368 / p50 4.76700 / p99 9.53500 / p99.9 13.31100 ms
+창(UTC) 2026-08-06T06:56:19Z ~ 2026-08-06T06:59:19Z   pipe=256 --ratio=1:9 --test-time=180
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=1280 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=1280 extstore_prof_span_ver=3 
+
+CELL SF-OP-SET DONE  3.525 M  avg 8.64592 / p50 7.00700 / p99 14.14300 / p99.9 21.11900 ms
+창(UTC) 2026-08-06T06:59:43Z ~ 2026-08-06T07:02:43Z   pipe=256 --ratio=1:0 --test-time=180
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=1280 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=1280 extstore_prof_span_ver=3 
+
+---
+
+## [2026-08-06 KST] genie — SF-OP 3부하 완주. **`W` 귀속에 아직 안 갈린 짝이 하나 있다**
+
+```text
+SF-OP-GET  6.873 M   avg 4429.44  p50 4191.0  p99  8767.0  little 0.99
+SF-OP-MIX  6.099 M   avg 4993.68  p50 4767.0  p99  9535.0  little 0.99
+SF-OP-SET  3.525 M   avg 8645.92  p50 7007.0  p99 14143.0  little 0.99
+```
+
+### 정정 — 내가 "범인은 W" 라고 단정한 것은 성급했다
+
+```text
+구성              W    slots   admit    M ops
+8/5 운영점       24       64      64   13.159
+SLOTAB-256     1280     1280       0    8.722
+SF-OP r2       1280     1280      64    6.873
+```
+
+**`W` 와 `EXT_READ_SLOTS` 가 항상 같이 움직였다.** 8/5 는 `W=24 slots=64`,
+지금은 `W=1280 slots=1280` 이다. **내 네 점으로는 둘을 분리 못 한다** —
+앞선 보고에서 "나머지 노브가 전부 동일" 이라고 썼는데 `slots` 를 빠뜨렸다.
+그 문장을 정정한다.
+
+당신이 `pending ATTR verdict on read_slots` 로 잡아둔 것이 정확히 이 지점이다.
+
+### 가르는 셀 둘 (각 180초, 재기동 2회, 약 10분)
+
+```text
+ATTR-W    W=24    slots=1280   admit=64   nqp=4 ORD=16 slot=256
+ATTR-S    W=1280  slots=64     admit=64   나머지 동일
+```
+
+```text
+ATTR-W 가 13 M 대  ->  범인은 W
+ATTR-S 가 13 M 대  ->  범인은 read_slots
+둘 다 중간         ->  둘이 함께 작용 (그 경우 곱 형태로 읽어야 한다)
+```
+
+**한 셀만 돌아도 절반은 갈린다** — `ATTR-W` 가 13 M 이면 `slots` 는 무죄다.
+GET-only 1부하씩이면 6분이다.
+
+### `W` 를 wire 곱으로 두는 라운드 3 설계에 대해
+
+방향은 맞다고 본다. 다만 **`slots` 도 같은 규칙을 받아야 하는지**가 위
+ATTR 결과에 달렸다. `slots` 가 범인이면 `slots = wire 곱` 도 함께 걸어야
+하고, 무죄면 `slots` 는 크게 둬도 된다(`d` 축에서 슬롯 수가 필요할 수 있다).
+
+**ATTR 먼저 돌고 라운드 3 설계를 확정하는 편이 안전하다.**
+
+### 부수 — SET 이 3.5 M 로 내려앉았다
+```text
+SET   8/5 운영점 5.714 M  ->  지금 3.525 M   -38.3%
+```
+SET 은 아홉 축에서 안 움직이던 값인데 이 구성 변경에는 크게 반응한다.
+**`W`/`slots` 가 SET 경로에도 실린다는 뜻**이고, 그것도 ATTR 로 갈린다.
+
+NEXT: ariel (ATTR 2셀 무장)

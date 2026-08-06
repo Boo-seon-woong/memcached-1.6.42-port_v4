@@ -25,7 +25,7 @@ MEMTIER='memtier_benchmark -s 10.99.0.3 -p 11411 -P memcache_text \
 # ── 무장. 성공 시 지문을 /tmp/sf-fp.txt 에 남긴다 ─────────────────────────
 arm(){ # arm <label> — 호출자가 env(SLOT/PC/RE/ORD/MCT/CPUSET/DVAL…)를 세팅
   local lbl=$1
-  if tools/night-arm.sh 20 1280 "${NQP:-4}" 1280 > "/tmp/sf-arm-$lbl.txt" 2>&1; then
+  if tools/night-arm.sh 20 "${WW:-64}" "${NQP:-4}" 1280 > "/tmp/sf-arm-$lbl.txt" 2>&1; then
     grep -v '^──' "/tmp/sf-arm-$lbl.txt" > /tmp/sf-fp.txt
     $G 'printf "stats\r\nquit\r\n"|timeout 5 nc -q1 127.0.0.1 11411|tr -d "\r"|grep -E "listen_disabled_num|curr_items|ext_pac_fallback"' \
       >> "/tmp/sf-arm-$lbl.txt" 2>/dev/null
@@ -134,8 +134,8 @@ go_batch(){ # go_batch <axis-label> <match-cell> <timeout> <본문파일>
 say "semi_final 시작"
 
 # ── 1: SF-OP (slot=256, admit=64) + ≥10M 게이트 ─────────
-SLOT=256 INLINE=1 AD=64 RE=8 PC=8 SQ=1 DEM=0 DVAL=64 arm SF-OP || { say "OP 무장 실패 — 중단"; exit 1; }
-go_trio SF-OP 30 4 256 64 "port_v4 c11ede3e slot=256 admit=64 W=1280 (라운드 2 — 드리프트 가드 시작점)"
+SLOT=256 INLINE=1 AD=0 WW=64 RE=8 PC=8 SQ=1 DEM=0 DVAL=64 arm SF-OP || { say "OP 무장 실패 — 중단"; exit 1; }
+go_trio SF-OP 30 4 256 64 "port_v4 c11ede3e slot=256 W=64(=wire곱) admit=0 (라운드 3 — 드리프트 가드 시작점)"
 
 OPS=$(ops_of SF-OP-GET)
 say "SF-OP-GET = ${OPS:-NA} M (게이트: ≥10M)"
@@ -159,7 +159,7 @@ sfsave
 {
   echo; echo "---"; echo
   echo "## [$(TZ=Asia/Seoul date +%Y-%m-%d) KST] ariel — semi_final P 축 GO (pipeline 8구성 × 3부하, 서버 불변)"
-  echo; echo "SERVER: port_v4 c11ede3e slot=256 admit=64 (SF-OP 와 동일 — 재기동 없음)"
+  echo; echo "SERVER: port_v4 c11ede3e slot=256 W=64 (SF-OP 와 동일 — 재기동 없음)"
   echo; echo '```text'
   for p in 1 8 32 64 128 256 384 512; do
     echo "SF-P${p}-{GET,MIX,SET}    --pipeline=$p    ratio 0:1 / 1:9 / 1:0    각 180초"
@@ -175,7 +175,7 @@ go_batch "SF-P" "SF-P512-SET" 7200 "$MSG/P.md"; sfsave
 {
   echo; echo "---"; echo
   echo "## [$(TZ=Asia/Seoul date +%Y-%m-%d) KST] ariel — semi_final E 축 GO (client×pipeline 곱 1,024 고정, 8구성 × 3부하, 서버 불변)"
-  echo; echo "SERVER: port_v4 c11ede3e slot=256 admit=64 (변경 없음)"
+  echo; echo "SERVER: port_v4 c11ede3e slot=256 W=64 (변경 없음)"
   echo; echo '```text'
   for cp in 1:1024 2:512 4:256 8:128 16:64 32:32 64:16 128:8; do
     c=${cp%%:*}; p=${cp##*:}
@@ -192,7 +192,7 @@ go_batch "SF-E" "SF-E128x8-SET" 7200 "$MSG/E.md"; sfsave
 # ── 4: D 축 (flush+프리로드, 크기별 GO) ──────────────────
 for d in 4 8 16 24 32 48 64 96 128; do
   if flush_preload "$d"; then
-    go_trio "SF-D$d" 30 4 256 "$d" "port_v4 c11ede3e slot=256 admit=64 (재기동 없음 — flush 후 d=$d 재프리로드)" \
+    go_trio "SF-D$d" 30 4 256 "$d" "port_v4 c11ede3e slot=256 W=64 (재기동 없음 — flush 후 d=$d 재프리로드)" \
       "프리로드도 -d $d 다. 부하 -d 를 반드시 맞출 것."
   else
     say "SF-D$d 프리로드/게이트 실패 — 건너뜀"
@@ -203,16 +203,16 @@ sfsave
 
 # ── 5: C 축 (재기동 16회) ───────────────────────────────
 for c in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16; do
-  SLOT=256 INLINE=1 AD=64 RE=8 PC=$c SQ=1 DEM=0 DVAL=64 arm "SF-C$c" || continue
-  go_trio "SF-C$c" 30 4 256 64 "port_v4 c11ede3e slot=256 admit=64 ext_post_chain=$c (reap=8)"
+  SLOT=256 INLINE=1 AD=0 WW=64 RE=8 PC=$c SQ=1 DEM=0 DVAL=64 arm "SF-C$c" || continue
+  go_trio "SF-C$c" 30 4 256 64 "port_v4 c11ede3e slot=256 W=64 ext_post_chain=$c (reap=8)"
 done
 sfsave
 
 # ── 6: Q 축 (재기동 6회) ────────────────────────────────
 for q in 1 2 4 8 16 64; do
   WIRE=$((q*16))
-  SLOT=256 INLINE=1 AD=$WIRE RE=8 PC=8 SQ=1 DEM=0 DVAL=64 NQP=$q arm "SF-Q$q" || continue
-  go_trio "SF-Q$q" 30 4 256 64 "port_v4 c11ede3e slot=256 nqp=$q ORD=협상16 admit=$WIRE (=wire 곱)"
+  SLOT=256 INLINE=1 AD=0 WW=$WIRE RE=8 PC=8 SQ=1 DEM=0 DVAL=64 NQP=$q arm "SF-Q$q" || continue
+  go_trio "SF-Q$q" 30 4 256 64 "port_v4 c11ede3e slot=256 nqp=$q ORD=협상16 W=$WIRE (=wire 곱)"
 done
 sfsave
 
@@ -221,9 +221,9 @@ for o in 1 2 4 8 0 32 64; do
   lbl="SF-O$o"; [ "$o" = 0 ] && lbl="SF-O16"
   ow=$o; [ "$o" = 0 ] && ow=16; [ "$ow" -gt 16 ] && ow=16
   WIRE=$((4*ow))
-  SLOT=256 INLINE=1 AD=$WIRE RE=8 PC=8 SQ=1 DEM=0 DVAL=64 ORD=$o arm "$lbl" || continue
-  note="port_v4 c11ede3e slot=256 nqp=4 ORD=$o admit=$WIRE (=wire 곱)"
-  [ "$o" = 0 ] && note="port_v4 c11ede3e slot=256 nqp=4 ORD=협상16 admit=64"
+  SLOT=256 INLINE=1 AD=0 WW=$WIRE RE=8 PC=8 SQ=1 DEM=0 DVAL=64 ORD=$o arm "$lbl" || continue
+  note="port_v4 c11ede3e slot=256 nqp=4 ORD=$o W=$WIRE (=wire 곱)"
+  [ "$o" = 0 ] && note="port_v4 c11ede3e slot=256 nqp=4 ORD=협상16 W=64"
   go_trio "$lbl" 30 4 256 64 "$note"
 done
 sfsave
@@ -233,21 +233,21 @@ for qo in 1:256 2:128 4:64 8:32 16:16 32:8 64:4; do
   q=${qo%%:*}; o=${qo##*:}
   lbl="SF-S${q}x${o}"
   WIRE=$((q*(o<16?o:16)))
-  SLOT=256 INLINE=1 AD=$WIRE RE=8 PC=8 SQ=1 DEM=0 DVAL=64 NQP=$q ORD=$o arm "$lbl" || continue
-  go_trio "$lbl" 30 4 256 64 "port_v4 c11ede3e slot=256 nqp=$q ORD=$o핀 admit=$WIRE (soft곱 256, wire곱 $WIRE)"
+  SLOT=256 INLINE=1 AD=0 WW=$WIRE RE=8 PC=8 SQ=1 DEM=0 DVAL=64 NQP=$q ORD=$o arm "$lbl" || continue
+  go_trio "$lbl" 30 4 256 64 "port_v4 c11ede3e slot=256 nqp=$q ORD=$o핀 W=$WIRE (soft곱 256, wire곱 $WIRE)"
 done
 sfsave
 
 # ── 9: T 축 (재기동 9회) ────────────────────────────────
 for m in 1 2 4 8 12 16 24 28 30; do
-  SLOT=256 INLINE=1 AD=64 RE=8 PC=8 SQ=1 DEM=0 DVAL=64 MCT=$m CPUSET="0-$((m-1))" arm "SF-T$m" || continue
-  go_trio "SF-T$m" "$m" 4 256 64 "port_v4 c11ede3e slot=256 admit=64 mcT=$m taskset 0-$((m-1)) — genie 도 -t $m" \
+  SLOT=256 INLINE=1 AD=0 WW=64 RE=8 PC=8 SQ=1 DEM=0 DVAL=64 MCT=$m CPUSET="0-$((m-1))" arm "SF-T$m" || continue
+  go_trio "SF-T$m" "$m" 4 256 64 "port_v4 c11ede3e slot=256 W=64 mcT=$m taskset 0-$((m-1)) — genie 도 -t $m" \
     "**mtT=$m 로 맞춰라** (mcT=mtT 동시 스케일)."
 done
 sfsave
 
 # ── 10: OP 재시행 ───────────────────────────────────────
-SLOT=256 INLINE=1 AD=64 RE=8 PC=8 SQ=1 DEM=0 DVAL=64 arm SF-OP-r2 && \
-  go_trio SF-OP-r2 30 4 256 64 "port_v4 c11ede3e slot=256 admit=64 (드리프트 가드 끝점 — SF-OP 와 동일 조건)"
+SLOT=256 INLINE=1 AD=0 WW=64 RE=8 PC=8 SQ=1 DEM=0 DVAL=64 arm SF-OP-r2 && \
+  go_trio SF-OP-r2 30 4 256 64 "port_v4 c11ede3e slot=256 W=64 (드리프트 가드 끝점 — SF-OP 와 동일 조건)"
 sfsave
 say "semi_final 종료"

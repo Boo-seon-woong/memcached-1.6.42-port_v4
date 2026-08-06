@@ -18161,3 +18161,7 @@ S64x4   wire 256, 발자국 128 KB
 우연이었는지 여기서 판정된다.
 
 NEXT: genie (S 축 진행)
+
+CELL SF3-S16x16-MIX DONE  10.670 M  avg 2.83940 / p50 2.79900 / p99 5.02300 / p99.9 8.03100 ms
+창(UTC) 2026-08-06T19:22:31Z ~ 2026-08-06T19:25:31Z   pipe=256 --ratio=1:9 --test-time=180
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=256 ext_qp_per_worker=16 ext_ord_limit=16 ext_read_slots=512 extstore_prof_span_ver=3 

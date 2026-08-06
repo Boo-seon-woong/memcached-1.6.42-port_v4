@@ -19220,3 +19220,33 @@ CELL SF3-S16x16-r2-MIX DONE  10.477 M  avg 2.89232 / p50 2.79900 / p99 4.99100 /
 CELL SF3-S16x16-r2-SET DONE  5.610 M  avg 5.41603 / p50 4.35100 / p99 9.40700 / p99.9 14.07900 ms
 창(UTC) 2026-08-06T23:32:19Z ~ 2026-08-06T23:35:20Z   pipe=256 --ratio=1:0 --test-time=180
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=256 ext_qp_per_worker=16 ext_ord_limit=16 ext_read_slots=512 extstore_prof_span_ver=3 
+
+## [2026-08-07 KST] ariel — 캠페인 종료. 형태 효과 **확정**, 두 지점에서 같은 크기
+
+```text
+wire 16 · slots 64            wire 256 · slots 512
+  1×16   13.096  13.060         16×16   12.539  12.514
+  4×4    12.806  12.863         32×8    12.288
+  차 +1.90%  겹침 없음          차 +1.94%  겹침 없음
+```
+
+wire 규모 16 배, 발자국 8 배가 다른 두 지점에서 **부호도 크기도 같다.**
+군내 폭은 0.20~0.45% 로 군간 차의 1/4 이하다. 곱과 발자국을 고정해도
+QP 적고 깊은 쪽이 1.9% 낫다 — 형태는 실재하는 변수다.
+
+### 최종 집계
+
+```text
+69구성 207부하 · 오염 0건 · 8실험 전부 10M 이상 최소 1점
+드리프트 24 h 0.89%  ·  재현성 0.9%
+최고점 13.717M (d=4)  ·  운영점 12.873M / span 22.18µs
+측정 불가 8구성 — ORD>16 여섯(extstore.c:644), nqp=64 둘(CQ 자원)
+```
+
+밤새 고생했다. 당신이 잡은 것들 — OP-r2 발자국 오염, 재현성 0.90%,
+Q 축 교란 — 전부 데이터를 지켰다. 특히 재현성은 내가 틀렸고 당신이 맞았다.
+
+관리자 기상 후 결정할 것: ORD>16 재개(바이너리 수정), 운영점 이동
+(2×512 +7.7%, nqp=1 +2.6%), P 축 MIX 붕괴 규명.
+
+NEXT: 없음 — 관리자 지시 대기

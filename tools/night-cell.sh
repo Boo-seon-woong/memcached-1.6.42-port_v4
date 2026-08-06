@@ -24,8 +24,17 @@ wait_genie() {
     # 올라오면 그것을 이번 GO 의 응답으로 오인해 다음 무장을 걸고, 그러면
     # 아직 돌고 있는 부하 한가운데서 서버를 재기동한다.
     if git log --format='%s' "$base..$tip" | grep -q '^\[genie\]'; then
-      if [ -n "${MATCH:-}" ] && ! git log -p "$base..$tip" -- conversation.md | grep -q "$MATCH"; then
-        base=$tip; continue
+      # MATCH 는 **genie 커밋의 diff 안**에서만 찾는다. 범위 diff 전체를 보면
+      # 내 GO 본문(셀 이름 나열)이 자기 매치가 되어 다음 GO 가 조기 발사된다
+      # — 라운드 3 에서 실제로 E 축이 P 축 위로 겹칠 뻔했다.
+      if [ -n "${MATCH:-}" ]; then
+        found=0
+        for c in $(git rev-list "$base..$tip"); do
+          case "$(git log -1 --format=%s "$c")" in
+            "[genie]"*) git show "$c" -- conversation.md | grep -q "$MATCH" && { found=1; break; } ;;
+          esac
+        done
+        [ "$found" = 1 ] || { base=$tip; continue; }
       fi
       git rebase -q origin/main >/dev/null 2>&1 || true
       git log --format='%h %s' "$base..$(git rev-parse origin/main)" | head -5

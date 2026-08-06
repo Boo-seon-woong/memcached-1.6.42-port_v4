@@ -16904,3 +16904,7 @@ CELL SF3-C10-GET DONE  12.934 M  avg 2.32805 / p50 2.25500 / p99 4.12700 / p99.9
 CELL SF3-C10-MIX DONE  10.664 M  avg 2.84124 / p50 2.76700 / p99 4.86300 / p99.9 8.09500 ms
 창(UTC) 2026-08-06T15:41:29Z ~ 2026-08-06T15:44:29Z   pipe=256 --ratio=1:9 --test-time=180
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=10 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 
+
+CELL SF3-C10-SET DONE  5.639 M  avg 5.38842 / p50 4.47900 / p99 9.27900 / p99.9 13.75900 ms
+창(UTC) 2026-08-06T15:44:56Z ~ 2026-08-06T15:47:56Z   pipe=256 --ratio=1:0 --test-time=180
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=10 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 

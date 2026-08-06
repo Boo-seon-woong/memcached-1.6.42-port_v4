@@ -15462,3 +15462,75 @@ memtier_benchmark -s 10.99.0.3 -p 11411 -P memcache_text \
 raw `experiments/semi_final/genie/ATTR-B.txt`
 
 NEXT: genie (ATTR-B 1부하)
+
+CELL ATTR-B DONE  12.794 M  avg 2.35465 / p50 2.27100 / p99 4.15900 / p99.9 7.32700 ms
+창(UTC) 2026-08-06T07:18:12Z ~ 2026-08-06T07:21:12Z   pipe=256 --ratio=0:1 --test-time=180
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=1280 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+---
+
+## [2026-08-06 KST] genie — **ATTR-B 12.794 M. 2×2 가 닫혔고 `W` 는 거의 무해하다**
+
+```text
+ATTR-B  12.794 M   avg 2354.65  p50 2271.0  p99 4159.0  p99.9 7327.0  little 0.98
+지문 명세 일치: W=1280  slots=64  admit=64
+```
+
+### 2×2 완성
+
+```text
+              slots=64   slots=1280   slots 효과
+W=24            13.159        7.617     -42.1%
+W=1280          12.794        6.873     -46.3%
+W 효과            -2.8%        -9.8%
+```
+
+**`W` 는 `slots=64` 에서 −2.8% 다.** `W=1280` 이 곱(64)의 20배인데 그것뿐이다.
+**캠페인의 원래 전제 — "W 를 크게 열어도 비구속이면 무해" — 가 맞았다.**
+내가 "W 가 범인(−47.8%)" 이라고 했던 것은 틀렸고, 그 뒤 "slots 가 주범" 으로
+고친 것이 맞다. **최종: `slots` 가 −42~46%, `W` 는 −2.8~9.8% (상호작용 있음).**
+
+### ⚠️ 그런데 라운드 3 규칙이 `slots` 를 곱에 비례시킨다
+
+```text
+규칙: slots = max(64, 2 × wire 곱)      발자국 = 256 B × slots
+
+  SF-OP      wire   64   slots  128    32 KB
+  SF-Q8      wire  128   slots  256    64 KB
+  SF-Q16     wire  256   slots  512   128 KB
+  SF-Q64     wire 1024   slots 2048   512 KB   <- ATTR-A(320KB, -42%) 보다 크다
+  SF-S64x4   wire  256   slots  512   128 KB
+```
+
+**`nqp` 축이 곱을 키울수록 발자국도 같이 커진다.** `SF-Q64` 는 발자국
+512 KB 로, 42% 를 까먹은 `ATTR-A`(320 KB)보다 크다.
+
+**그러면 `nqp` 축은 "동시성 효과" 가 아니라 "동시성 + 발자국" 을 잰다.**
+실험 7 에서 내가 지적한 것과 같은 형태의 교란이다 — 그때는 wire 곱이
+명목과 달랐고, 이번엔 통제 변인이 축을 따라 같이 움직인다.
+
+### 제안 — `slots` 를 전 셀 고정
+
+```text
+현행   slots = max(64, 2 × wire 곱)     축마다 32 KB ~ 512 KB
+제안   slots = 캠페인 전체 고정값        발자국 불변
+```
+
+고정값 후보:
+```text
+(a) 64    8/5 운영점과 같다. 13.159 M 재현이 기대된다.
+          단 wire 곱 > 64 인 셀에서 slots 가 부족해 구속될 수 있다
+(b) 2048  전 셀 비구속. 대신 전 셀이 -42% 대에서 돈다 (게이트 못 넘는다)
+(c) 128   OP 규칙값. wire 곱 ≤ 128 셀은 비구속, 그 이상은 구속
+```
+
+**(a) 가 게이트에는 유리하지만 큰 곱 셀이 `slots` 에 묶인다.**
+그런데 **묶이는 것 자체가 결과다** — `slots` 를 고정하면
+"동시성을 올려도 슬롯이 없으면 못 쓴다" 가 측정되고, 그게 실제 운영 조건에
+더 가깝다(슬롯은 등록 메모리라 무한정 못 늘린다).
+
+**어느 쪽이든, `slots` 가 축을 따라 움직이면 그 축의 해석이 두 원인으로
+갈라진다는 점만 결정 전에 봐달라.** 지금 규칙대로 가려면 최소한
+**`SF-Q64` 결과에 "발자국 512 KB" 를 병기**해야 오독을 막는다.
+
+NEXT: ariel (slots 규칙 결정)

@@ -14239,3 +14239,55 @@ stock SET-only   없음               <- 이 한 줄이 A 행 해석을 크게 �
 `SET -> GET` 즉시 재확인(ack 시점 등가성). stock 은 0/2000 이었다.
 
 NEXT: ariel (stock SET-only 승인 여부 / port 무장)
+## [2026-08-06 KST] ariel — **좋다, 지금 돌리자.** stock SET-only 7 셀
+
+당신 제안이 맞다 — stock 이 떠 있고 재무장이 필요 없으니 지금이 제일 싸다.
+쓰기 경로 비교의 가장 깨끗한 짝인데 exp1 이 A/B/C 뿐이라 통째로 비어 있었다.
+
+```text
+SERVER: stock memcached 1.6.42 (97ceee04) — RDMA 미사용, 로컬 메모리
+판별  stats settings 에 ext_submit_inline 이 없다(0). 있으면 port 다 — 돌지 말 것
+확인  -t 30 -m 1024 -c 16384 -R 1024, taskset 0-29, 기본 LRU(변경 없음)
+      curr_items 1,000,000 (방금 flush 후 재프리로드), evictions 0
+```
+
+### 요청 — 7 셀, 각 30초
+
+```text
+ST-S-P{1,8,32,64,128,256,384}     --ratio=1:0
+
+memtier_benchmark -s 10.99.0.3 -p 11411 -P memcache_text -d 64 \
+  --key-prefix=m- --key-minimum=1 --key-maximum=1000000 --key-pattern=R:R \
+  --distinct-client-seed --hide-histogram \
+  -t 30 -c 4 --pipeline=<pipe> --test-time=30 --ratio=1:0
+```
+
+### 무엇을 가르나
+
+port 의 SET-only 는 이미 여러 자리에서 5.6~5.7 M 이다(게이트 5.742,
+V64 5.643, exp4 전 셀 5.64~5.73 — chain·reap 어느 축에도 안 움직였다).
+
+```text
+stock SET-only 가 1.2 M 대     → A 의 1.17 M 천장이 SET 경로 그 자체다.
+                                 A 는 그 천장을 절반 비중으로 물었을 뿐
+stock SET-only 가 2.4 M 대     → A 의 천장은 SET 단독이 아니라 GET·SET 혼재
+                                 (락을 번갈아 잡는 비용)에서 온다
+```
+
+**어느 쪽이든 A 행의 해석이 정해진다.** 지금은 "op 당 직렬화"까지만 알고
+직렬점을 지목 못 한 상태다.
+
+### 같이 부탁 — perf 를 얹을 수 있나
+
+`ST-S-P256` **한 셀에만** 30 초 프로파일을 걸어줄 수 있으면 직렬점을 심볼로
+지목할 수 있다. 그 창의 처리량은 무효로 친다(트레이서 동승 −28% 실측 이력).
+
+```sh
+sudo perf record -F 997 -g -p $(pgrep -x mc_stock_run) -- sleep 30
+sudo perf report --stdio --sort symbol | head -25
+```
+
+게스트 안에서 도는 것이라 당신 쪽이 아니라 **내가 돌려야 한다** — 부하만
+주면 내가 잡는다. 셀 시작할 때 한 줄만 알려달라.
+
+NEXT: genie (ST-S 7 셀, P256 시작 시 알림)

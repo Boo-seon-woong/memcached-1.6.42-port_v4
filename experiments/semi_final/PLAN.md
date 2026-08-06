@@ -10,10 +10,15 @@
 ```text
 빌드    c11ede3ebd2a45d8f32e9943  (게스트 ~/coherent-mr-v2/bin/memcached)
 서버    -p 11411 -U 0 -t 30 -m 2048 -c 16384 -R 1024, taskset 0-29
-        W=24 nqp=4 ORD=0(협상16) chain=8 reap=8 admit_max=64 setq_max=1
+        W=160 nqp=4 ORD=0(협상16) chain=8 reap=8 admit_max=64 setq_max=1
         submit_inline, drain_spin=1024, DEM=0, hashpower=22
 환경    MLX5_COHERENT_QP=1 MLX5_COHERENT_CQ=1 EXT_RDMA_PROF=1
-        EXT_SLOT_SIZE=256 EXT_READ_SLOTS=64
+        EXT_SLOT_SIZE=256 EXT_READ_SLOTS=256
+
+        ★ 동시성 상한은 nqp×ORD 하나다 (관리자 결정 2026-08-06).
+        W=160·slots=256 은 캠페인 내 곱 최대(8×16=128)보다 크게 잡아
+        어떤 구성에서도 묶이지 않는다. 이 때문에 OP 의 실효 깊이가 64 가
+        되어 08-03 게이트(W=24, 실효 24)와 절대값이 다르게 나온다 — 정상이다
 부하    genie off-box. memtier -s 10.99.0.3 -p 11411 -P memcache_text
         -t 30 -c 4 --pipeline=256 -d 64 --key-prefix=m-
         --key-minimum=1 --key-maximum=1000000 --key-pattern=R:R
@@ -32,32 +37,33 @@
 
 ## 1. 변인과 값
 
-| # | 변인 | 값 (굵게 = OP) | 신규 구성 | 바꾸는 방법 | 실효 동시성 min(W, nqp×ORD) |
+| # | 변인 | 값 (굵게 = OP) | 신규 구성 | 바꾸는 방법 | nqp × ORD |
 |---|---|---|---:|---|---|
-| 1 | pipeline | 1, 8, 32, 64, 128, **256**, 384 | 6 | 클라 `--pipeline` 만 | 24 고정 |
-| 2 | thread (mcT=mtT) | 8, 16, 24, **30** | 3 | 재기동: `-t m`, `taskset 0-(m−1)`, genie `-t m` | 24 고정 |
-| 3 | value_size | 16, 32, **64**, 128, CAP(156↘152) | 4 | flush + `-d` 재프리로드, 부하도 같은 `-d` | 24 고정 |
-| 4 | ext_post_chain | 1, 2, 4, **8**, 12, 16 | 5 | 재기동: `-o ext_post_chain=c` (reap=8 유지) | 24 고정 |
-| 5 | nqp | 1, 2, **4**, 8 | 3 | 재기동: `ext_qp_per_worker=q` (ORD=협상16) | 16, 24, **24**, 24 |
-| 6 | ORD | 1, 2, 4, **협상16** | 3 | 재기동: `ext_ord_limit=o` 핀 (nqp=4) | 4, 8, 16, **24** |
+| 1 | pipeline | 1, 8, 32, 64, 128, **256**, 384 | 6 | 클라 `--pipeline` 만 | 4 × 16 = 64 |
+| 2 | thread (mcT=mtT) | 8, 16, 24, **30** | 3 | 재기동: `-t m`, `taskset 0-(m−1)`, genie `-t m` | 4 × 16 = 64 |
+| 3 | value_size | 16, 32, **64**, 128, CAP(156↘152) | 4 | flush + `-d` 재프리로드, 부하도 같은 `-d` | 4 × 16 = 64 |
+| 4 | ext_post_chain | 1, 2, 4, **8**, 12, 16 | 5 | 재기동: `-o ext_post_chain=c` (reap=8 유지) | 4 × 16 = 64 |
+| 5 | nqp | 1, 2, **4**, 8 | 3 | 재기동: `ext_qp_per_worker=q` (ORD=협상16) | 1·2·**4**·8 × 16 = 16, 32, **64**, 128 |
+| 6 | ORD | 1, 2, 4, **협상16** | 3 | 재기동: `ext_ord_limit=o` 핀 (nqp=4) | 4 × 1·2·4·**16** = 4, 8, 16, **64** |
 
 - CAP 확정 규칙: `-d 156` 프리로드 후 `ext_pac_fallback` 이 0 이면 156,
   아니면 152. 추가 탐침 없음.
-- nqp 축은 nqp≥2 에서 실효 동시성이 W=24 로 같다 — 그 구간은 **같은 깊이를
-  몇 개의 QP 로 나누는가**를 재는 것이다. ORD 축이 깊이(4→24)를 재는 축이다.
+- nqp 축과 ORD 축은 둘 다 곱을 바꾸지만 **형태가 다르다** — 곱이 같아도
+  구성에 따라 성능이 다를 수 있으므로 두 축을 합치지 않는다. 곱 16 에서
+  SF-Q1(1×16)과 SF-O4(4×4)가 같은-곱·다른-형태 대조쌍이다.
 
 ## 2. 실행 순서 (재기동 최소화 순. 이대로 위에서 아래로)
 
 ```text
-0  무장 OP + 프리로드(d=64) + 게이트           tools/night-arm.sh: INLINE=1 AD=64 RE=8 PC=8 DEM=0 → 20 24 4 64
+0  무장 OP + 프리로드(d=64) + 게이트           tools/night-arm.sh: INLINE=1 AD=64 RE=8 PC=8 DEM=0 → 20 160 4 256
 1  SF-OP        3부하 (pipe=256)              여섯 축의 공용점. 재기동 없음
 2  SF-P{1,8,32,64,128,384}      6×3부하       클라만 변경. 재기동 없음
 3  value 축     탐침: flush → d=156 프리로드 → fallback 확인 → CAP 확정
    SF-D{16,32,128,CAP}          4×3부하       크기마다 flush+프리로드. 부하 -d 동일
-4  SF-C{1,2,4,12,16}            5×3부하       재기동 5회: PC=c RE=8, 매회 d=64 프리로드+게이트
-5  SF-Q{1,2,8}                  3×3부하       재기동 3회: night-arm.sh 20 24 q 64
-6  SF-O{1,2,4}                  3×3부하       재기동 3회: ORD=o(핀), nqp=4
-7  SF-T{8,16,24}                3×3부하       재기동 3회: MCT=m CPUSET=0-(m−1), genie -t m
+4  SF-C{1,2,4,12,16}            5×3부하       재기동 5회: PC=c RE=8 → 20 160 4 256, 매회 d=64 프리로드+게이트
+5  SF-Q{1,2,8}                  3×3부하       재기동 3회: night-arm.sh 20 160 q 256
+6  SF-O{1,2,4}                  3×3부하       재기동 3회: ORD=o(핀) → 20 160 4 256
+7  SF-T{8,16,24}                3×3부하       재기동 3회: MCT=m CPUSET=0-(m−1) → 20 160 4 256, genie -t m
 8  SF-OP-r2      3부하 (pipe=256)              OP 재무장(재기동 1회) 후 1과 동일 조건
 ```
 

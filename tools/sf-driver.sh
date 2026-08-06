@@ -25,7 +25,7 @@ MEMTIER='memtier_benchmark -s 10.99.0.3 -p 11411 -P memcache_text \
 # ── 무장. 성공 시 지문을 /tmp/sf-fp.txt 에 남긴다 ─────────────────────────
 arm(){ # arm <label> — 호출자가 env(SLOT/PC/RE/ORD/MCT/CPUSET/DVAL…)를 세팅
   local lbl=$1
-  if tools/night-arm.sh 20 "${WW:-64}" "${NQP:-4}" 1280 > "/tmp/sf-arm-$lbl.txt" 2>&1; then
+  if tools/night-arm.sh 20 "${WW:-64}" "${NQP:-4}" "${SS:-128}" > "/tmp/sf-arm-$lbl.txt" 2>&1; then
     grep -v '^──' "/tmp/sf-arm-$lbl.txt" > /tmp/sf-fp.txt
     $G 'printf "stats\r\nquit\r\n"|timeout 5 nc -q1 127.0.0.1 11411|tr -d "\r"|grep -E "listen_disabled_num|curr_items|ext_pac_fallback"' \
       >> "/tmp/sf-arm-$lbl.txt" 2>/dev/null
@@ -210,8 +210,8 @@ sfsave
 
 # ── 6: Q 축 (재기동 6회) ────────────────────────────────
 for q in 1 2 4 8 16 64; do
-  WIRE=$((q*16))
-  SLOT=256 INLINE=1 AD=0 WW=$WIRE RE=8 PC=8 SQ=1 DEM=0 DVAL=64 NQP=$q arm "SF-Q$q" || continue
+  WIRE=$((q*16)); SS=$((WIRE*2>64 ? WIRE*2 : 64))
+  SLOT=256 INLINE=1 AD=0 WW=$WIRE SS=$SS RE=8 PC=8 SQ=1 DEM=0 DVAL=64 NQP=$q arm "SF-Q$q" || continue
   go_trio "SF-Q$q" 30 4 256 64 "port_v4 c11ede3e slot=256 nqp=$q ORD=협상16 W=$WIRE (=wire 곱)"
 done
 sfsave
@@ -220,8 +220,8 @@ sfsave
 for o in 1 2 4 8 0 32 64; do
   lbl="SF-O$o"; [ "$o" = 0 ] && lbl="SF-O16"
   ow=$o; [ "$o" = 0 ] && ow=16; [ "$ow" -gt 16 ] && ow=16
-  WIRE=$((4*ow))
-  SLOT=256 INLINE=1 AD=0 WW=$WIRE RE=8 PC=8 SQ=1 DEM=0 DVAL=64 ORD=$o arm "$lbl" || continue
+  WIRE=$((4*ow)); SS=$((WIRE*2>64 ? WIRE*2 : 64))
+  SLOT=256 INLINE=1 AD=0 WW=$WIRE SS=$SS RE=8 PC=8 SQ=1 DEM=0 DVAL=64 ORD=$o arm "$lbl" || continue
   note="port_v4 c11ede3e slot=256 nqp=4 ORD=$o W=$WIRE (=wire 곱)"
   [ "$o" = 0 ] && note="port_v4 c11ede3e slot=256 nqp=4 ORD=협상16 W=64"
   go_trio "$lbl" 30 4 256 64 "$note"
@@ -232,8 +232,8 @@ sfsave
 for qo in 1:256 2:128 4:64 8:32 16:16 32:8 64:4; do
   q=${qo%%:*}; o=${qo##*:}
   lbl="SF-S${q}x${o}"
-  WIRE=$((q*(o<16?o:16)))
-  SLOT=256 INLINE=1 AD=0 WW=$WIRE RE=8 PC=8 SQ=1 DEM=0 DVAL=64 NQP=$q ORD=$o arm "$lbl" || continue
+  WIRE=$((q*(o<16?o:16))); SS=$((WIRE*2>64 ? WIRE*2 : 64))
+  SLOT=256 INLINE=1 AD=0 WW=$WIRE SS=$SS RE=8 PC=8 SQ=1 DEM=0 DVAL=64 NQP=$q ORD=$o arm "$lbl" || continue
   go_trio "$lbl" 30 4 256 64 "port_v4 c11ede3e slot=256 nqp=$q ORD=$o핀 W=$WIRE (soft곱 256, wire곱 $WIRE)"
 done
 sfsave

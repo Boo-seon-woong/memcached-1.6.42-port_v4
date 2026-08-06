@@ -532,6 +532,53 @@ def f2a(rows, out):
     s.save(f"{out}/f2a-pipeline-curve.svg")
 
 
+def f4d(rows, out):
+    """exp4 의 처리량–지연: chain 을 파라미터로 놓은 산점.
+    F4a 는 x 가 chain 이라 "노브를 얼마로 둘까" 를 보고, 이 그림은
+    x 가 처리량이라 "그 노브가 운영점을 어디로 옮기나" 를 본다."""
+    cl = load_client()
+    if not cl:
+        print("  F4d 건너뜀"); return
+    chains = [1, 2, 4, 8, 12, 16]
+    reaps = [1, 2, 4, 12]
+    s2 = Svg(title="F4d  chain·reap 별 처리량–지연")
+    l, r, t, b = axes(s2, "처리량 (M ops/s)", "클라이언트 지연 avg (ms)")
+    xhi, yhi = 14.5, 4.0
+    for gx in (0, 4, 8, 12):
+        x = linmap(gx, 0, xhi, l, r)
+        s2.line(x, t, x, b, C["grid"])
+        s2.txt(x, b + 16, str(gx), 10, C["mute"], "middle")
+    for gy in (0, 1, 2, 3, 4):
+        y = linmap(gy, 0, yhi, b, t)
+        s2.line(l, y, r, y, C["grid"])
+        s2.txt(l - 8, y + 4, str(gy), 10, C["mute"], "end")
+    def draw(cells, labels, col, dash, tag):
+        pts = []
+        for cid, lab in zip(cells, labels):
+            c = cl.get(cid)
+            if c and c["avg_ms"]:
+                pts.append((linmap(float(c["ops_M"]), 0, xhi, l, r),
+                            linmap(float(c["avg_ms"]), 0, yhi, b, t), lab))
+        if not pts:
+            return
+        s2.path([(x, y) for x, y, _ in pts], col, 2.0, dash)
+        for x, y, lab in pts:
+            s2.dot(x, y, col, 3.8, dash is not None)
+            s2.txt(x, y - 9, lab, 8.5, C["mute"], "middle")
+        s2.txt(pts[-1][0] + 8, pts[-1][1] + 4, tag, 9.5, col, "start", 600)
+    for wl, col in (("GET", C["get"]), ("MIX", C["mix"])):
+        draw([f"E4-C{c}R8-{wl}" for c in chains], [f"c{c}" for c in chains],
+             col, None, f"{wl} · chain 축")
+        draw([f"E4-C8R{r_}-{wl}" for r_ in reaps], [f"r{r_}" for r_ in reaps],
+             col, "4 3", f"{wl} · reap 축")
+    legend(s2, ["달리한 것: 배칭 노브 두 개. 실선 = chain 1~16 (reap=8 고정),",
+                "           파선 = reap 1~12 (chain=8 고정). 그 외 운영값 고정",
+                "점 = 셀 하나(30초, pipe=256). 점 옆 = 그 셀의 노브 값",
+                "파랑 GET-only · 주황 1:9 혼합.  x 처리량 · y memtier avg 지연",
+                "두 축이 같은 점(c8=r8)에서 만난다 — 거기가 현 운영값이다"])
+    s2.save(f"{out}/f4d-batching-throughput-latency.svg")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--rows", default="experiments/night-20260806/rows.tsv")
@@ -540,7 +587,7 @@ def main():
     Path(a.out).mkdir(parents=True, exist_ok=True)
     rows = load(a.rows)
     print(f"rows={len(rows)} → {a.out}")
-    f1(rows, a.out); f1b(rows, a.out); f3b(rows, a.out); f2a(rows, a.out); f2b(rows, a.out); f2c(rows, a.out); f3(rows, a.out); f4(rows, a.out)
+    f1(rows, a.out); f1b(rows, a.out); f3b(rows, a.out); f2a(rows, a.out); f2b(rows, a.out); f2c(rows, a.out); f3(rows, a.out); f4(rows, a.out); f4d(rows, a.out)
 
 
 main()

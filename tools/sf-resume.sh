@@ -68,6 +68,7 @@ for r in rows[1:]:
     l=r.split('\t')[0]
     key=('SLOTAB' if l.startswith('SLOTAB') else
          'SF3-OP' if l.startswith('SF3-OP') else
+         'SF3-O' if l.startswith('SF3-O') else
          'SF3-P' if l.startswith('SF3-P') else
          'SF3-E' if l.startswith('SF3-E') else
          'SF3-D' if l.startswith('SF3-D') else

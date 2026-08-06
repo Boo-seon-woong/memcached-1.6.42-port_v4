@@ -1,0 +1,5 @@
+── 무장: submit_batch=20 W=16 nqp=1 READ_SLOTS=64 -R 1024 admit=0 reap=8 chain=8 setq=1 dem=0 mcT=30 ilp=0 hp=22 ord=256 cpu=0-29 (총 QP = 30 × 1)
+── coherent MR 게이트 (2 여야 한다): 2
+extstore: genie_connect OK (raddr=0x767236a00000 rkey=0x183000 size=4294967296, workers=30 qps/worker=1 window=16 ord=256 pinned batch=32)
+extstore selftest: SYNC_FOR_DEVICE advise failed: No such file or directory
+extstore selftest: READ completed with status remote invalid request error (9)

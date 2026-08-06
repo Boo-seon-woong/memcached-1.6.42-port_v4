@@ -1,0 +1,4 @@
+── 무장: submit_batch=20 W=128 nqp=8 READ_SLOTS=256 -R 1024 admit=0 reap=8 chain=8 setq=1 dem=0 mcT=30 ilp=0 hp=22 ord=32 cpu=0-29 (총 QP = 30 × 8)
+── coherent MR 게이트 (2 여야 한다): 0
+extstore rdma_cm: connect failed (worker 0 qp 0): Invalid argument
+Failed to prepare storage workers

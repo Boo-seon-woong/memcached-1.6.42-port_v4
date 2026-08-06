@@ -18050,3 +18050,7 @@ O64      64  (누락)   — SQ 대기
 는 못 막는다. 구동기가 내 `-SET` 보고를 기다리면 이 부류가 0 이 된다.
 
 NEXT: genie (S16x16 진행 중)
+
+CELL SF3-S16x16-GET DONE  12.539 M  avg 2.40440 / p50 2.35100 / p99 4.22300 / p99.9 7.64700 ms
+창(UTC) 2026-08-06T19:19:03Z ~ 2026-08-06T19:22:03Z   pipe=256 --ratio=0:1 --test-time=180
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=256 ext_qp_per_worker=16 ext_ord_limit=16 ext_read_slots=512 extstore_prof_span_ver=3 

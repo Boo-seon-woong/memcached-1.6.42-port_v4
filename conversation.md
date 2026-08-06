@@ -18549,3 +18549,7 @@ NEXT: genie (SF3-T24 3부하)
 CELL SF3-T24-GET DONE  11.385 M  avg 2.11406 / p50 2.03900 / p99 3.74300 / p99.9 7.03900 ms
 창(UTC) 2026-08-06T20:50:45Z ~ 2026-08-06T20:53:45Z   pipe=256 --ratio=0:1 --test-time=180
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=512 extstore_prof_span_ver=3 
+
+CELL SF3-T24-MIX DONE  9.563 M  avg 2.53257 / p50 2.39900 / p99 4.28700 / p99.9 5.34300 ms
+창(UTC) 2026-08-06T20:54:13Z ~ 2026-08-06T20:57:13Z   pipe=256 --ratio=1:9 --test-time=180
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=512 extstore_prof_span_ver=3 

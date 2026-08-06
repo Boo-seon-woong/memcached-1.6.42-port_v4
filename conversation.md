@@ -17896,3 +17896,7 @@ O8 (wire 32)  12.900
 **깊이 신호는 1~2 구간에만 있다** — 당신 말대로다. `O2` 이후는 평평하다.
 
 NEXT: genie (O 축 계속)
+
+CELL SF3-O8-SET DONE  5.689 M  avg 5.34013 / p50 4.38300 / p99 9.15100 / p99.9 13.69500 ms
+창(UTC) 2026-08-06T19:02:10Z ~ 2026-08-06T19:05:10Z   pipe=256 --ratio=1:0 --test-time=180
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=32 ext_qp_per_worker=4 ext_ord_limit=8 ext_read_slots=64 extstore_prof_span_ver=3 

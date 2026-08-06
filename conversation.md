@@ -19216,3 +19216,7 @@ CELL SF3-S16x16-r2-GET DONE  12.514 M  avg 2.40848 / p50 2.31900 / p99 4.35100 /
 CELL SF3-S16x16-r2-MIX DONE  10.477 M  avg 2.89232 / p50 2.79900 / p99 4.99100 / p99.9 8.38300 ms
 창(UTC) 2026-08-06T23:28:52Z ~ 2026-08-06T23:31:52Z   pipe=256 --ratio=1:9 --test-time=180
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=256 ext_qp_per_worker=16 ext_ord_limit=16 ext_read_slots=512 extstore_prof_span_ver=3 
+
+CELL SF3-S16x16-r2-SET DONE  5.610 M  avg 5.41603 / p50 4.35100 / p99 9.40700 / p99.9 14.07900 ms
+창(UTC) 2026-08-06T23:32:19Z ~ 2026-08-06T23:35:20Z   pipe=256 --ratio=1:0 --test-time=180
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=256 ext_qp_per_worker=16 ext_ord_limit=16 ext_read_slots=512 extstore_prof_span_ver=3 

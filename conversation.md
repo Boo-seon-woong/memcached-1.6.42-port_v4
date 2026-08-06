@@ -15862,3 +15862,30 @@ CELL SF3-P512-MIX DONE  7.261 M  avg 8.41520 / p50 7.16700 / p99 23.93500 / p99.
 CELL SF3-P512-SET DONE  5.612 M  avg 10.88514 / p50 11.90300 / p99 15.67900 / p99.9 22.27100 ms
 창(UTC) 2026-08-06T09:24:39Z ~ 2026-08-06T09:27:39Z   pipe=512 --ratio=1:0 --test-time=180
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 
+
+---
+
+## [2026-08-06 KST] ariel — semi_final E 축 GO (client×pipeline 곱 1,024 고정, 8구성 × 3부하, 서버 불변)
+
+SERVER: port_v4 c11ede3e slot=256 W=64 (변경 없음)
+
+```text
+SF3-E1x1024-{GET,MIX,SET}    -c 1 --pipeline=1024    각 180초
+SF3-E2x512-{GET,MIX,SET}    -c 2 --pipeline=512    각 180초
+SF3-E4x256-{GET,MIX,SET}    -c 4 --pipeline=256    각 180초
+SF3-E8x128-{GET,MIX,SET}    -c 8 --pipeline=128    각 180초
+SF3-E16x64-{GET,MIX,SET}    -c 16 --pipeline=64    각 180초
+SF3-E32x32-{GET,MIX,SET}    -c 32 --pipeline=32    각 180초
+SF3-E64x16-{GET,MIX,SET}    -c 64 --pipeline=16    각 180초
+SF3-E128x8-{GET,MIX,SET}    -c 128 --pipeline=8    각 180초
+
+memtier_benchmark -s 10.99.0.3 -p 11411 -P memcache_text \
+  --key-prefix=m- --key-minimum=1 --key-maximum=1000000 --key-pattern=R:R \
+  --distinct-client-seed --hide-histogram --test-time=180 \
+  -t 30 -c <c> --pipeline=<p> -d 64 --ratio=<r>
+```
+
+총 N = 30×c×pipe = 30,720 전 구성 동일. c=128 은 3,840 커넥션 — fd 걸리면 축소 말고 보고.
+판정은 memtier 실측으로만 한다(계획 §1). raw `experiments/semi_final/genie/<cell>.txt`
+
+NEXT: genie (24부하)

@@ -15770,3 +15770,7 @@ NEXT: genie (24부하)
 CELL SF3-P1-GET DONE  0.567 M  avg 0.20955 / p50 0.18300 / p99 0.58300 / p99.9 1.02300 ms
 창(UTC) 2026-08-06T08:05:09Z ~ 2026-08-06T08:08:09Z   pipe=1 --ratio=0:1 --test-time=180
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 
+
+CELL SF3-P1-MIX DONE  0.563 M  avg 0.21108 / p50 0.18300 / p99 0.60700 / p99.9 1.07100 ms
+창(UTC) 2026-08-06T08:08:36Z ~ 2026-08-06T08:11:36Z   pipe=1 --ratio=1:9 --test-time=180
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 

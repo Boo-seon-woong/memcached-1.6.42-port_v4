@@ -330,8 +330,9 @@ def f1(rows, out):
                 series[side] = pts
         if len(series) < 2:
             continue
-        zp = {side: cl.get(f"{'PTZ' if side=='PT' else 'ST'}-{wl}-Z256")
-              for side in ("ST", "PT")}
+        # genie 는 재시행분도 PT-*-Z256 이름으로 보고했다(파서가 나중 것을
+        # 취하므로 그 값이 정본이다). PTZ- 로 찾으면 하나도 안 걸린다.
+        zp = {side: cl.get(f"{side}-{wl}-Z256") for side in ("ST", "PT")}
         s2 = Svg(title=f"F1 — local(stock) vs remote(port), {nm}")
         l, r, t, b = axes(s2, "처리량 (M ops/s)", "클라이언트 지연 avg (ms, 로그)")
         xhi = max(max(x for x, _, _ in v) for v in series.values()) * 1.12

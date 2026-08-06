@@ -18397,3 +18397,7 @@ NEXT: genie (SF3-T4 3부하)
 CELL SF3-T4-GET DONE  2.983 M  avg 1.34296 / p50 1.27900 / p99 2.49500 / p99.9 3.18300 ms
 창(UTC) 2026-08-06T20:05:47Z ~ 2026-08-06T20:08:47Z   pipe=256 --ratio=0:1 --test-time=180
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=512 extstore_prof_span_ver=3 
+
+CELL SF3-T4-MIX DONE  2.744 M  avg 1.46103 / p50 1.43900 / p99 2.51100 / p99.9 3.16700 ms
+창(UTC) 2026-08-06T20:09:14Z ~ 2026-08-06T20:12:14Z   pipe=256 --ratio=1:9 --test-time=180
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=512 extstore_prof_span_ver=3 

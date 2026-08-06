@@ -15163,3 +15163,80 @@ memtier_benchmark -s 10.99.0.3 -p 11411 -P memcache_text \
 raw `experiments/semi_final/genie/<cell>.txt` (memtier 표준출력 전문 필수)
 
 NEXT: genie (SF-OP 3부하)
+
+CELL SF-OP-MIX DONE  5.697 M  avg 5.34906 / p50 5.02300 / p99 10.36700 / p99.9 14.01500 ms
+창(UTC) 2026-08-06T06:22:32Z ~ 2026-08-06T06:25:32Z   pipe=256 --ratio=1:9 --test-time=180
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=1280 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=1280 extstore_prof_span_ver=3 
+
+CELL SF-OP-SET DONE  3.571 M  avg 8.53270 / p50 6.94300 / p99 13.88700 / p99.9 20.73500 ms
+창(UTC) 2026-08-06T06:25:56Z ~ 2026-08-06T06:28:57Z   pipe=256 --ratio=1:0 --test-time=180
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=1280 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=1280 extstore_prof_span_ver=3 
+
+CELL SF-OP-GET DONE  6.873 M  avg 4.42944 / p50 4.19100 / p99 8.76700 / p99.9 12.09500 ms
+창(UTC) 2026-08-06T06:52:54Z ~ 2026-08-06T06:55:55Z   pipe=256 --ratio=0:1 --test-time=180
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=1280 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=1280 extstore_prof_span_ver=3 
+
+---
+
+## [2026-08-06 KST] genie — ⚠️ **10 M 게이트 발동: SF-OP-GET 6.873 M.** 그리고 범인은 `W` 다
+
+```text
+SF-OP-GET  6.873 M   avg 4429.44  p50 4191.0  p99 8767.0  p99.9 12095.0  little 0.99
+지문 명세 일치: admit_max=64  W=1280  slot=256  nqp=4 ORD=16  bed 3/3
+```
+
+**`< 10 M` 이므로 중단·보고 규칙이다.** MIX/SET 은 돌고 있고(6분) 축 셀은
+시작하지 않는다.
+
+### 네 점이 모여 한 변인씩 갈린다
+
+```text
+구성                  W    admit   slot    M ops
+8/5 운영점           24      64     256   13.159
+SLOTAB-256         1280       0     256    8.722
+SF-OP r2           1280      64     256    6.873
+SF-OP r1           1280       0    1024    6.336
+```
+
+```text
+slot  256 -> 1024   (W1280 admit0)     8.722 -> 6.336   -27.4%
+admit   0 -> 64     (W1280 slot256)    8.722 -> 6.873   -21.2%   <- 나빠진다
+W      24 -> 1280   (admit64 slot256) 13.159 -> 6.873   -47.8%   <- 지배적
+```
+
+### 라운드 2 의 귀속을 정정해야 한다
+
+당신이 라운드 2 에서 **"admit=0(무제한)이 −33.7% 의 원인"** 이라고 적고
+`admit = wire 곱(기본 64)` 규칙을 세웠다. **실측은 반대다** —
+같은 `W=1280 slot=256` 에서 `admit 0 → 64` 가 **8.722 → 6.873 으로 21% 더
+나빠졌다.** admit 을 죄는 것이 도움이 안 된다.
+
+**−33.7% 도 −47.8% 도 `W` 다.** `W=24` 대 `W=1280` 하나만 다른 쌍
+(8/5 운영점 13.159 vs 지금 6.873)이 그걸 직접 보여준다. 두 셀 모두
+`admit=64 slot=256 chain=8 reap=8 nqp=4 ORD=16` 로 동일하다.
+
+### `W` 가 "비구속" 이 아니다
+
+캠페인 전제가 **"W=1280 은 곱보다 크므로 묶지 않는다"** 였다.
+**묶지는 않지만 해롭다.** `ext_worker_window` 가 상한 역할만 하는 게 아니라
+워커당 상주 요청 수를 실제로 키우는 것으로 보이고, 그러면 캐시·큐잉 비용이
+따라온다. **"안 묶으면 무해" 라는 가정이 틀렸다.**
+
+### 제안 — `W` 를 축으로 넣거나, 최소한 OP 를 W=24 로
+
+```text
+(a) OP 를 W=24 로 되돌린다     8/5 운영점과 같아지고 게이트 13 M 통과 예상.
+                               "상한은 nqp×ORD 하나" 전제는 포기한다
+(b) W 축 신설                  W ∈ {24, 64, 128, 512, 1280} 5구성 15부하 50분.
+                               이 노브가 얼마나 해로운지가 축으로 남는다
+(c) W=24 로 OP 만 잡고 진행    다른 축은 계획대로. W 는 별도 라운드
+```
+
+**(a) 또는 (c) 를 권한다.** 지금 OP 로 14시간을 돌면 **모든 축이 절반 성능
+지점에서 측정**되고, 특히 `10 M 이상 값이 하나는 있어야 한다`는 관리자 의도가
+어느 축에서도 안 나올 수 있다.
+
+**(b) 는 값어치가 크지만 시간이 든다** — `W` 가 성능을 절반으로 가르는
+노브인데 캠페인 8축에 없다는 것 자체가 공백이다.
+
+NEXT: ariel (W 결정)

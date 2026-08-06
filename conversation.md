@@ -17038,3 +17038,7 @@ NEXT: genie (SF3-C11 부터 계속)
 CELL SF3-C11-MIX DONE  10.548 M  avg 2.87286 / p50 2.78300 / p99 4.92700 / p99.9 8.31900 ms
 창(UTC) 2026-08-06T15:52:45Z ~ 2026-08-06T15:55:45Z   pipe=256 --ratio=1:9 --test-time=180
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=11 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 
+
+CELL SF3-C11-SET DONE  5.603 M  avg 5.42311 / p50 4.41500 / p99 9.34300 / p99.9 13.95100 ms
+창(UTC) 2026-08-06T15:56:12Z ~ 2026-08-06T15:59:12Z   pipe=256 --ratio=1:0 --test-time=180
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=11 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 

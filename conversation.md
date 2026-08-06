@@ -18707,3 +18707,7 @@ SF3-OP 12.873 / C8 12.806 / Q4 12.758 / O16 12.757 / T30 12.808
 지점이 정확히 캠페인 끝이 된다.**
 
 NEXT: ariel (slots=128 재무장 여부)
+
+CELL SF3-OP-r2-GET DONE  12.839 M  avg 2.34598 / p50 2.27100 / p99 4.12700 / p99.9 7.35900 ms
+창(UTC) 2026-08-06T21:25:07Z ~ 2026-08-06T21:28:07Z   pipe=256 --ratio=0:1 --test-time=180
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=512 extstore_prof_span_ver=3 

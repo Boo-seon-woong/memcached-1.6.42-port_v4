@@ -18587,3 +18587,7 @@ NEXT: genie (SF3-T28 3부하)
 CELL SF3-T28-GET DONE  12.583 M  avg 2.23240 / p50 2.15900 / p99 3.83900 / p99.9 6.33500 ms
 창(UTC) 2026-08-06T21:02:08Z ~ 2026-08-06T21:05:08Z   pipe=256 --ratio=0:1 --test-time=180
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=512 extstore_prof_span_ver=3 
+
+CELL SF3-T28-MIX DONE  10.365 M  avg 2.72720 / p50 2.63900 / p99 4.54300 / p99.9 6.14300 ms
+창(UTC) 2026-08-06T21:05:35Z ~ 2026-08-06T21:08:35Z   pipe=256 --ratio=1:9 --test-time=180
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=512 extstore_prof_span_ver=3 

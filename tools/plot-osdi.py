@@ -238,6 +238,49 @@ def f3(rows, out):
     s.save(f"{out}/f3-value-size.svg")
 
 
+# ── F3b: exp3 throughput–latency ─────────────────────────────────────────
+def f3b(rows, out):
+    """값 크기가 운영점을 어디로 옮기는지. 셀이 pipe=256 한 점씩이라
+    곡선이 아니라 **크기로 이어붙인 궤적**이다 — 그 사실을 상자에 적는다."""
+    cl = load_client()
+    sizes = [16, 32, 64, 152]
+    series = {}
+    for wtag, wnm, col in (("W1", "GET-only", C["get"]), ("W2", "1:9 혼합", C["mix"]),
+                           ("W3", "SET-only", C["set"])):
+        pts = []
+        for d in sizes:
+            c = cl.get(f"V{d}-{wtag}")
+            if c and c["avg_ms"]:
+                pts.append((float(c["ops_M"]), float(c["avg_ms"]), d))
+        if pts:
+            series[wnm] = (pts, col)
+    if not series:
+        print("  F3b 건너뜀"); return
+    s2 = Svg(title="F3b  값 크기별 처리량–지연")
+    l, r, t, b = axes(s2, "처리량 (M ops/s)", "클라이언트 지연 avg (ms)")
+    xhi, yhi = 16.0, 6.5
+    for gx in (0, 4, 8, 12, 16):
+        x = linmap(gx, 0, xhi, l, r)
+        s2.line(x, t, x, b, C["grid"])
+        s2.txt(x, b + 16, str(gx), 10, C["mute"], "middle")
+    for gy in (0, 1, 2, 3, 4, 5, 6):
+        y = linmap(gy, 0, yhi, b, t)
+        s2.line(l, y, r, y, C["grid"])
+        s2.txt(l - 8, y + 4, str(gy), 10, C["mute"], "end")
+    for wnm, (pts, col) in series.items():
+        xy = [(linmap(x, 0, xhi, l, r), linmap(y, 0, yhi, b, t), d) for x, y, d in pts]
+        s2.path([(x, y) for x, y, _ in xy], col, 2.0)
+        for x, y, d in xy:
+            s2.dot(x, y, col, 4.0)
+            s2.txt(x, y - 9, f"{d}B", 8.5, C["mute"], "middle")
+        s2.txt(xy[-1][0] - 8, xy[-1][1] + 16, wnm, 10, col, "end", 600)
+    legend(s2, ["달리한 것: 값 크기만 (16·32·64·152 B). pipeline=256 고정, 서버 구성 고정",
+                "점 = 셀 하나(30초). 점 옆 = 값 크기.  x 처리량 · y memtier avg 지연",
+                "선은 크기 순으로 이은 궤적이지 부하 곡선이 아니다 — 셀마다 부하가 같다",
+                "색 = 워크로드. 152 B 는 수용 상한(pac_fallback 0), port_v4 c11ede3e PROF=1"])
+    s2.save(f"{out}/f3b-size-throughput-latency.svg")
+
+
 # ── F4a/b/c: 배칭 ────────────────────────────────────────────────────────
 def cell(rows, label, seq="1"):
     rw = [r for r in rows if r["label"] == label and r["seq"] == seq]
@@ -497,7 +540,7 @@ def main():
     Path(a.out).mkdir(parents=True, exist_ok=True)
     rows = load(a.rows)
     print(f"rows={len(rows)} → {a.out}")
-    f1(rows, a.out); f1b(rows, a.out); f2a(rows, a.out); f2b(rows, a.out); f2c(rows, a.out); f3(rows, a.out); f4(rows, a.out)
+    f1(rows, a.out); f1b(rows, a.out); f3b(rows, a.out); f2a(rows, a.out); f2b(rows, a.out); f2c(rows, a.out); f3(rows, a.out); f4(rows, a.out)
 
 
 main()

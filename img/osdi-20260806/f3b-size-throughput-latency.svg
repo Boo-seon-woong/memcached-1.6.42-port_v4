@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="500" viewBox="0 0 820 500" font-family="Helvetica,Arial,sans-serif">
+<rect width="820" height="500" fill="white"/>
+<text x="410.0" y="24.0" font-size="15" fill="#0f172a" text-anchor="middle" font-weight="600">F3b  값 크기별 처리량–지연</text>
+<line x1="80.0" y1="442.0" x2="760.0" y2="442.0" stroke="#0f172a" stroke-width="1"/>
+<line x1="80.0" y1="132.0" x2="80.0" y2="442.0" stroke="#0f172a" stroke-width="1"/>
+<text x="420.0" y="486.0" font-size="12" fill="#0f172a" text-anchor="middle" font-weight="400">처리량 (M ops/s)</text>
+<text x="18" y="287.0" font-size="12" fill="#0f172a" text-anchor="middle" transform="rotate(-90 18 287.0)">클라이언트 지연 avg (ms)</text>
+<line x1="80.0" y1="132.0" x2="80.0" y2="442.0" stroke="#e5e7eb" stroke-width="1"/>
+<text x="80.0" y="458.0" font-size="10" fill="#64748b" text-anchor="middle" font-weight="400">0</text>
+<line x1="250.0" y1="132.0" x2="250.0" y2="442.0" stroke="#e5e7eb" stroke-width="1"/>
+<text x="250.0" y="458.0" font-size="10" fill="#64748b" text-anchor="middle" font-weight="400">4</text>
+<line x1="420.0" y1="132.0" x2="420.0" y2="442.0" stroke="#e5e7eb" stroke-width="1"/>
+<text x="420.0" y="458.0" font-size="10" fill="#64748b" text-anchor="middle" font-weight="400">8</text>
+<line x1="590.0" y1="132.0" x2="590.0" y2="442.0" stroke="#e5e7eb" stroke-width="1"/>
+<text x="590.0" y="458.0" font-size="10" fill="#64748b" text-anchor="middle" font-weight="400">12</text>
+<line x1="760.0" y1="132.0" x2="760.0" y2="442.0" stroke="#e5e7eb" stroke-width="1"/>
+<text x="760.0" y="458.0" font-size="10" fill="#64748b" text-anchor="middle" font-weight="400">16</text>
+<line x1="80.0" y1="442.0" x2="760.0" y2="442.0" stroke="#e5e7eb" stroke-width="1"/>
+<text x="72.0" y="446.0" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">0</text>
+<line x1="80.0" y1="394.3" x2="760.0" y2="394.3" stroke="#e5e7eb" stroke-width="1"/>
+<text x="72.0" y="398.3" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">1</text>
+<line x1="80.0" y1="346.6" x2="760.0" y2="346.6" stroke="#e5e7eb" stroke-width="1"/>
+<text x="72.0" y="350.6" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">2</text>
+<line x1="80.0" y1="298.9" x2="760.0" y2="298.9" stroke="#e5e7eb" stroke-width="1"/>
+<text x="72.0" y="302.9" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">3</text>
+<line x1="80.0" y1="251.2" x2="760.0" y2="251.2" stroke="#e5e7eb" stroke-width="1"/>
+<text x="72.0" y="255.2" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">4</text>
+<line x1="80.0" y1="203.5" x2="760.0" y2="203.5" stroke="#e5e7eb" stroke-width="1"/>
+<text x="72.0" y="207.5" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">5</text>
+<line x1="80.0" y1="155.8" x2="760.0" y2="155.8" stroke="#e5e7eb" stroke-width="1"/>
+<text x="72.0" y="159.8" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">6</text>
+<path d="M 696.4,345.0 L 684.6,342.2 L 634.5,332.0 L 566.1,315.3" fill="none" stroke="#2563eb" stroke-width="2.0"/>
+<circle cx="696.4" cy="345.0" r="4.0" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
+<text x="696.4" y="336.0" font-size="8.5" fill="#64748b" text-anchor="middle" font-weight="400">16B</text>
+<circle cx="684.6" cy="342.2" r="4.0" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
+<text x="684.6" y="333.2" font-size="8.5" fill="#64748b" text-anchor="middle" font-weight="400">32B</text>
+<circle cx="634.5" cy="332.0" r="4.0" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
+<text x="634.5" y="323.0" font-size="8.5" fill="#64748b" text-anchor="middle" font-weight="400">64B</text>
+<circle cx="566.1" cy="315.3" r="4.0" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
+<text x="566.1" y="306.3" font-size="8.5" fill="#64748b" text-anchor="middle" font-weight="400">152B</text>
+<text x="558.1" y="331.3" font-size="10" fill="#2563eb" text-anchor="end" font-weight="600">GET-only</text>
+<path d="M 573.7,319.5 L 567.2,316.9 L 537.6,307.9 L 493.6,292.7" fill="none" stroke="#ea580c" stroke-width="2.0"/>
+<circle cx="573.7" cy="319.5" r="4.0" fill="#ea580c" stroke="#ea580c" stroke-width="1.6"/>
+<text x="573.7" y="310.5" font-size="8.5" fill="#64748b" text-anchor="middle" font-weight="400">16B</text>
+<circle cx="567.2" cy="316.9" r="4.0" fill="#ea580c" stroke="#ea580c" stroke-width="1.6"/>
+<text x="567.2" y="307.9" font-size="8.5" fill="#64748b" text-anchor="middle" font-weight="400">32B</text>
+<circle cx="537.6" cy="307.9" r="4.0" fill="#ea580c" stroke="#ea580c" stroke-width="1.6"/>
+<text x="537.6" y="298.9" font-size="8.5" fill="#64748b" text-anchor="middle" font-weight="400">64B</text>
+<circle cx="493.6" cy="292.7" r="4.0" fill="#ea580c" stroke="#ea580c" stroke-width="1.6"/>
+<text x="493.6" y="283.7" font-size="8.5" fill="#64748b" text-anchor="middle" font-weight="400">152B</text>
+<text x="485.6" y="308.7" font-size="10" fill="#ea580c" text-anchor="end" font-weight="600">1:9 혼합</text>
+<path d="M 340.6,206.9 L 339.4,205.8 L 321.8,187.3 L 306.9,169.0" fill="none" stroke="#16a34a" stroke-width="2.0"/>
+<circle cx="340.6" cy="206.9" r="4.0" fill="#16a34a" stroke="#16a34a" stroke-width="1.6"/>
+<text x="340.6" y="197.9" font-size="8.5" fill="#64748b" text-anchor="middle" font-weight="400">16B</text>
+<circle cx="339.4" cy="205.8" r="4.0" fill="#16a34a" stroke="#16a34a" stroke-width="1.6"/>
+<text x="339.4" y="196.8" font-size="8.5" fill="#64748b" text-anchor="middle" font-weight="400">32B</text>
+<circle cx="321.8" cy="187.3" r="4.0" fill="#16a34a" stroke="#16a34a" stroke-width="1.6"/>
+<text x="321.8" y="178.3" font-size="8.5" fill="#64748b" text-anchor="middle" font-weight="400">64B</text>
+<circle cx="306.9" cy="169.0" r="4.0" fill="#16a34a" stroke="#16a34a" stroke-width="1.6"/>
+<text x="306.9" y="160.0" font-size="8.5" fill="#64748b" text-anchor="middle" font-weight="400">152B</text>
+<text x="298.9" y="185.0" font-size="10" fill="#16a34a" text-anchor="end" font-weight="600">SET-only</text>
+<rect x="88.0" y="36.0" width="664.0" height="62" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1" rx="3"/>
+<text x="96.0" y="51.0" font-size="9.5" fill="#0f172a" text-anchor="start" font-weight="600">달리한 것: 값 크기만 (16·32·64·152 B). pipeline=256 고정, 서버 구성 고정</text>
+<text x="96.0" y="64.0" font-size="9.5" fill="#64748b" text-anchor="start" font-weight="400">점 = 셀 하나(30초). 점 옆 = 값 크기.  x 처리량 · y memtier avg 지연</text>
+<text x="96.0" y="77.0" font-size="9.5" fill="#64748b" text-anchor="start" font-weight="400">선은 크기 순으로 이은 궤적이지 부하 곡선이 아니다 — 셀마다 부하가 같다</text>
+<text x="96.0" y="90.0" font-size="9.5" fill="#64748b" text-anchor="start" font-weight="400">색 = 워크로드. 152 B 는 수용 상한(pac_fallback 0), port_v4 c11ede3e PROF=1</text>
+</svg>

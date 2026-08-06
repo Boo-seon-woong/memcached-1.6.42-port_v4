@@ -16473,3 +16473,29 @@ CELL SF3-D96-MIX DONE  10.104 M  avg 3.00970 / p50 2.84700 / p99 5.40700 / p99.9
 CELL SF3-D96-SET DONE  5.468 M  avg 5.57329 / p50 5.88700 / p99 8.38300 / p99.9 12.60700 ms
 창(UTC) 2026-08-06T12:38:07Z ~ 2026-08-06T12:41:07Z   pipe=256 --ratio=1:0 --test-time=180
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 
+---
+
+## [2026-08-06 KST] ariel — semi_final `SF3-D128` GO
+
+SERVER: port_v4 c11ede3e slot=256 W=64 (재기동 없음 — flush 후 d=128 재프리로드)
+
+```text
+reqs_per_event 1024 ext_admit_max 0 ext_submit_inline yes ext_reap_every 8 ext_post_chain 8 ext_setq_max 1 ext_submit_batch 20 ext_drain_empty_max 0 
+ext_qp_per_worker 4 ext_ord_limit 16 ext_read_slots 128 ext_pac_fallback 0 extstore_prof_span_ver 3 curr_items 1000000 
+build c11ede3ebd2a45d8f32e9943
+```
+
+```text
+SF3-D128-GET   --ratio=0:1     각 180초, 사이 20초
+SF3-D128-MIX   --ratio=1:9
+SF3-D128-SET   --ratio=1:0
+
+memtier_benchmark -s 10.99.0.3 -p 11411 -P memcache_text \
+  --key-prefix=m- --key-minimum=1 --key-maximum=1000000 --key-pattern=R:R \
+  --distinct-client-seed --hide-histogram --test-time=180 \
+  -t 30 -c 4 --pipeline=256 -d 128 --ratio=<위>
+```
+프리로드도 -d 128 다. 부하 -d 를 반드시 맞출 것.
+raw `experiments/semi_final/genie/<cell>.txt` (memtier 표준출력 전문 필수)
+
+NEXT: genie (SF3-D128 3부하)

@@ -67,14 +67,14 @@ hdr=rows[0]; buckets={}
 for r in rows[1:]:
     l=r.split('\t')[0]
     key=('SLOTAB' if l.startswith('SLOTAB') else
-         'SF-OP' if l.startswith('SF-OP') else
-         'SF-P' if l.startswith('SF-P') else
-         'SF-E' if l.startswith('SF-E') else
-         'SF-D' if l.startswith('SF-D') else
-         'SF-C' if l.startswith('SF-C') else
-         'SF-Q' if l.startswith('SF-Q') else
-         'SF-S' if l.startswith('SF-S') else
-         'SF-T' if l.startswith('SF-T') else
+         'SF3-OP' if l.startswith('SF3-OP') else
+         'SF3-P' if l.startswith('SF3-P') else
+         'SF3-E' if l.startswith('SF3-E') else
+         'SF3-D' if l.startswith('SF3-D') else
+         'SF3-C' if l.startswith('SF3-C') else
+         'SF3-Q' if l.startswith('SF3-Q') else
+         'SF3-S' if l.startswith('SF3-S') else
+         'SF3-T' if l.startswith('SF3-T') else
          'SF-O' if l.startswith('SF-O') else 'etc')
     buckets.setdefault(key,[]).append(r)
 for k,v in buckets.items():
@@ -133,24 +133,24 @@ go_batch(){ # go_batch <axis-label> <match-cell> <timeout> <본문파일>
 # ═════════════════════════ 실행 ═════════════════════════
 say "semi_final 시작"
 
-# ── 1: SF-OP (slot=256, admit=64) + ≥10M 게이트 ─────────
-SLOT=256 INLINE=1 AD=0 WW=64 RE=8 PC=8 SQ=1 DEM=0 DVAL=64 arm SF-OP || { say "OP 무장 실패 — 중단"; exit 1; }
-go_trio SF-OP 30 4 256 64 "port_v4 c11ede3e slot=256 W=64(=wire곱) admit=0 (라운드 3 — 드리프트 가드 시작점)"
+# ── 1: SF3-OP (slot=256, admit=64) + ≥10M 게이트 ─────────
+SLOT=256 INLINE=1 AD=0 WW=64 RE=8 PC=8 SQ=1 DEM=0 DVAL=64 arm SF3-OP || { say "OP 무장 실패 — 중단"; exit 1; }
+go_trio SF3-OP 30 4 256 64 "port_v4 c11ede3e slot=256 W=64(=wire곱) admit=0 (라운드 3 — 드리프트 가드 시작점)"
 
-OPS=$(ops_of SF-OP-GET)
-say "SF-OP-GET = ${OPS:-NA} M (게이트: ≥10M)"
+OPS=$(ops_of SF3-OP-GET)
+say "SF3-OP-GET = ${OPS:-NA} M (게이트: ≥10M)"
 if [ -n "${OPS:-}" ] && python3 -c "exit(0 if float('${OPS}')<10.0 else 1)"; then
   cat >> conversation.md <<EOF
 
 ---
 
-## [$(TZ=Asia/Seoul date +%Y-%m-%d) KST] ariel — **캠페인 중단: SF-OP ${OPS} M < 10 M 게이트**
+## [$(TZ=Asia/Seoul date +%Y-%m-%d) KST] ariel — **캠페인 중단: SF3-OP ${OPS} M < 10 M 게이트**
 
 admit=64 복원으로 13M대 복귀를 예상했는데 미달이다. 관리자 판단 대기.
 
 NEXT: (중단)
 EOF
-  git add -A conversation.md && git commit -q -m "[ariel] STOP: SF-OP ${OPS}M under the 10M gate" && git push -q
+  git add -A conversation.md && git commit -q -m "[ariel] STOP: SF3-OP ${OPS}M under the 10M gate" && git push -q
   exit 1
 fi
 sfsave
@@ -159,17 +159,17 @@ sfsave
 {
   echo; echo "---"; echo
   echo "## [$(TZ=Asia/Seoul date +%Y-%m-%d) KST] ariel — semi_final P 축 GO (pipeline 8구성 × 3부하, 서버 불변)"
-  echo; echo "SERVER: port_v4 c11ede3e slot=256 W=64 (SF-OP 와 동일 — 재기동 없음)"
+  echo; echo "SERVER: port_v4 c11ede3e slot=256 W=64 (SF3-OP 와 동일 — 재기동 없음)"
   echo; echo '```text'
   for p in 1 8 32 64 128 256 384 512; do
-    echo "SF-P${p}-{GET,MIX,SET}    --pipeline=$p    ratio 0:1 / 1:9 / 1:0    각 180초"
+    echo "SF3-P${p}-{GET,MIX,SET}    --pipeline=$p    ratio 0:1 / 1:9 / 1:0    각 180초"
   done
   echo; echo "$MEMTIER \\"; echo '  -t 30 -c 4 --pipeline=<p> -d 64 --ratio=<r>'
   echo '```'; echo
   echo "구성 순서 고정(P1→P512), 구성 안에서 GET→MIX→SET. raw \`experiments/semi_final/genie/<cell>.txt\`"
   echo; echo "NEXT: genie (24부하)"
 } > "$MSG/P.md"
-go_batch "SF-P" "SF-P512-SET" 7200 "$MSG/P.md"; sfsave
+go_batch "SF3-P" "SF3-P512-SET" 7200 "$MSG/P.md"; sfsave
 
 # ── 3: E 축 (클라만, 한 GO) ─────────────────────────────
 {
@@ -179,7 +179,7 @@ go_batch "SF-P" "SF-P512-SET" 7200 "$MSG/P.md"; sfsave
   echo; echo '```text'
   for cp in 1:1024 2:512 4:256 8:128 16:64 32:32 64:16 128:8; do
     c=${cp%%:*}; p=${cp##*:}
-    echo "SF-E${c}x${p}-{GET,MIX,SET}    -c $c --pipeline=$p    각 180초"
+    echo "SF3-E${c}x${p}-{GET,MIX,SET}    -c $c --pipeline=$p    각 180초"
   done
   echo; echo "$MEMTIER \\"; echo '  -t 30 -c <c> --pipeline=<p> -d 64 --ratio=<r>'
   echo '```'; echo
@@ -187,38 +187,38 @@ go_batch "SF-P" "SF-P512-SET" 7200 "$MSG/P.md"; sfsave
   echo "판정은 memtier 실측으로만 한다(계획 §1). raw \`experiments/semi_final/genie/<cell>.txt\`"
   echo; echo "NEXT: genie (24부하)"
 } > "$MSG/E.md"
-go_batch "SF-E" "SF-E128x8-SET" 7200 "$MSG/E.md"; sfsave
+go_batch "SF3-E" "SF3-E128x8-SET" 7200 "$MSG/E.md"; sfsave
 
 # ── 4: D 축 (flush+프리로드, 크기별 GO) ──────────────────
 for d in 4 8 16 24 32 48 64 96 128; do
   if flush_preload "$d"; then
-    go_trio "SF-D$d" 30 4 256 "$d" "port_v4 c11ede3e slot=256 W=64 (재기동 없음 — flush 후 d=$d 재프리로드)" \
+    go_trio "SF3-D$d" 30 4 256 "$d" "port_v4 c11ede3e slot=256 W=64 (재기동 없음 — flush 후 d=$d 재프리로드)" \
       "프리로드도 -d $d 다. 부하 -d 를 반드시 맞출 것."
   else
-    say "SF-D$d 프리로드/게이트 실패 — 건너뜀"
-    echo "SF-D$d PRELOAD-FAIL $(date -u +%s)" >> "$SF/ariel/listen.log"
+    say "SF3-D$d 프리로드/게이트 실패 — 건너뜀"
+    echo "SF3-D$d PRELOAD-FAIL $(date -u +%s)" >> "$SF/ariel/listen.log"
   fi
 done
 sfsave
 
 # ── 5: C 축 (재기동 16회) ───────────────────────────────
 for c in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16; do
-  SLOT=256 INLINE=1 AD=0 WW=64 RE=8 PC=$c SQ=1 DEM=0 DVAL=64 arm "SF-C$c" || continue
-  go_trio "SF-C$c" 30 4 256 64 "port_v4 c11ede3e slot=256 W=64 ext_post_chain=$c (reap=8)"
+  SLOT=256 INLINE=1 AD=0 WW=64 RE=8 PC=$c SQ=1 DEM=0 DVAL=64 arm "SF3-C$c" || continue
+  go_trio "SF3-C$c" 30 4 256 64 "port_v4 c11ede3e slot=256 W=64 ext_post_chain=$c (reap=8)"
 done
 sfsave
 
 # ── 6: Q 축 (재기동 6회) ────────────────────────────────
 for q in 1 2 4 8 16 64; do
   WIRE=$((q*16)); SS=$((WIRE*2>64 ? WIRE*2 : 64))
-  SLOT=256 INLINE=1 AD=0 WW=$WIRE SS=$SS RE=8 PC=8 SQ=1 DEM=0 DVAL=64 NQP=$q arm "SF-Q$q" || continue
-  go_trio "SF-Q$q" 30 4 256 64 "port_v4 c11ede3e slot=256 nqp=$q ORD=협상16 W=$WIRE (=wire 곱)"
+  SLOT=256 INLINE=1 AD=0 WW=$WIRE SS=$SS RE=8 PC=8 SQ=1 DEM=0 DVAL=64 NQP=$q arm "SF3-Q$q" || continue
+  go_trio "SF3-Q$q" 30 4 256 64 "port_v4 c11ede3e slot=256 nqp=$q ORD=협상16 W=$WIRE (=wire 곱)"
 done
 sfsave
 
 # ── 7: O 축 (재기동 7회) ────────────────────────────────
 for o in 1 2 4 8 0 32 64; do
-  lbl="SF-O$o"; [ "$o" = 0 ] && lbl="SF-O16"
+  lbl="SF3-O$o"; [ "$o" = 0 ] && lbl="SF3-O16"
   ow=$o; [ "$o" = 0 ] && ow=16; [ "$ow" -gt 16 ] && ow=16
   WIRE=$((4*ow)); SS=$((WIRE*2>64 ? WIRE*2 : 64))
   SLOT=256 INLINE=1 AD=0 WW=$WIRE SS=$SS RE=8 PC=8 SQ=1 DEM=0 DVAL=64 ORD=$o arm "$lbl" || continue
@@ -231,7 +231,7 @@ sfsave
 # ── 8: S 축 (곱 256, 재기동 7회) ─────────────────────────
 for qo in 1:256 2:128 4:64 8:32 16:16 32:8 64:4; do
   q=${qo%%:*}; o=${qo##*:}
-  lbl="SF-S${q}x${o}"
+  lbl="SF3-S${q}x${o}"
   WIRE=$((q*(o<16?o:16))); SS=$((WIRE*2>64 ? WIRE*2 : 64))
   SLOT=256 INLINE=1 AD=0 WW=$WIRE SS=$SS RE=8 PC=8 SQ=1 DEM=0 DVAL=64 NQP=$q ORD=$o arm "$lbl" || continue
   go_trio "$lbl" 30 4 256 64 "port_v4 c11ede3e slot=256 nqp=$q ORD=$o핀 W=$WIRE (soft곱 256, wire곱 $WIRE)"
@@ -240,14 +240,14 @@ sfsave
 
 # ── 9: T 축 (재기동 9회) ────────────────────────────────
 for m in 1 2 4 8 12 16 24 28 30; do
-  SLOT=256 INLINE=1 AD=0 WW=64 RE=8 PC=8 SQ=1 DEM=0 DVAL=64 MCT=$m CPUSET="0-$((m-1))" arm "SF-T$m" || continue
-  go_trio "SF-T$m" "$m" 4 256 64 "port_v4 c11ede3e slot=256 W=64 mcT=$m taskset 0-$((m-1)) — genie 도 -t $m" \
+  SLOT=256 INLINE=1 AD=0 WW=64 RE=8 PC=8 SQ=1 DEM=0 DVAL=64 MCT=$m CPUSET="0-$((m-1))" arm "SF3-T$m" || continue
+  go_trio "SF3-T$m" "$m" 4 256 64 "port_v4 c11ede3e slot=256 W=64 mcT=$m taskset 0-$((m-1)) — genie 도 -t $m" \
     "**mtT=$m 로 맞춰라** (mcT=mtT 동시 스케일)."
 done
 sfsave
 
 # ── 10: OP 재시행 ───────────────────────────────────────
-SLOT=256 INLINE=1 AD=0 WW=64 RE=8 PC=8 SQ=1 DEM=0 DVAL=64 arm SF-OP-r2 && \
-  go_trio SF-OP-r2 30 4 256 64 "port_v4 c11ede3e slot=256 W=64 (드리프트 가드 끝점 — SF-OP 와 동일 조건)"
+SLOT=256 INLINE=1 AD=0 WW=64 RE=8 PC=8 SQ=1 DEM=0 DVAL=64 arm SF3-OP-r2 && \
+  go_trio SF3-OP-r2 30 4 256 64 "port_v4 c11ede3e slot=256 W=64 (드리프트 가드 끝점 — SF3-OP 와 동일 조건)"
 sfsave
 say "semi_final 종료"

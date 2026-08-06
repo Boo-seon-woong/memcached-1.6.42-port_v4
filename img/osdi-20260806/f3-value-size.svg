@@ -1,38 +1,42 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="760" height="420" viewBox="0 0 760 420" font-family="Helvetica,Arial,sans-serif">
-<rect width="760" height="420" fill="white"/>
-<text x="380.0" y="24.0" font-size="15" fill="#0f172a" text-anchor="middle" font-weight="600">F3 — 값 크기: CPU/op 는 아핀이다 (2.00 µs + 4.05 ns/B)</text>
-<line x1="78.0" y1="366.0" x2="702.0" y2="366.0" stroke="#0f172a" stroke-width="1"/>
-<line x1="78.0" y1="46.0" x2="78.0" y2="366.0" stroke="#0f172a" stroke-width="1"/>
-<text x="390.0" y="406.0" font-size="12" fill="#0f172a" text-anchor="middle" font-weight="400">값 크기 (B)</text>
-<text x="18" y="206.0" font-size="12" fill="#0f172a" text-anchor="middle" transform="rotate(-90 18 206.0)">CPU/op (µs)</text>
-<text x="746" y="206.0" font-size="12" fill="#64748b" text-anchor="middle" transform="rotate(90 746 206.0)">성분 (µs)</text>
-<line x1="78.0" y1="330.4" x2="702.0" y2="330.4" stroke="#e5e7eb" stroke-width="1"/>
-<text x="70.0" y="334.4" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">2.0</text>
-<line x1="78.0" y1="259.3" x2="702.0" y2="259.3" stroke="#e5e7eb" stroke-width="1"/>
-<text x="70.0" y="263.3" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">2.2</text>
-<line x1="78.0" y1="188.2" x2="702.0" y2="188.2" stroke="#e5e7eb" stroke-width="1"/>
-<text x="70.0" y="192.2" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">2.4</text>
-<line x1="78.0" y1="117.1" x2="702.0" y2="117.1" stroke="#e5e7eb" stroke-width="1"/>
-<text x="70.0" y="121.1" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">2.6</text>
-<line x1="78.0" y1="46.0" x2="702.0" y2="46.0" stroke="#e5e7eb" stroke-width="1"/>
-<text x="70.0" y="50.0" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">2.8</text>
-<path d="M 78.0,330.4 L 702.0,100.0" fill="none" stroke="#64748b" stroke-width="1.4" stroke-dasharray="5 4"/>
-<circle cx="140.4" cy="309.6" r="4.2" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
-<text x="140.4" y="299.6" font-size="9" fill="#0f172a" text-anchor="middle" font-weight="400">2.059</text>
-<text x="140.4" y="382.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">16</text>
-<text x="140.4" y="396.0" font-size="9" fill="#64748b" text-anchor="middle" font-weight="400">14.47M</text>
-<circle cx="202.8" cy="293.6" r="4.2" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
-<text x="202.8" y="283.6" font-size="9" fill="#0f172a" text-anchor="middle" font-weight="400">2.104</text>
-<text x="202.8" y="382.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">32</text>
-<text x="202.8" y="396.0" font-size="9" fill="#64748b" text-anchor="middle" font-weight="400">14.21M</text>
-<circle cx="327.6" cy="226.2" r="4.2" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
-<text x="327.6" y="216.2" font-size="9" fill="#0f172a" text-anchor="middle" font-weight="400">2.293</text>
-<text x="327.6" y="382.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">64</text>
-<text x="327.6" y="396.0" font-size="9" fill="#64748b" text-anchor="middle" font-weight="400">13.04M</text>
-<circle cx="670.8" cy="115.9" r="4.2" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
-<text x="670.8" y="105.9" font-size="9" fill="#0f172a" text-anchor="middle" font-weight="400">2.603</text>
-<text x="670.8" y="382.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">152</text>
-<text x="670.8" y="396.0" font-size="9" fill="#64748b" text-anchor="middle" font-weight="400">11.45M</text>
-<text x="140.4" y="52.0" font-size="10" fill="#64748b" text-anchor="start" font-weight="400">파선 = 최소제곱 2.00 + 0.00405·B (잔차 2% 안)</text>
-<text x="140.4" y="68.0" font-size="10" fill="#64748b" text-anchor="start" font-weight="400">xfer 12.96→16.36   crypto 0.51→0.76  ← 바이트 비용은 전송이다</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="500" viewBox="0 0 820 500" font-family="Helvetica,Arial,sans-serif">
+<rect width="820" height="500" fill="white"/>
+<text x="410.0" y="24.0" font-size="15" fill="#0f172a" text-anchor="middle" font-weight="600">F3 — 값 크기: CPU/op 는 아핀이다 (2.00 µs + 4.05 ns/B)</text>
+<line x1="80.0" y1="442.0" x2="760.0" y2="442.0" stroke="#0f172a" stroke-width="1"/>
+<line x1="80.0" y1="132.0" x2="80.0" y2="442.0" stroke="#0f172a" stroke-width="1"/>
+<text x="420.0" y="486.0" font-size="12" fill="#0f172a" text-anchor="middle" font-weight="400">값 크기 (B)</text>
+<text x="18" y="287.0" font-size="12" fill="#0f172a" text-anchor="middle" transform="rotate(-90 18 287.0)">CPU/op (µs)</text>
+<text x="806" y="287.0" font-size="12" fill="#64748b" text-anchor="middle" transform="rotate(90 806 287.0)">성분 (µs)</text>
+<line x1="80.0" y1="407.6" x2="760.0" y2="407.6" stroke="#e5e7eb" stroke-width="1"/>
+<text x="72.0" y="411.6" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">2.0</text>
+<line x1="80.0" y1="338.7" x2="760.0" y2="338.7" stroke="#e5e7eb" stroke-width="1"/>
+<text x="72.0" y="342.7" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">2.2</text>
+<line x1="80.0" y1="269.8" x2="760.0" y2="269.8" stroke="#e5e7eb" stroke-width="1"/>
+<text x="72.0" y="273.8" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">2.4</text>
+<line x1="80.0" y1="200.9" x2="760.0" y2="200.9" stroke="#e5e7eb" stroke-width="1"/>
+<text x="72.0" y="204.9" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">2.6</text>
+<line x1="80.0" y1="132.0" x2="760.0" y2="132.0" stroke="#e5e7eb" stroke-width="1"/>
+<text x="72.0" y="136.0" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">2.8</text>
+<path d="M 80.0,407.6 L 760.0,184.4" fill="none" stroke="#64748b" stroke-width="1.4" stroke-dasharray="5 4"/>
+<circle cx="148.0" cy="387.3" r="4.2" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
+<text x="148.0" y="377.3" font-size="9" fill="#0f172a" text-anchor="middle" font-weight="400">2.059</text>
+<text x="148.0" y="458.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">16</text>
+<text x="148.0" y="472.0" font-size="9" fill="#64748b" text-anchor="middle" font-weight="400">14.47M</text>
+<circle cx="216.0" cy="371.8" r="4.2" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
+<text x="216.0" y="361.8" font-size="9" fill="#0f172a" text-anchor="middle" font-weight="400">2.104</text>
+<text x="216.0" y="458.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">32</text>
+<text x="216.0" y="472.0" font-size="9" fill="#64748b" text-anchor="middle" font-weight="400">14.21M</text>
+<circle cx="352.0" cy="306.5" r="4.2" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
+<text x="352.0" y="296.5" font-size="9" fill="#0f172a" text-anchor="middle" font-weight="400">2.293</text>
+<text x="352.0" y="458.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">64</text>
+<text x="352.0" y="472.0" font-size="9" fill="#64748b" text-anchor="middle" font-weight="400">13.04M</text>
+<circle cx="726.0" cy="199.8" r="4.2" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
+<text x="726.0" y="189.8" font-size="9" fill="#0f172a" text-anchor="middle" font-weight="400">2.603</text>
+<text x="726.0" y="458.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">152</text>
+<text x="726.0" y="472.0" font-size="9" fill="#64748b" text-anchor="middle" font-weight="400">11.45M</text>
+<rect x="88.0" y="36.0" width="664.0" height="75" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1" rx="3"/>
+<text x="96.0" y="51.0" font-size="9.5" fill="#0f172a" text-anchor="start" font-weight="600">달리한 것: 값 크기만 (16·32·64·152 B). 크기마다 재프리로드, 서버 구성 고정</text>
+<text x="96.0" y="64.0" font-size="9.5" fill="#64748b" text-anchor="start" font-weight="400">점 = CPU/op = busyCPU ÷ 처리량 (busy 는 네 셀 다 29.8~29.9 로 포화)</text>
+<text x="96.0" y="77.0" font-size="9.5" fill="#64748b" text-anchor="start" font-weight="400">파선 = 최소제곱 2.00 µs + 4.05 ns/B (네 점 잔차 2% 안)</text>
+<text x="96.0" y="90.0" font-size="9.5" fill="#64748b" text-anchor="start" font-weight="400">xfer 12.96→16.36 µs · crypto 0.51→0.76 µs — 바이트 비용은 전송이지 암복호가 아니다</text>
+<text x="96.0" y="103.0" font-size="9.5" fill="#64748b" text-anchor="start" font-weight="400">점 아래 숫자 = GET-only 처리량. 152 B 는 수용 상한(pac_fallback 0)</text>
 </svg>

@@ -1,43 +1,47 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="760" height="420" viewBox="0 0 760 420" font-family="Helvetica,Arial,sans-serif">
-<rect width="760" height="420" fill="white"/>
-<text x="380.0" y="24.0" font-size="15" fill="#0f172a" text-anchor="middle" font-weight="600">F4b — admit 은 대칭, v2 는 비대칭</text>
-<line x1="78.0" y1="366.0" x2="702.0" y2="366.0" stroke="#0f172a" stroke-width="1"/>
-<line x1="78.0" y1="46.0" x2="78.0" y2="366.0" stroke="#0f172a" stroke-width="1"/>
-<text x="390.0" y="406.0" font-size="12" fill="#0f172a" text-anchor="middle" font-weight="400">유효 배치 min(chain, reap)</text>
-<text x="18" y="206.0" font-size="12" fill="#0f172a" text-anchor="middle" transform="rotate(-90 18 206.0)">µs</text>
-<line x1="78.0" y1="366.0" x2="702.0" y2="366.0" stroke="#e5e7eb" stroke-width="1"/>
-<text x="70.0" y="370.0" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">0</text>
-<line x1="78.0" y1="286.0" x2="702.0" y2="286.0" stroke="#e5e7eb" stroke-width="1"/>
-<text x="70.0" y="290.0" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">5</text>
-<line x1="78.0" y1="206.0" x2="702.0" y2="206.0" stroke="#e5e7eb" stroke-width="1"/>
-<text x="70.0" y="210.0" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">10</text>
-<line x1="78.0" y1="126.0" x2="702.0" y2="126.0" stroke="#e5e7eb" stroke-width="1"/>
-<text x="70.0" y="130.0" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">15</text>
-<line x1="78.0" y1="46.0" x2="702.0" y2="46.0" stroke="#e5e7eb" stroke-width="1"/>
-<text x="70.0" y="50.0" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">20</text>
-<path d="M 156.0,364.2 L 312.0,353.8 L 468.0,333.5 L 624.0,294.5" fill="none" stroke="#2563eb" stroke-width="2.0"/>
-<circle cx="156.0" cy="364.2" r="3.2" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
-<circle cx="312.0" cy="353.8" r="3.2" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
-<circle cx="468.0" cy="333.5" r="3.2" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
-<circle cx="624.0" cy="294.5" r="3.2" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
-<path d="M 156.0,364.1 L 312.0,353.8 L 468.0,334.3 L 624.0,294.5" fill="none" stroke="#2563eb" stroke-width="2.0" stroke-dasharray="4 3"/>
-<circle cx="156.0" cy="364.1" r="3.2" fill="white" stroke="#2563eb" stroke-width="1.6"/>
-<circle cx="312.0" cy="353.8" r="3.2" fill="white" stroke="#2563eb" stroke-width="1.6"/>
-<circle cx="468.0" cy="334.3" r="3.2" fill="white" stroke="#2563eb" stroke-width="1.6"/>
-<circle cx="624.0" cy="294.5" r="3.2" fill="white" stroke="#2563eb" stroke-width="1.6"/>
-<path d="M 156.0,142.5 L 312.0,116.4 L 468.0,111.3 L 624.0,89.2" fill="none" stroke="#ea580c" stroke-width="2.0"/>
-<circle cx="156.0" cy="142.5" r="3.2" fill="#ea580c" stroke="#ea580c" stroke-width="1.6"/>
-<circle cx="312.0" cy="116.4" r="3.2" fill="#ea580c" stroke="#ea580c" stroke-width="1.6"/>
-<circle cx="468.0" cy="111.3" r="3.2" fill="#ea580c" stroke="#ea580c" stroke-width="1.6"/>
-<circle cx="624.0" cy="89.2" r="3.2" fill="#ea580c" stroke="#ea580c" stroke-width="1.6"/>
-<path d="M 156.0,276.9 L 312.0,241.7 L 468.0,204.9 L 624.0,89.2" fill="none" stroke="#ea580c" stroke-width="2.0" stroke-dasharray="4 3"/>
-<circle cx="156.0" cy="276.9" r="3.2" fill="white" stroke="#ea580c" stroke-width="1.6"/>
-<circle cx="312.0" cy="241.7" r="3.2" fill="white" stroke="#ea580c" stroke-width="1.6"/>
-<circle cx="468.0" cy="204.9" r="3.2" fill="white" stroke="#ea580c" stroke-width="1.6"/>
-<circle cx="624.0" cy="89.2" r="3.2" fill="white" stroke="#ea580c" stroke-width="1.6"/>
-<text x="156.0" y="382.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">1</text>
-<text x="312.0" y="382.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">2</text>
-<text x="468.0" y="382.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">4</text>
-<text x="624.0" y="382.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">8</text>
-<text x="88.0" y="34.0" font-size="10" fill="#64748b" text-anchor="start" font-weight="400">파랑 admit — 두 축이 포개진다(트리거 B)   주황 v2 — 갈라진다(reap 전용)</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="500" viewBox="0 0 820 500" font-family="Helvetica,Arial,sans-serif">
+<rect width="820" height="500" fill="white"/>
+<text x="410.0" y="24.0" font-size="15" fill="#0f172a" text-anchor="middle" font-weight="600">F4b — admit 은 대칭, v2 는 비대칭</text>
+<line x1="80.0" y1="442.0" x2="760.0" y2="442.0" stroke="#0f172a" stroke-width="1"/>
+<line x1="80.0" y1="132.0" x2="80.0" y2="442.0" stroke="#0f172a" stroke-width="1"/>
+<text x="420.0" y="486.0" font-size="12" fill="#0f172a" text-anchor="middle" font-weight="400">유효 배치 min(chain, reap)</text>
+<text x="18" y="287.0" font-size="12" fill="#0f172a" text-anchor="middle" transform="rotate(-90 18 287.0)">µs</text>
+<line x1="80.0" y1="442.0" x2="760.0" y2="442.0" stroke="#e5e7eb" stroke-width="1"/>
+<text x="72.0" y="446.0" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">0</text>
+<line x1="80.0" y1="364.5" x2="760.0" y2="364.5" stroke="#e5e7eb" stroke-width="1"/>
+<text x="72.0" y="368.5" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">5</text>
+<line x1="80.0" y1="287.0" x2="760.0" y2="287.0" stroke="#e5e7eb" stroke-width="1"/>
+<text x="72.0" y="291.0" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">10</text>
+<line x1="80.0" y1="209.5" x2="760.0" y2="209.5" stroke="#e5e7eb" stroke-width="1"/>
+<text x="72.0" y="213.5" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">15</text>
+<line x1="80.0" y1="132.0" x2="760.0" y2="132.0" stroke="#e5e7eb" stroke-width="1"/>
+<text x="72.0" y="136.0" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">20</text>
+<path d="M 165.0,440.3 L 335.0,430.2 L 505.0,410.5 L 675.0,372.7" fill="none" stroke="#2563eb" stroke-width="2.0"/>
+<circle cx="165.0" cy="440.3" r="3.2" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
+<circle cx="335.0" cy="430.2" r="3.2" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
+<circle cx="505.0" cy="410.5" r="3.2" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
+<circle cx="675.0" cy="372.7" r="3.2" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
+<path d="M 165.0,440.1 L 335.0,430.2 L 505.0,411.3 L 675.0,372.7" fill="none" stroke="#2563eb" stroke-width="2.0" stroke-dasharray="4 3"/>
+<circle cx="165.0" cy="440.1" r="3.2" fill="white" stroke="#2563eb" stroke-width="1.6"/>
+<circle cx="335.0" cy="430.2" r="3.2" fill="white" stroke="#2563eb" stroke-width="1.6"/>
+<circle cx="505.0" cy="411.3" r="3.2" fill="white" stroke="#2563eb" stroke-width="1.6"/>
+<circle cx="675.0" cy="372.7" r="3.2" fill="white" stroke="#2563eb" stroke-width="1.6"/>
+<path d="M 165.0,225.5 L 335.0,200.2 L 505.0,195.2 L 675.0,173.9" fill="none" stroke="#ea580c" stroke-width="2.0"/>
+<circle cx="165.0" cy="225.5" r="3.2" fill="#ea580c" stroke="#ea580c" stroke-width="1.6"/>
+<circle cx="335.0" cy="200.2" r="3.2" fill="#ea580c" stroke="#ea580c" stroke-width="1.6"/>
+<circle cx="505.0" cy="195.2" r="3.2" fill="#ea580c" stroke="#ea580c" stroke-width="1.6"/>
+<circle cx="675.0" cy="173.9" r="3.2" fill="#ea580c" stroke="#ea580c" stroke-width="1.6"/>
+<path d="M 165.0,355.7 L 335.0,321.6 L 505.0,285.9 L 675.0,173.9" fill="none" stroke="#ea580c" stroke-width="2.0" stroke-dasharray="4 3"/>
+<circle cx="165.0" cy="355.7" r="3.2" fill="white" stroke="#ea580c" stroke-width="1.6"/>
+<circle cx="335.0" cy="321.6" r="3.2" fill="white" stroke="#ea580c" stroke-width="1.6"/>
+<circle cx="505.0" cy="285.9" r="3.2" fill="white" stroke="#ea580c" stroke-width="1.6"/>
+<circle cx="675.0" cy="173.9" r="3.2" fill="white" stroke="#ea580c" stroke-width="1.6"/>
+<text x="165.0" y="458.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">1</text>
+<text x="335.0" y="458.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">2</text>
+<text x="505.0" y="458.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">4</text>
+<text x="675.0" y="458.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">8</text>
+<rect x="88.0" y="36.0" width="664.0" height="62" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1" rx="3"/>
+<text x="96.0" y="51.0" font-size="9.5" fill="#0f172a" text-anchor="start" font-weight="600">달리한 것: 같은 유효 배치를 chain 으로 만들 것이냐 reap 으로 만들 것이냐</text>
+<text x="96.0" y="64.0" font-size="9.5" fill="#64748b" text-anchor="start" font-weight="400">x = min(chain, reap).  실선·채운 점 = chain 축 (reap=8 고정)</text>
+<text x="96.0" y="77.0" font-size="9.5" fill="#64748b" text-anchor="start" font-weight="400">파선·빈 점 = reap 축 (chain=8 고정)</text>
+<text x="96.0" y="90.0" font-size="9.5" fill="#64748b" text-anchor="start" font-weight="400">파랑 admit — 두 축이 포개진다(트리거 B) · 주황 v2 — 갈라진다(reap 전용)</text>
 </svg>

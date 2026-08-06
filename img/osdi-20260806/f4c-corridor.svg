@@ -1,39 +1,43 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="760" height="420" viewBox="0 0 760 420" font-family="Helvetica,Arial,sans-serif">
-<rect width="760" height="420" fill="white"/>
-<text x="380.0" y="24.0" font-size="15" fill="#0f172a" text-anchor="middle" font-weight="600">F4c — 계약 회랑의 아래 끝은 chain 1~2 사이</text>
-<line x1="78.0" y1="366.0" x2="702.0" y2="366.0" stroke="#0f172a" stroke-width="1"/>
-<line x1="78.0" y1="46.0" x2="78.0" y2="366.0" stroke="#0f172a" stroke-width="1"/>
-<text x="390.0" y="406.0" font-size="12" fill="#0f172a" text-anchor="middle" font-weight="400">ext_post_chain</text>
-<text x="18" y="206.0" font-size="12" fill="#0f172a" text-anchor="middle" transform="rotate(-90 18 206.0)">처리량 (M ops/s)</text>
-<line x1="78.0" y1="366.0" x2="702.0" y2="366.0" stroke="#e5e7eb" stroke-width="1"/>
-<text x="70.0" y="370.0" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">8</text>
-<line x1="78.0" y1="259.3" x2="702.0" y2="259.3" stroke="#e5e7eb" stroke-width="1"/>
-<text x="70.0" y="263.3" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">10</text>
-<line x1="78.0" y1="152.7" x2="702.0" y2="152.7" stroke="#e5e7eb" stroke-width="1"/>
-<text x="70.0" y="156.7" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">12</text>
-<line x1="78.0" y1="46.0" x2="702.0" y2="46.0" stroke="#e5e7eb" stroke-width="1"/>
-<text x="70.0" y="50.0" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">14</text>
-<line x1="78.0" y1="259.3" x2="702.0" y2="259.3" stroke="#16a34a" stroke-width="1.6" stroke-dasharray="6 4"/>
-<text x="698.0" y="253.3" font-size="10" fill="#16a34a" text-anchor="end" font-weight="400">계약 10 M</text>
-<path d="M 130.0,186.5 L 234.0,145.3 L 338.0,121.3 L 442.0,97.4 L 546.0,91.9 L 650.0,95.5" fill="none" stroke="#2563eb" stroke-width="2.2"/>
-<circle cx="130.0" cy="186.5" r="3.6" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
-<circle cx="234.0" cy="145.3" r="3.6" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
-<circle cx="338.0" cy="121.3" r="3.6" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
-<circle cx="442.0" cy="97.4" r="3.6" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
-<circle cx="546.0" cy="91.9" r="3.6" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
-<circle cx="650.0" cy="95.5" r="3.6" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
-<path d="M 130.0,277.8 L 234.0,249.2 L 338.0,227.5 L 442.0,208.9 L 546.0,218.7 L 650.0,218.2" fill="none" stroke="#ea580c" stroke-width="2.2"/>
-<circle cx="130.0" cy="277.8" r="3.6" fill="#ea580c" stroke="#ea580c" stroke-width="1.6"/>
-<circle cx="234.0" cy="249.2" r="3.6" fill="#ea580c" stroke="#ea580c" stroke-width="1.6"/>
-<circle cx="338.0" cy="227.5" r="3.6" fill="#ea580c" stroke="#ea580c" stroke-width="1.6"/>
-<circle cx="442.0" cy="208.9" r="3.6" fill="#ea580c" stroke="#ea580c" stroke-width="1.6"/>
-<circle cx="546.0" cy="218.7" r="3.6" fill="#ea580c" stroke="#ea580c" stroke-width="1.6"/>
-<circle cx="650.0" cy="218.2" r="3.6" fill="#ea580c" stroke="#ea580c" stroke-width="1.6"/>
-<text x="130.0" y="382.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">1</text>
-<text x="234.0" y="382.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">2</text>
-<text x="338.0" y="382.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">4</text>
-<text x="442.0" y="382.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">8</text>
-<text x="546.0" y="382.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">12</text>
-<text x="650.0" y="382.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">16</text>
-<text x="88.0" y="34.0" font-size="10" fill="#64748b" text-anchor="start" font-weight="400">파랑 GET-only · 주황 1:9 혼합 — 혼합만 chain=1 에서 미달</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="500" viewBox="0 0 820 500" font-family="Helvetica,Arial,sans-serif">
+<rect width="820" height="500" fill="white"/>
+<text x="410.0" y="24.0" font-size="15" fill="#0f172a" text-anchor="middle" font-weight="600">F4c — 계약 회랑의 아래 끝은 chain 1~2 사이</text>
+<line x1="80.0" y1="442.0" x2="760.0" y2="442.0" stroke="#0f172a" stroke-width="1"/>
+<line x1="80.0" y1="132.0" x2="80.0" y2="442.0" stroke="#0f172a" stroke-width="1"/>
+<text x="420.0" y="486.0" font-size="12" fill="#0f172a" text-anchor="middle" font-weight="400">ext_post_chain</text>
+<text x="18" y="287.0" font-size="12" fill="#0f172a" text-anchor="middle" transform="rotate(-90 18 287.0)">처리량 (M ops/s)</text>
+<line x1="80.0" y1="442.0" x2="760.0" y2="442.0" stroke="#e5e7eb" stroke-width="1"/>
+<text x="72.0" y="446.0" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">8</text>
+<line x1="80.0" y1="338.7" x2="760.0" y2="338.7" stroke="#e5e7eb" stroke-width="1"/>
+<text x="72.0" y="342.7" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">10</text>
+<line x1="80.0" y1="235.3" x2="760.0" y2="235.3" stroke="#e5e7eb" stroke-width="1"/>
+<text x="72.0" y="239.3" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">12</text>
+<line x1="80.0" y1="132.0" x2="760.0" y2="132.0" stroke="#e5e7eb" stroke-width="1"/>
+<text x="72.0" y="136.0" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">14</text>
+<line x1="80.0" y1="338.7" x2="760.0" y2="338.7" stroke="#16a34a" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text x="756.0" y="332.7" font-size="10" fill="#16a34a" text-anchor="end" font-weight="400">계약 10 M</text>
+<path d="M 136.7,268.1 L 250.0,228.2 L 363.3,205.0 L 476.7,181.8 L 590.0,176.4 L 703.3,180.0" fill="none" stroke="#2563eb" stroke-width="2.2"/>
+<circle cx="136.7" cy="268.1" r="3.6" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
+<circle cx="250.0" cy="228.2" r="3.6" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
+<circle cx="363.3" cy="205.0" r="3.6" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
+<circle cx="476.7" cy="181.8" r="3.6" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
+<circle cx="590.0" cy="176.4" r="3.6" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
+<circle cx="703.3" cy="180.0" r="3.6" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
+<path d="M 136.7,356.6 L 250.0,328.9 L 363.3,307.8 L 476.7,289.8 L 590.0,299.3 L 703.3,298.8" fill="none" stroke="#ea580c" stroke-width="2.2"/>
+<circle cx="136.7" cy="356.6" r="3.6" fill="#ea580c" stroke="#ea580c" stroke-width="1.6"/>
+<circle cx="250.0" cy="328.9" r="3.6" fill="#ea580c" stroke="#ea580c" stroke-width="1.6"/>
+<circle cx="363.3" cy="307.8" r="3.6" fill="#ea580c" stroke="#ea580c" stroke-width="1.6"/>
+<circle cx="476.7" cy="289.8" r="3.6" fill="#ea580c" stroke="#ea580c" stroke-width="1.6"/>
+<circle cx="590.0" cy="299.3" r="3.6" fill="#ea580c" stroke="#ea580c" stroke-width="1.6"/>
+<circle cx="703.3" cy="298.8" r="3.6" fill="#ea580c" stroke="#ea580c" stroke-width="1.6"/>
+<text x="136.7" y="458.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">1</text>
+<text x="250.0" y="458.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">2</text>
+<text x="363.3" y="458.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">4</text>
+<text x="476.7" y="458.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">8</text>
+<text x="590.0" y="458.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">12</text>
+<text x="703.3" y="458.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">16</text>
+<rect x="88.0" y="36.0" width="664.0" height="62" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1" rx="3"/>
+<text x="96.0" y="51.0" font-size="9.5" fill="#0f172a" text-anchor="start" font-weight="600">달리한 것: ext_post_chain 만 (1~16). reap=8 고정</text>
+<text x="96.0" y="64.0" font-size="9.5" fill="#64748b" text-anchor="start" font-weight="400">y = 처리량. 초록 파선 = 계약선 10 M ops/s</text>
+<text x="96.0" y="77.0" font-size="9.5" fill="#64748b" text-anchor="start" font-weight="400">파랑 GET-only · 주황 1:9 혼합 — 혼합만 chain=1 에서 미달(9.653 M)</text>
+<text x="96.0" y="90.0" font-size="9.5" fill="#64748b" text-anchor="start" font-weight="400">chain 노브가 존재하는 이유가 혼합 조항이라는 뜻이다</text>
 </svg>

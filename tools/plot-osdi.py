@@ -12,8 +12,8 @@
 import argparse
 from pathlib import Path
 
-W, H = 760, 420
-PAD = dict(l=78, r=58, t=46, b=54)
+W, H = 820, 500
+PAD = dict(l=80, r=60, t=132, b=58)   # t 가 큰 이유: 상단 주석 상자 자리
 C = dict(v4="#2563eb", v3="#dc2626", get="#2563eb", mix="#ea580c", set="#16a34a",
          que="#cbd5e1", pre="#94a3b8", span="#1d4ed8", post="#fca5a5", grid="#e5e7eb",
          ink="#0f172a", mute="#64748b")
@@ -84,6 +84,21 @@ class Svg:
         print(f"  {p}")
 
 
+def legend(s, lines, x=None, y=None, w=None):
+    """좌상단 주석 상자. **무엇을 달리했고 값이 무엇인지**를 그림 안에 적는다 —
+    캡션은 붙어 다니지 않지만 그림은 혼자 돌아다닌다."""
+    x = PAD["l"] + 8 if x is None else x
+    y = 36 if y is None else y   # 제목 아래, 축 위
+    w = (s.w - PAD["l"] - PAD["r"] - 16) if w is None else w
+    h = 13 * len(lines) + 10
+    s.p.append(f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h}" '
+               f'fill="#f8fafc" stroke="#cbd5e1" stroke-width="1" rx="3"/>')
+    for i, ln in enumerate(lines):
+        s.txt(x + 8, y + 15 + i * 13, ln, 9.5, C["ink"] if i == 0 else C["mute"],
+              weight=600 if i == 0 else 400)
+    return y + h
+
+
 def axes(s, xlab, ylab, y2lab=None):
     l, r, t, b = PAD["l"], s.w - PAD["r"], PAD["t"], s.h - PAD["b"]
     s.line(l, b, r, b, C["ink"])
@@ -140,10 +155,14 @@ def f2b(rows, out):
             s.txt(x + bw / 2, linmap(acc, lo, hi, b, t) - 6, f"{srv:.0f}", 9,
                   C["ink"], "middle", 600)
             s.txt(x + bw / 2, b + 16, str(p), 10, C["ink"], "middle")
+        yb = legend(s, ["달리한 것: pipeline 깊이만 (1~384). 서버 구성은 운영값 고정",
+                        "막대 = 서버 체류 srv 를 네 구간으로 나눈 것. 막대 위 숫자 = srv 합(µs)",
+                        "que 소켓read→명령시작 · pre 파싱 · span v3 계약구간 · post 복호→송신",
+                        "port_v4 c11ede3e, PROF=1, 셀당 60초"])
         for i, (nm, col) in enumerate((("que", C["que"]), ("pre", C["pre"]),
                                        ("span v3 (계약)", C["span"]), ("post", C["post"]))):
-            s.rect(l + 10 + i * 108, t - 22, 11, 11, col)
-            s.txt(l + 26 + i * 108, t - 12, nm, 10, C["ink"])
+            s.rect(l + 10 + i * 118, yb + 6, 11, 11, col)
+            s.txt(l + 26 + i * 118, yb + 15, nm, 9.5, C["ink"])
         s.save(f"{out}/f2b-{tag}.svg")
 
 
@@ -175,8 +194,10 @@ def f2c(rows, out):
         s.path(pts, col, 1.4, dash)
     for x, p in zip(xs, pipes):
         s.txt(x, b + 16, str(p), 10, C["ink"], "middle")
-    s.txt(l + 10, t - 12, "실선 = span v3   파선 = srv(서버 체류)", 10, C["mute"])
-    s.txt(l + 10, t + 4, "빨강 v3 · 파랑 v4", 10, C["mute"])
+    legend(s, ["달리한 것: 포트 버전(v3/v4)만. 격자·부하·창 길이는 동일",
+               "실선 = span v3 (계약이 재는 구간) · 파선 = srv (서버 체류 전체)",
+               "빨강 port_v3 86da4222 (W=40 nqp=4) · 파랑 port_v4 c11ede3e (W=24 reap=8 chain=8)",
+               "pipe=256 에서 span −91% 인데 srv 는 −4.2% — 시간이 span 밖으로 옮겨갔다"])
     s.save(f"{out}/f2c-v3-v4.svg")
 
 
@@ -208,10 +229,12 @@ def f3(rows, out):
         s.txt(x, b + 16, str(d), 10, C["ink"], "middle")
         s.txt(x, b + 30, f"{m:.2f}M", 9, C["mute"], "middle")
     x0 = fx(pts[0][0])
-    s.txt(x0, t + 6, "파선 = 최소제곱 2.00 + 0.00405·B (잔차 2% 안)", 10, C["mute"])
-    s.txt(x0, t + 22, f"xfer {pts[0][3]:.2f}→{pts[-1][3]:.2f}   "
-                      f"crypto {pts[0][4]:.2f}→{pts[-1][4]:.2f}  ← 바이트 비용은 전송이다",
-          10, C["mute"])
+    legend(s, ["달리한 것: 값 크기만 (16·32·64·152 B). 크기마다 재프리로드, 서버 구성 고정",
+               "점 = CPU/op = busyCPU ÷ 처리량 (busy 는 네 셀 다 29.8~29.9 로 포화)",
+               "파선 = 최소제곱 2.00 µs + 4.05 ns/B (네 점 잔차 2% 안)",
+               f"xfer {pts[0][3]:.2f}→{pts[-1][3]:.2f} µs · crypto {pts[0][4]:.2f}→{pts[-1][4]:.2f} µs "
+               "— 바이트 비용은 전송이지 암복호가 아니다",
+               "점 아래 숫자 = GET-only 처리량. 152 B 는 수용 상한(pac_fallback 0)"])
     s.save(f"{out}/f3-value-size.svg")
 
 
@@ -251,8 +274,10 @@ def f4(rows, out):
         for x, (c, rw) in zip(xs, cs):
             s.txt(x, b + 16, str(c), 10, C["ink"], "middle")
             s.txt(x, b + 30, f"{num(rw,'Mops'):.2f}M", 9, C["mute"], "middle")
-        s.txt(l + 10, t - 12, "실선(왼쪽 축) span v3 ↑   파선(오른쪽) srv ↓  — 같은 노브에 반대 부호",
-              10, C["mute"])
+        legend(s, ["달리한 것: ext_post_chain 만 (1~16). reap=8 고정, 그 외 운영값",
+                   "실선(왼쪽 축) span v3 — 오른다 · 파선(오른쪽 축) srv 서버 체류 — 내린다",
+                   "x 축 아래 숫자 = 그 셀의 GET-only 처리량",
+                   "c8 은 재시행값이다 (첫 셀이 −2.8% 낮게 나왔다)"])
         s.save(f"{out}/f4a-chain-opposite.svg")
 
     # F4b: admit 대칭 / v2 비대칭
@@ -282,8 +307,10 @@ def f4(rows, out):
                 s.dot(p[0], p[1], col, 3.2, dash is not None)
         for x, k in zip(xs, mins):
             s.txt(x, b + 16, str(k), 10, C["ink"], "middle")
-        s.txt(l + 10, t - 12, "파랑 admit — 두 축이 포개진다(트리거 B)   주황 v2 — 갈라진다(reap 전용)",
-              10, C["mute"])
+        legend(s, ["달리한 것: 같은 유효 배치를 chain 으로 만들 것이냐 reap 으로 만들 것이냐",
+                   "x = min(chain, reap).  실선·채운 점 = chain 축 (reap=8 고정)",
+                   "파선·빈 점 = reap 축 (chain=8 고정)",
+                   "파랑 admit — 두 축이 포개진다(트리거 B) · 주황 v2 — 갈라진다(reap 전용)"])
         s.save(f"{out}/f4b-two-knobs.svg")
 
     # F4c: 계약 회랑
@@ -313,7 +340,10 @@ def f4(rows, out):
             s.dot(p[0], p[1], C["mix"])
         for x, (c, _) in zip(xs, cs):
             s.txt(x, b + 16, str(c), 10, C["ink"], "middle")
-        s.txt(l + 10, t - 12, "파랑 GET-only · 주황 1:9 혼합 — 혼합만 chain=1 에서 미달", 10, C["mute"])
+        legend(s, ["달리한 것: ext_post_chain 만 (1~16). reap=8 고정",
+                   "y = 처리량. 초록 파선 = 계약선 10 M ops/s",
+                   "파랑 GET-only · 주황 1:9 혼합 — 혼합만 chain=1 에서 미달(9.653 M)",
+                   "chain 노브가 존재하는 이유가 혼합 조항이라는 뜻이다"])
         s.save(f"{out}/f4c-corridor.svg")
 
 
@@ -372,11 +402,13 @@ def f1(rows, out):
                 s2.dot(linmap(float(z["ops_M"]), 0, xhi, l, r),
                        linmap(float(z["avg_ms"]), ylo, yhi, b, t), col, 4.6, True)
         ps = max(x for x, _, _ in series["ST"]); pp = max(x for x, _, _ in series["PT"])
-        s2.txt(l + 10, t - 12, f"빨강 stock · 파랑 port · 속 빈 마커 = zipf θ=0.99    "
-                               f"정점 {ps:.2f} → {pp:.2f} M ({(pp/ps-1)*100:+.0f}%)",
-               11, C["ink"], "start", 600)
+        note = ["달리한 것: 서버 종류(stock/port) × pipeline 깊이 1~384",
+                f"점 = 셀 하나(30초). 점 옆 숫자 = pipeline.  x 처리량 · y memtier avg 지연",
+                "빨강 stock(로컬 메모리) · 파랑 port(원격 RDMA) · 속 빈 마커 = zipf θ=0.99",
+                f"정점 {ps:.2f} → {pp:.2f} M ({(pp/ps-1)*100:+.0f}%)   그 외 모든 조건 동일"]
         if wl == "A":
-            s2.txt(l + 10, t + 6, "주의: 메모리 배치와 item_lock 경합이 겹친 워크로드다", 10, C["mute"])
+            note.append("주의: 이 워크로드는 메모리 배치와 쓰기 경로 직렬화가 겹쳐 있다")
+        legend(s2, note)
         s2.save(f"{out}/f1-{wl}.svg")
 
 
@@ -390,7 +422,7 @@ def f1b(rows, out):
              "48 코어 중 58.2% — 부하를 만드는 비용"),
             ("guest memcached\n(port 서버)", 29.9, C["v4"],
              "30 코어 중 99.7% — 일을 하는 쪽")]
-    s = Svg(h=400, title="F1b — one-sided READ: 메모리 노드는 CPU 를 쓰지 않는다")
+    s = Svg(title="F1b — one-sided READ: 메모리 노드는 CPU 를 쓰지 않는다")
     l, r, t, b = axes(s, "", "CPU (코어)")
     lo, hi = 0.0, 32
     for gv in (0, 5, 10, 15, 20, 25, 30):
@@ -407,8 +439,9 @@ def f1b(rows, out):
         for j, ln in enumerate(nm.split("\n")):
             s.txt(x + bw / 2, b + 18 + j * 13, ln, 10, C["ink"], "middle")
         s.txt(x + bw / 2, b + 46, note, 8.5, C["mute"], "middle")
-    s.txt(l + 10, t - 12, "첫 막대는 선형 축에서 보이지 않는다 — 그것이 이 그림의 주장이다 (서버의 50 만분의 1)",
-          10, C["mute"])
+    legend(s, ["달리한 것: CPU 를 재는 대상 (같은 시스템의 세 구성 요소)",
+               "값 = 점유 코어 수. genie_memd 는 utime+stime 누적 15.3 s / 66.6 h",
+               "첫 막대는 선형 축에서 보이지 않는다 — 그것이 이 그림의 주장이다"])
     s.save(f"{out}/f1b-memory-node-cpu.svg")
 
 
@@ -449,9 +482,10 @@ def f2a(rows, out):
         s.path(spn, col, 1.4, "4 3")
         for pt in spn:
             s.dot(pt[0], pt[1], col, 3.0, True)
-    s.txt(l + 10, t - 12, "실선(왼쪽) 클라이언트 지연 ↑    파선(오른쪽) span v3 — 평평하다",
-          10, C["mute"])
-    s.txt(l + 10, t + 4, "파랑 GET-only · 주황 1:9 혼합", 10, C["mute"])
+    legend(s, ["달리한 것: pipeline 깊이만 (1~384). 점 하나가 셀 하나(60초)",
+               "실선·채운 점(왼쪽 축) = memtier 클라이언트 지연 — 부하와 함께 오른다",
+               "파선·빈 점(오른쪽 축) = span v3 — 평평하다. 초록 파선 = 계약 30 µs",
+               "파랑 GET-only · 주황 1:9 혼합.  port_v4 c11ede3e, PROF=1"])
     s.save(f"{out}/f2a-pipeline-curve.svg")
 
 

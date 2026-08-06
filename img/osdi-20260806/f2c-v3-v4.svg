@@ -1,45 +1,48 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="760" height="420" viewBox="0 0 760 420" font-family="Helvetica,Arial,sans-serif">
-<rect width="760" height="420" fill="white"/>
-<text x="380.0" y="24.0" font-size="15" fill="#0f172a" text-anchor="middle" font-weight="600">F2c — port_v3 ↔ port_v4, 같은 격자 (GET-only, 60초)</text>
-<line x1="78.0" y1="366.0" x2="702.0" y2="366.0" stroke="#0f172a" stroke-width="1"/>
-<line x1="78.0" y1="46.0" x2="78.0" y2="366.0" stroke="#0f172a" stroke-width="1"/>
-<text x="390.0" y="406.0" font-size="12" fill="#0f172a" text-anchor="middle" font-weight="400">pipeline</text>
-<text x="18" y="206.0" font-size="12" fill="#0f172a" text-anchor="middle" transform="rotate(-90 18 206.0)">µs</text>
-<line x1="78.0" y1="366.0" x2="702.0" y2="366.0" stroke="#e5e7eb" stroke-width="1"/>
-<text x="70.0" y="370.0" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">0</text>
-<line x1="78.0" y1="300.7" x2="702.0" y2="300.7" stroke="#e5e7eb" stroke-width="1"/>
-<text x="70.0" y="304.7" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">200</text>
-<line x1="78.0" y1="235.4" x2="702.0" y2="235.4" stroke="#e5e7eb" stroke-width="1"/>
-<text x="70.0" y="239.4" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">400</text>
-<line x1="78.0" y1="170.1" x2="702.0" y2="170.1" stroke="#e5e7eb" stroke-width="1"/>
-<text x="70.0" y="174.1" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">600</text>
-<line x1="78.0" y1="104.7" x2="702.0" y2="104.7" stroke="#e5e7eb" stroke-width="1"/>
-<text x="70.0" y="108.7" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">800</text>
-<path d="M 122.6,360.9 L 211.7,354.8 L 300.9,341.9 L 390.0,340.2 L 479.1,322.9 L 568.3,287.4 L 657.4,230.7" fill="none" stroke="#dc2626" stroke-width="2.2"/>
-<circle cx="122.6" cy="360.9" r="3.6" fill="#dc2626" stroke="#dc2626" stroke-width="1.6"/>
-<circle cx="211.7" cy="354.8" r="3.6" fill="#dc2626" stroke="#dc2626" stroke-width="1.6"/>
-<circle cx="300.9" cy="341.9" r="3.6" fill="#dc2626" stroke="#dc2626" stroke-width="1.6"/>
-<circle cx="390.0" cy="340.2" r="3.6" fill="#dc2626" stroke="#dc2626" stroke-width="1.6"/>
-<circle cx="479.1" cy="322.9" r="3.6" fill="#dc2626" stroke="#dc2626" stroke-width="1.6"/>
-<circle cx="568.3" cy="287.4" r="3.6" fill="#dc2626" stroke="#dc2626" stroke-width="1.6"/>
-<circle cx="657.4" cy="230.7" r="3.6" fill="#dc2626" stroke="#dc2626" stroke-width="1.6"/>
-<path d="M 122.6,360.2 L 211.7,357.0 L 300.9,358.1 L 390.0,358.2 L 479.1,358.7 L 568.3,358.9 L 657.4,358.8" fill="none" stroke="#2563eb" stroke-width="2.2"/>
-<circle cx="122.6" cy="360.2" r="3.6" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
-<circle cx="211.7" cy="357.0" r="3.6" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
-<circle cx="300.9" cy="358.1" r="3.6" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
-<circle cx="390.0" cy="358.2" r="3.6" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
-<circle cx="479.1" cy="358.7" r="3.6" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
-<circle cx="568.3" cy="358.9" r="3.6" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
-<circle cx="657.4" cy="358.8" r="3.6" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
-<path d="M 122.6,351.4 L 211.7,341.8 L 300.9,316.0 L 390.0,310.8 L 479.1,273.4 L 568.3,195.6 L 657.4,75.1" fill="none" stroke="#dc2626" stroke-width="1.4" stroke-dasharray="4 3"/>
-<path d="M 122.6,351.9 L 211.7,343.7 L 300.9,320.3 L 390.0,316.8 L 479.1,285.4 L 568.3,202.8 L 657.4,106.0" fill="none" stroke="#2563eb" stroke-width="1.4" stroke-dasharray="4 3"/>
-<text x="122.6" y="382.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">1</text>
-<text x="211.7" y="382.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">8</text>
-<text x="300.9" y="382.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">32</text>
-<text x="390.0" y="382.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">64</text>
-<text x="479.1" y="382.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">128</text>
-<text x="568.3" y="382.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">256</text>
-<text x="657.4" y="382.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">384</text>
-<text x="88.0" y="34.0" font-size="10" fill="#64748b" text-anchor="start" font-weight="400">실선 = span v3   파선 = srv(서버 체류)</text>
-<text x="88.0" y="50.0" font-size="10" fill="#64748b" text-anchor="start" font-weight="400">빨강 v3 · 파랑 v4</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="500" viewBox="0 0 820 500" font-family="Helvetica,Arial,sans-serif">
+<rect width="820" height="500" fill="white"/>
+<text x="410.0" y="24.0" font-size="15" fill="#0f172a" text-anchor="middle" font-weight="600">F2c — port_v3 ↔ port_v4, 같은 격자 (GET-only, 60초)</text>
+<line x1="80.0" y1="442.0" x2="760.0" y2="442.0" stroke="#0f172a" stroke-width="1"/>
+<line x1="80.0" y1="132.0" x2="80.0" y2="442.0" stroke="#0f172a" stroke-width="1"/>
+<text x="420.0" y="486.0" font-size="12" fill="#0f172a" text-anchor="middle" font-weight="400">pipeline</text>
+<text x="18" y="287.0" font-size="12" fill="#0f172a" text-anchor="middle" transform="rotate(-90 18 287.0)">µs</text>
+<line x1="80.0" y1="442.0" x2="760.0" y2="442.0" stroke="#e5e7eb" stroke-width="1"/>
+<text x="72.0" y="446.0" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">0</text>
+<line x1="80.0" y1="378.7" x2="760.0" y2="378.7" stroke="#e5e7eb" stroke-width="1"/>
+<text x="72.0" y="382.7" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">200</text>
+<line x1="80.0" y1="315.5" x2="760.0" y2="315.5" stroke="#e5e7eb" stroke-width="1"/>
+<text x="72.0" y="319.5" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">400</text>
+<line x1="80.0" y1="252.2" x2="760.0" y2="252.2" stroke="#e5e7eb" stroke-width="1"/>
+<text x="72.0" y="256.2" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">600</text>
+<line x1="80.0" y1="188.9" x2="760.0" y2="188.9" stroke="#e5e7eb" stroke-width="1"/>
+<text x="72.0" y="192.9" font-size="10" fill="#64748b" text-anchor="end" font-weight="400">800</text>
+<path d="M 128.6,437.1 L 225.7,431.2 L 322.9,418.6 L 420.0,417.0 L 517.1,400.3 L 614.3,365.8 L 711.4,310.9" fill="none" stroke="#dc2626" stroke-width="2.2"/>
+<circle cx="128.6" cy="437.1" r="3.6" fill="#dc2626" stroke="#dc2626" stroke-width="1.6"/>
+<circle cx="225.7" cy="431.2" r="3.6" fill="#dc2626" stroke="#dc2626" stroke-width="1.6"/>
+<circle cx="322.9" cy="418.6" r="3.6" fill="#dc2626" stroke="#dc2626" stroke-width="1.6"/>
+<circle cx="420.0" cy="417.0" r="3.6" fill="#dc2626" stroke="#dc2626" stroke-width="1.6"/>
+<circle cx="517.1" cy="400.3" r="3.6" fill="#dc2626" stroke="#dc2626" stroke-width="1.6"/>
+<circle cx="614.3" cy="365.8" r="3.6" fill="#dc2626" stroke="#dc2626" stroke-width="1.6"/>
+<circle cx="711.4" cy="310.9" r="3.6" fill="#dc2626" stroke="#dc2626" stroke-width="1.6"/>
+<path d="M 128.6,436.4 L 225.7,433.3 L 322.9,434.4 L 420.0,434.5 L 517.1,435.0 L 614.3,435.1 L 711.4,435.1" fill="none" stroke="#2563eb" stroke-width="2.2"/>
+<circle cx="128.6" cy="436.4" r="3.6" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
+<circle cx="225.7" cy="433.3" r="3.6" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
+<circle cx="322.9" cy="434.4" r="3.6" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
+<circle cx="420.0" cy="434.5" r="3.6" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
+<circle cx="517.1" cy="435.0" r="3.6" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
+<circle cx="614.3" cy="435.1" r="3.6" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
+<circle cx="711.4" cy="435.1" r="3.6" fill="#2563eb" stroke="#2563eb" stroke-width="1.6"/>
+<path d="M 128.6,427.9 L 225.7,418.6 L 322.9,393.6 L 420.0,388.5 L 517.1,352.3 L 614.3,276.9 L 711.4,160.2" fill="none" stroke="#dc2626" stroke-width="1.4" stroke-dasharray="4 3"/>
+<path d="M 128.6,428.3 L 225.7,420.4 L 322.9,397.7 L 420.0,394.4 L 517.1,363.9 L 614.3,283.9 L 711.4,190.1" fill="none" stroke="#2563eb" stroke-width="1.4" stroke-dasharray="4 3"/>
+<text x="128.6" y="458.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">1</text>
+<text x="225.7" y="458.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">8</text>
+<text x="322.9" y="458.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">32</text>
+<text x="420.0" y="458.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">64</text>
+<text x="517.1" y="458.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">128</text>
+<text x="614.3" y="458.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">256</text>
+<text x="711.4" y="458.0" font-size="10" fill="#0f172a" text-anchor="middle" font-weight="400">384</text>
+<rect x="88.0" y="36.0" width="664.0" height="62" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1" rx="3"/>
+<text x="96.0" y="51.0" font-size="9.5" fill="#0f172a" text-anchor="start" font-weight="600">달리한 것: 포트 버전(v3/v4)만. 격자·부하·창 길이는 동일</text>
+<text x="96.0" y="64.0" font-size="9.5" fill="#64748b" text-anchor="start" font-weight="400">실선 = span v3 (계약이 재는 구간) · 파선 = srv (서버 체류 전체)</text>
+<text x="96.0" y="77.0" font-size="9.5" fill="#64748b" text-anchor="start" font-weight="400">빨강 port_v3 86da4222 (W=40 nqp=4) · 파랑 port_v4 c11ede3e (W=24 reap=8 chain=8)</text>
+<text x="96.0" y="90.0" font-size="9.5" fill="#64748b" text-anchor="start" font-weight="400">pipe=256 에서 span −91% 인데 srv 는 −4.2% — 시간이 span 밖으로 옮겨갔다</text>
 </svg>

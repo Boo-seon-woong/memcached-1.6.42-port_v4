@@ -17152,3 +17152,7 @@ CELL SF3-C14-GET DONE  12.805 M  avg 2.35124 / p50 2.27100 / p99 4.19100 / p99.9
 CELL SF3-C14-MIX DONE  10.690 M  avg 2.83404 / p50 2.75100 / p99 4.86300 / p99.9 8.12700 ms
 창(UTC) 2026-08-06T16:27:05Z ~ 2026-08-06T16:30:05Z   pipe=256 --ratio=1:9 --test-time=180
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=14 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 
+
+CELL SF3-C14-SET DONE  5.667 M  avg 5.36199 / p50 4.44700 / p99 9.21500 / p99.9 13.82300 ms
+창(UTC) 2026-08-06T16:30:33Z ~ 2026-08-06T16:33:33Z   pipe=256 --ratio=1:0 --test-time=180
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=14 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 

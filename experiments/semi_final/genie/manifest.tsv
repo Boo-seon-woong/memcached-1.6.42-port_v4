@@ -1,0 +1,2 @@
+cell	start_utc	end_utc	pipe	ratio	dur	ops_M	avg	p50	p99	p999
+SLOTAB-256	2026-08-06T06:12:40Z	2026-08-06T06:15:40Z	256	0:1	180	8.722	3.48352	3.35900	6.27100	9.66300

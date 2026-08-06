@@ -14894,3 +14894,62 @@ memtier_benchmark -s 10.99.0.3 -p 11411 -P memcache_text \
 raw `experiments/semi_final/genie/SLOTAB-256.txt`
 
 NEXT: genie (SLOTAB-256 1부하)
+
+CELL SLOTAB-256 DONE  8.722 M  avg 3.48352 / p50 3.35900 / p99 6.27100 / p99.9 9.66300 ms
+창(UTC) 2026-08-06T06:12:40Z ~ 2026-08-06T06:15:40Z   pipe=256 --ratio=0:1 --test-time=180
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=1280 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=1280 extstore_prof_span_ver=3 
+
+---
+
+## [2026-08-06 KST] genie — SLOTAB-256 완료. **상한을 열었더니 34% 잃었다 — A/B 전에 이걸 봐야 한다**
+
+```text
+SLOTAB-256   8.722 M   avg 3483.52  p50 3359.0  p99 6271.0  p99.9 9663.0 µs
+             little 0.99   (N=30,720 인가 정상)
+지문 명세 일치: W=1280 admit_max=0 nqp=4 ORD=16 slots=1280 chain=8 reap=8
+bed 3/3, PROF on, 180초
+```
+
+### 같은 `slot=256` 에서 상한만 바뀌었는데 −33.7% 다
+
+```text
+구성                        W     admit   실효깊이    M ops
+E4-C8R8-r2 (8/5, 30초)     24      64        24     13.159
+SLOTAB-256 (8/6, 180초)  1280       0        64      8.722
+                                                    -33.7%
+```
+
+**둘 다 `slot=256`, `pipe=256`, PROF on, 같은 빌드다.** 다른 것은
+`W 24→1280` 과 `admit_max 64→0` 뿐이고, **실효 깊이가 24→64 로 늘었는데
+처리량이 34% 떨어졌다.**
+
+### 이게 A/B 판정보다 먼저다
+
+지금 설계는 `SLOTAB-256`(slot 256) vs `SF-OP`(slot 1024)를 비교해 **slot 영향**을
+본다. 그런데 **두 셀 다 상한이 열린 구성**이라, A/B 는 slot 만 갈라도
+**캠페인 전체가 이미 34% 낮은 지점에서 돈다.**
+
+`admit_max` 를 연 이유가 "그것도 워커당 상주 상한이라 비구속으로 열어야
+한다" 였는데, **실측은 그 상한이 성능을 지키고 있었다고 말한다.**
+과잉 in-flight 가 들어와 `post`·큐잉이 늘어난 그림으로 보인다 —
+`avg` 가 2284 → 3484 µs 로 52% 늘어난 것과 방향이 같다.
+
+### 판단이 필요한 지점 (셀은 안 멈췄다)
+
+```text
+(a) 그대로 진행    "상한 비구속" 이 이 캠페인의 정의된 OP 다.
+                   축 간 비교는 내부적으로 유효하고, 절대값이 낮을 뿐이다.
+(b) admit_max 만 되돌림   64 로 두고 W·slots 만 열면 실효 깊이는 여전히
+                   nqp×ORD 로 제어되고, 34% 를 회복할 수 있다.
+                   단 "상한은 nqp×ORD 하나" 라는 전제가 깨진다.
+(c) 확인 1셀       admit_max=64, 나머지 동일로 1부하(180초).
+                   34% 가 admit 탓인지 W 탓인지 갈린다. 4분.
+```
+
+**나는 (c) 를 권한다.** 13.6시간짜리 캠페인의 운영점이 34% 낮은 채로 도는지,
+아니면 노브 하나 되돌리면 회복되는지를 **4분에 알 수 있다.**
+그 답에 따라 (a)/(b)를 고르면 된다.
+
+**어느 쪽이든 지시대로 따른다.** 지금은 다음 GO 를 기다린다.
+
+NEXT: ariel (SF-OP 무장 / 또는 확인 1셀)

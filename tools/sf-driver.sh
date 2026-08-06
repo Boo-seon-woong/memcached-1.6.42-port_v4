@@ -133,122 +133,33 @@ go_batch(){ # go_batch <axis-label> <match-cell> <timeout> <본문파일>
 # ═════════════════════════ 실행 ═════════════════════════
 say "semi_final 시작"
 
-# ── 0: SLOTAB (slot=256) ────────────────────────────────
-if SLOT=256 INLINE=1 AD=0 RE=8 PC=8 SQ=1 DEM=0 DVAL=64 arm SLOTAB-256; then
-  cat > "$MSG/slotab.md" <<EOF
+# ── 1: SF-OP (slot=256, admit=64) + ≥10M 게이트 ─────────
+SLOT=256 INLINE=1 AD=64 RE=8 PC=8 SQ=1 DEM=0 DVAL=64 arm SF-OP || { say "OP 무장 실패 — 중단"; exit 1; }
+go_trio SF-OP 30 4 256 64 "port_v4 c11ede3e slot=256 admit=64 W=1280 (라운드 2 — 드리프트 가드 시작점)"
+
+OPS=$(ops_of SF-OP-GET)
+say "SF-OP-GET = ${OPS:-NA} M (게이트: ≥10M)"
+if [ -n "${OPS:-}" ] && python3 -c "exit(0 if float('${OPS}')<10.0 else 1)"; then
+  cat >> conversation.md <<EOF
 
 ---
 
-## [$(TZ=Asia/Seoul date +%Y-%m-%d) KST] ariel — semi_final 개시. \`SLOTAB-256\` GO (slot A/B 의 256 쪽)
+## [$(TZ=Asia/Seoul date +%Y-%m-%d) KST] ariel — **캠페인 중단: SF-OP ${OPS} M < 10 M 게이트**
 
-계획 \`experiments/semi_final/PLAN.md\` 대로 §2-0 부터 §2-10 까지 순차 실행한다.
-7번 축의 wire-곱 지적은 계획 §1 에 반영했다 — wire-고정-256 부분집합
-{16×16, 32×8, 64×4}로 형태를 읽고 나머지는 SQ 대기 팔이다.
+admit=64 복원으로 13M대 복귀를 예상했는데 미달이다. 관리자 판단 대기.
 
-SERVER: port_v4 c11ede3e **EXT_SLOT_SIZE=256** (A/B 검증용 단독 셀)
-
-\`\`\`text
-$(cat /tmp/sf-fp.txt)
-\`\`\`
-
-\`\`\`text
-SLOTAB-256   --ratio=0:1   1부하 180초
-
-$MEMTIER \\
-  -t 30 -c 4 --pipeline=256 -d 64 --ratio=0:1
-\`\`\`
-
-raw \`experiments/semi_final/genie/SLOTAB-256.txt\`
-
-NEXT: genie (SLOTAB-256 1부하)
+NEXT: (중단)
 EOF
-  post "$MSG/slotab.md" "SLOTAB-256" "SLOTAB-256" 900
+  git add -A conversation.md && git commit -q -m "[ariel] STOP: SF-OP ${OPS}M under the 10M gate" && git push -q
+  exit 1
 fi
-
-# ── 1: SF-OP (slot=1024) + A/B 판정 ─────────────────────
-SLOT=1024 INLINE=1 AD=0 RE=8 PC=8 SQ=1 DEM=0 DVAL=64 arm SF-OP || { say "OP 무장 실패 — 중단"; exit 1; }
-go_trio SF-OP 30 4 256 64 "port_v4 c11ede3e slot=1024 (본 캠페인 고정 조건 — 드리프트 가드 시작점)"
-
-AB=$(python3 - <<'PY'
-import subprocess
-rows={}
-try:
-    out=subprocess.run(['python3','tools/parse-client.py'],capture_output=True,text=True).stdout
-    for l in out.strip().split('\n')[1:]:
-        f=l.split('\t'); rows[f[0]]=f[1]
-    a=float(rows.get('SLOTAB-256',0)); b=float(rows.get('SF-OP-GET',0))
-    print(f"{(b-a)/a*100:+.2f}" if a>0 else "NA")
-except Exception:
-    print("NA")
-PY
-)
-say "slot A/B: SLOTAB-256 대비 SF-OP-GET Δ=${AB}%"
-case $AB in
-  NA) say "A/B 판정 불가(값 부재) — 진행하되 기록" ;;
-  *) ABS=${AB#+}; ABS=${ABS#-}
-     if python3 -c "exit(0 if float('$ABS')>5 else 1)"; then
-       cat >> conversation.md <<EOF
-
----
-
-## [$(TZ=Asia/Seoul date +%Y-%m-%d) KST] ariel — **캠페인 중단: slot A/B |Δ|>5%** (Δ=${AB}%)
-
-slot 256↔1024 가 ${AB}% 다. 계획 §2-1 밴드에 따라 중단하고 관리자 판단을 기다린다.
-
-NEXT: (중단)
-EOF
-       git add -A conversation.md && git commit -q -m "[ariel] STOP: slot A/B delta ${AB}%" && git push -q
-       exit 1
-     elif python3 -c "exit(0 if float('$ABS')>2 else 1)"; then
-       say "A/B 중간 밴드(${AB}%) — SLOTAB 재시행"
-       if SLOT=256 INLINE=1 AD=0 RE=8 PC=8 SQ=1 DEM=0 DVAL=64 arm SLOTAB-256-r2; then
-         sed "s/SLOTAB-256/SLOTAB-256-r2/g" "$MSG/slotab.md" > "$MSG/slotab2.md"
-         post "$MSG/slotab2.md" "SLOTAB-256-r2" "SLOTAB-256-r2" 900
-         AB2=$(python3 - <<'PY'
-import subprocess
-rows={}
-out=subprocess.run(['python3','tools/parse-client.py'],capture_output=True,text=True).stdout
-for l in out.strip().split('\n')[1:]:
-    f=l.split('\t'); rows[f[0]]=f[1]
-try:
-    a=float(rows['SLOTAB-256-r2']); b=float(rows['SF-OP-GET'])
-    print(f"{(b-a)/a*100:+.2f}")
-except Exception: print("NA")
-PY
-)
-         say "A/B 재시행 Δ2=${AB2}%"
-         SAME=$(python3 -c "
-d1,d2='$AB','$AB2'
-try:
-    f1,f2=float(d1),float(d2)
-    print('yes' if (f1*f2>0 and abs(f1)>2 and abs(f2)>2) else 'no')
-except Exception: print('no')")
-         if [ "$SAME" = yes ]; then
-           cat >> conversation.md <<EOF
-
----
-
-## [$(TZ=Asia/Seoul date +%Y-%m-%d) KST] ariel — **캠페인 중단: slot A/B 재현** (Δ1=${AB}%, Δ2=${AB2}%)
-
-두 번 다 같은 방향·크기다. §2-1 밴드에 따라 중단한다.
-
-NEXT: (중단)
-EOF
-           git add -A conversation.md && git commit -q -m "[ariel] STOP: slot A/B reproduced" && git push -q
-           exit 1
-         fi
-         say "재현 안 됨 — 편차로 기록하고 진행. slot=1024 재무장"
-         SLOT=1024 INLINE=1 AD=0 RE=8 PC=8 SQ=1 DEM=0 DVAL=64 arm SF-OP-rearm || exit 1
-       fi
-     fi ;;
-esac
 sfsave
 
 # ── 2: P 축 (클라만, 한 GO) ─────────────────────────────
 {
   echo; echo "---"; echo
   echo "## [$(TZ=Asia/Seoul date +%Y-%m-%d) KST] ariel — semi_final P 축 GO (pipeline 8구성 × 3부하, 서버 불변)"
-  echo; echo "SERVER: port_v4 c11ede3e slot=1024 (SF-OP 와 동일 — 재기동 없음)"
+  echo; echo "SERVER: port_v4 c11ede3e slot=256 admit=64 (SF-OP 와 동일 — 재기동 없음)"
   echo; echo '```text'
   for p in 1 8 32 64 128 256 384 512; do
     echo "SF-P${p}-{GET,MIX,SET}    --pipeline=$p    ratio 0:1 / 1:9 / 1:0    각 180초"
@@ -264,7 +175,7 @@ go_batch "SF-P" "SF-P512-SET" 7200 "$MSG/P.md"; sfsave
 {
   echo; echo "---"; echo
   echo "## [$(TZ=Asia/Seoul date +%Y-%m-%d) KST] ariel — semi_final E 축 GO (client×pipeline 곱 1,024 고정, 8구성 × 3부하, 서버 불변)"
-  echo; echo "SERVER: port_v4 c11ede3e slot=1024 (변경 없음)"
+  echo; echo "SERVER: port_v4 c11ede3e slot=256 admit=64 (변경 없음)"
   echo; echo '```text'
   for cp in 1:1024 2:512 4:256 8:128 16:64 32:32 64:16 128:8; do
     c=${cp%%:*}; p=${cp##*:}
@@ -279,9 +190,9 @@ go_batch "SF-P" "SF-P512-SET" 7200 "$MSG/P.md"; sfsave
 go_batch "SF-E" "SF-E128x8-SET" 7200 "$MSG/E.md"; sfsave
 
 # ── 4: D 축 (flush+프리로드, 크기별 GO) ──────────────────
-for d in 16 32 64 128 256 512; do
+for d in 4 8 16 24 32 48 64 96 128; do
   if flush_preload "$d"; then
-    go_trio "SF-D$d" 30 4 256 "$d" "port_v4 c11ede3e slot=1024 (재기동 없음 — flush 후 d=$d 재프리로드)" \
+    go_trio "SF-D$d" 30 4 256 "$d" "port_v4 c11ede3e slot=256 admit=64 (재기동 없음 — flush 후 d=$d 재프리로드)" \
       "프리로드도 -d $d 다. 부하 -d 를 반드시 맞출 것."
   else
     say "SF-D$d 프리로드/게이트 실패 — 건너뜀"
@@ -292,24 +203,27 @@ sfsave
 
 # ── 5: C 축 (재기동 16회) ───────────────────────────────
 for c in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16; do
-  SLOT=1024 INLINE=1 AD=0 RE=8 PC=$c SQ=1 DEM=0 DVAL=64 arm "SF-C$c" || continue
-  go_trio "SF-C$c" 30 4 256 64 "port_v4 c11ede3e slot=1024 ext_post_chain=$c (reap=8)"
+  SLOT=256 INLINE=1 AD=64 RE=8 PC=$c SQ=1 DEM=0 DVAL=64 arm "SF-C$c" || continue
+  go_trio "SF-C$c" 30 4 256 64 "port_v4 c11ede3e slot=256 admit=64 ext_post_chain=$c (reap=8)"
 done
 sfsave
 
 # ── 6: Q 축 (재기동 6회) ────────────────────────────────
 for q in 1 2 4 8 16 64; do
-  SLOT=1024 INLINE=1 AD=0 RE=8 PC=8 SQ=1 DEM=0 DVAL=64 NQP=$q arm "SF-Q$q" || continue
-  go_trio "SF-Q$q" 30 4 256 64 "port_v4 c11ede3e slot=1024 nqp=$q ORD=협상16 (wire 곱 = $((q*16)))"
+  WIRE=$((q*16))
+  SLOT=256 INLINE=1 AD=$WIRE RE=8 PC=8 SQ=1 DEM=0 DVAL=64 NQP=$q arm "SF-Q$q" || continue
+  go_trio "SF-Q$q" 30 4 256 64 "port_v4 c11ede3e slot=256 nqp=$q ORD=협상16 admit=$WIRE (=wire 곱)"
 done
 sfsave
 
 # ── 7: O 축 (재기동 7회) ────────────────────────────────
 for o in 1 2 4 8 0 32 64; do
   lbl="SF-O$o"; [ "$o" = 0 ] && lbl="SF-O16"
-  SLOT=1024 INLINE=1 AD=0 RE=8 PC=8 SQ=1 DEM=0 DVAL=64 ORD=$o arm "$lbl" || continue
-  note="port_v4 c11ede3e slot=1024 nqp=4 ORD=$o"
-  [ "$o" = 0 ] && note="port_v4 c11ede3e slot=1024 nqp=4 ORD=협상16"
+  ow=$o; [ "$o" = 0 ] && ow=16; [ "$ow" -gt 16 ] && ow=16
+  WIRE=$((4*ow))
+  SLOT=256 INLINE=1 AD=$WIRE RE=8 PC=8 SQ=1 DEM=0 DVAL=64 ORD=$o arm "$lbl" || continue
+  note="port_v4 c11ede3e slot=256 nqp=4 ORD=$o admit=$WIRE (=wire 곱)"
+  [ "$o" = 0 ] && note="port_v4 c11ede3e slot=256 nqp=4 ORD=협상16 admit=64"
   go_trio "$lbl" 30 4 256 64 "$note"
 done
 sfsave
@@ -318,21 +232,22 @@ sfsave
 for qo in 1:256 2:128 4:64 8:32 16:16 32:8 64:4; do
   q=${qo%%:*}; o=${qo##*:}
   lbl="SF-S${q}x${o}"
-  SLOT=1024 INLINE=1 AD=0 RE=8 PC=8 SQ=1 DEM=0 DVAL=64 NQP=$q ORD=$o arm "$lbl" || continue
-  go_trio "$lbl" 30 4 256 64 "port_v4 c11ede3e slot=1024 nqp=$q ORD=$o핀 (soft곱 256, wire곱 $((q*(o<16?o:16))))"
+  WIRE=$((q*(o<16?o:16)))
+  SLOT=256 INLINE=1 AD=$WIRE RE=8 PC=8 SQ=1 DEM=0 DVAL=64 NQP=$q ORD=$o arm "$lbl" || continue
+  go_trio "$lbl" 30 4 256 64 "port_v4 c11ede3e slot=256 nqp=$q ORD=$o핀 admit=$WIRE (soft곱 256, wire곱 $WIRE)"
 done
 sfsave
 
 # ── 9: T 축 (재기동 9회) ────────────────────────────────
 for m in 1 2 4 8 12 16 24 28 30; do
-  SLOT=1024 INLINE=1 AD=0 RE=8 PC=8 SQ=1 DEM=0 DVAL=64 MCT=$m CPUSET="0-$((m-1))" arm "SF-T$m" || continue
-  go_trio "SF-T$m" "$m" 4 256 64 "port_v4 c11ede3e slot=1024 mcT=$m taskset 0-$((m-1)) — genie 도 -t $m" \
+  SLOT=256 INLINE=1 AD=64 RE=8 PC=8 SQ=1 DEM=0 DVAL=64 MCT=$m CPUSET="0-$((m-1))" arm "SF-T$m" || continue
+  go_trio "SF-T$m" "$m" 4 256 64 "port_v4 c11ede3e slot=256 admit=64 mcT=$m taskset 0-$((m-1)) — genie 도 -t $m" \
     "**mtT=$m 로 맞춰라** (mcT=mtT 동시 스케일)."
 done
 sfsave
 
 # ── 10: OP 재시행 ───────────────────────────────────────
-SLOT=1024 INLINE=1 AD=0 RE=8 PC=8 SQ=1 DEM=0 DVAL=64 arm SF-OP-r2 && \
-  go_trio SF-OP-r2 30 4 256 64 "port_v4 c11ede3e slot=1024 (드리프트 가드 끝점 — SF-OP 와 동일 조건)"
+SLOT=256 INLINE=1 AD=64 RE=8 PC=8 SQ=1 DEM=0 DVAL=64 arm SF-OP-r2 && \
+  go_trio SF-OP-r2 30 4 256 64 "port_v4 c11ede3e slot=256 admit=64 (드리프트 가드 끝점 — SF-OP 와 동일 조건)"
 sfsave
 say "semi_final 종료"

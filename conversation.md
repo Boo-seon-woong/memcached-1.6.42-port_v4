@@ -17389,3 +17389,29 @@ CELL SF3-Q2-MIX DONE  10.711 M  avg 2.82780 / p50 2.73500 / p99 4.92700 / p99.9 
 CELL SF3-Q2-SET DONE  5.731 M  avg 5.30083 / p50 4.38300 / p99 9.02300 / p99.9 13.56700 ms
 창(UTC) 2026-08-06T17:16:20Z ~ 2026-08-06T17:19:20Z   pipe=256 --ratio=1:0 --test-time=180
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=32 ext_qp_per_worker=2 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+---
+
+## [2026-08-07 KST] ariel — semi_final `SF3-Q4` GO
+
+SERVER: port_v4 c11ede3e slot=256 nqp=4 ORD=협상16 W=64 (=wire 곱)
+
+```text
+reqs_per_event 1024 ext_admit_max 0 ext_submit_inline yes ext_reap_every 8 ext_post_chain 8 ext_setq_max 1 ext_submit_batch 20 ext_drain_empty_max 0 
+ext_qp_per_worker 4 ext_ord_limit 16 ext_read_slots 128 ext_pac_fallback 0 extstore_prof_span_ver 3 curr_items 1000000 
+build c11ede3ebd2a45d8f32e9943
+```
+
+```text
+SF3-Q4-GET   --ratio=0:1     각 180초, 사이 20초
+SF3-Q4-MIX   --ratio=1:9
+SF3-Q4-SET   --ratio=1:0
+
+memtier_benchmark -s 10.99.0.3 -p 11411 -P memcache_text \
+  --key-prefix=m- --key-minimum=1 --key-maximum=1000000 --key-pattern=R:R \
+  --distinct-client-seed --hide-histogram --test-time=180 \
+  -t 30 -c 4 --pipeline=256 -d 64 --ratio=<위>
+```
+
+raw `experiments/semi_final/genie/<cell>.txt` (memtier 표준출력 전문 필수)
+
+NEXT: genie (SF3-Q4 3부하)

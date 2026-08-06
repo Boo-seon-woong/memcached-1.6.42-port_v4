@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="820" height="500" viewBox="0 0 820 500" font-family="Helvetica,Arial,sans-serif">
 <rect width="820" height="500" fill="white"/>
-<text x="410.0" y="24.0" font-size="15" fill="#0f172a" text-anchor="middle" font-weight="600">F1 — local(stock) vs remote(port), YCSB A (1:1, 쓰기 50%)</text>
+<text x="410.0" y="24.0" font-size="15" fill="#0f172a" text-anchor="middle" font-weight="600">F1  YCSB A (1:1, 쓰기 50%) — stock vs port</text>
 <line x1="80.0" y1="442.0" x2="760.0" y2="442.0" stroke="#0f172a" stroke-width="1"/>
 <line x1="80.0" y1="132.0" x2="80.0" y2="442.0" stroke="#0f172a" stroke-width="1"/>
 <text x="420.0" y="486.0" font-size="12" fill="#0f172a" text-anchor="middle" font-weight="400">처리량 (M ops/s)</text>

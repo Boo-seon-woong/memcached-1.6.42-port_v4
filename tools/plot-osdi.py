@@ -128,7 +128,7 @@ def f2b(rows, out):
         bd = [r for r in rows if r["label"] == "BD2-b"][sl]
         if len(bd) < 7:
             continue
-        s = Svg(title=f"F2b — 서버 체류 분해, {title} (v4, 60초 셀)")
+        s = Svg(title=f"F2b  서버 체류 분해 — {title}")
         l, r, t, b = axes(s, "pipeline", "서버 체류 (µs)")
         lo = 0.0
         hi = max(num(r_, "srv") for r_ in bd) * 1.12
@@ -173,7 +173,7 @@ def f2c(rows, out):
     v3 = [r for r in rows if r["label"] == "BD3"][0:7]
     if len(v3) < 7 or len(v4) < 7:
         return
-    s = Svg(title="F2c — port_v3 ↔ port_v4, 같은 격자 (GET-only, 60초)")
+    s = Svg(title="F2c  span·srv 대 pipeline — v3 vs v4")
     l, r, t, b = axes(s, "pipeline", "µs")
     lo = 0.0
     hi = max(max(num(x, "srv") for x in v3), max(num(x, "srv") for x in v4)) * 1.1
@@ -212,7 +212,7 @@ def f3(rows, out):
             pts.append((d, busy / m if m else 0, m, num(rw[0], "Gxfer"), num(rw[0], "Gcrypto")))
     if len(pts) < 3:
         return
-    s = Svg(title="F3 — 값 크기: CPU/op 는 아핀이다 (2.00 µs + 4.05 ns/B)")
+    s = Svg(title="F3  값 크기 대 CPU/op")
     l, r, t, b = axes(s, "값 크기 (B)", "CPU/op (µs)", "성분 (µs)")
     ylo, yhi = 1.9, 2.8
     for gv in (2.0, 2.2, 2.4, 2.6, 2.8):
@@ -256,7 +256,7 @@ def f4(rows, out):
         if rw:
             cs.append((c, rw))
     if len(cs) >= 5:
-        s = Svg(title="F4a — 같은 노브, 반대 부호 (chain 축, reap=8)")
+        s = Svg(title="F4a  chain 축 — span 과 srv")
         l, r, t, b = axes(s, "ext_post_chain", "span v3 (µs)", "srv (µs)")
         for gv in (5, 10, 15, 20, 25):
             y = linmap(gv, 0, 26, b, t)
@@ -290,7 +290,7 @@ def f4(rows, out):
             ca.append(num(a, "Gadmit")); ra.append(num(bq, "Gadmit"))
             cv.append(num(a, "Gv2"));    rv.append(num(bq, "Gv2"))
     if len(mins) >= 3:
-        s = Svg(title="F4b — admit 은 대칭, v2 는 비대칭")
+        s = Svg(title="F4b  유효 배치 대 admit·v2")
         l, r, t, b = axes(s, "유효 배치 min(chain, reap)", "µs")
         for gv in (0, 5, 10, 15, 20):
             y = linmap(gv, 0, 20, b, t)
@@ -310,12 +310,12 @@ def f4(rows, out):
         legend(s, ["달리한 것: 같은 유효 배치를 chain 으로 만들 것이냐 reap 으로 만들 것이냐",
                    "x = min(chain, reap).  실선·채운 점 = chain 축 (reap=8 고정)",
                    "파선·빈 점 = reap 축 (chain=8 고정)",
-                   "파랑 admit — 두 축이 포개진다(트리거 B) · 주황 v2 — 갈라진다(reap 전용)"])
+                   "파랑 admit — 두 축이 포개진다(대칭) · 주황 v2 — 갈라진다(reap 전용)"])
         s.save(f"{out}/f4b-two-knobs.svg")
 
     # F4c: 계약 회랑
     if len(cs) >= 5:
-        s = Svg(title="F4c — 계약 회랑의 아래 끝은 chain 1~2 사이")
+        s = Svg(title="F4c  chain 축 처리량과 계약선")
         l, r, t, b = axes(s, "ext_post_chain", "처리량 (M ops/s)")
         for gv in (8, 10, 12, 14):
             y = linmap(gv, 8, 14, b, t)
@@ -370,7 +370,7 @@ def f1(rows, out):
         # genie 는 재시행분도 PT-*-Z256 이름으로 보고했다(파서가 나중 것을
         # 취하므로 그 값이 정본이다). PTZ- 로 찾으면 하나도 안 걸린다.
         zp = {side: cl.get(f"{side}-{wl}-Z256") for side in ("ST", "PT")}
-        s2 = Svg(title=f"F1 — local(stock) vs remote(port), {nm}")
+        s2 = Svg(title=f"F1  {nm} — stock vs port")
         l, r, t, b = axes(s2, "처리량 (M ops/s)", "클라이언트 지연 avg (ms)")
         xhi = max(max(x for x, _, _ in v) for v in series.values()) * 1.12
         ylo = 0.0
@@ -422,7 +422,7 @@ def f1b(rows, out):
              "48 코어 중 58.2% — 부하를 만드는 비용"),
             ("guest memcached\n(port 서버)", 29.9, C["v4"],
              "30 코어 중 99.7% — 일을 하는 쪽")]
-    s = Svg(title="F1b — one-sided READ: 메모리 노드는 CPU 를 쓰지 않는다")
+    s = Svg(title="F1b  구성 요소별 CPU 점유")
     l, r, t, b = axes(s, "", "CPU (코어)")
     lo, hi = 0.0, 32
     for gv in (0, 5, 10, 15, 20, 25, 30):
@@ -441,7 +441,7 @@ def f1b(rows, out):
         s.txt(x + bw / 2, b + 46, note, 8.5, C["mute"], "middle")
     legend(s, ["달리한 것: CPU 를 재는 대상 (같은 시스템의 세 구성 요소)",
                "값 = 점유 코어 수. genie_memd 는 utime+stime 누적 15.3 s / 66.6 h",
-               "첫 막대는 선형 축에서 보이지 않는다 — 그것이 이 그림의 주장이다"])
+               "첫 막대는 선형 축에서 보이지 않는다 (서버의 50 만분의 1)"])
     s.save(f"{out}/f1b-memory-node-cpu.svg")
 
 
@@ -452,7 +452,7 @@ def f2a(rows, out):
     v4 = [r for r in rows if r["label"] == "BD2-b"]
     if not cl or len(v4) < 16:
         print("  F2a 건너뜀"); return
-    s = Svg(title="F2a — 같은 부하 축에서 두 지표가 반대로 간다 (port_v4)")
+    s = Svg(title="F2a  pipeline 축 — 클라이언트 지연과 span")
     l, r, t, b = axes(s, "처리량 (M ops/s)", "클라이언트 지연 avg (ms)", "span v3 (µs)")
     xhi = 14.5
     ylo, yhi = 0.0, 4.0

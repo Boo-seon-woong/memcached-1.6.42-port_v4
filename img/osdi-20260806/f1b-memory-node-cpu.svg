@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="820" height="500" viewBox="0 0 820 500" font-family="Helvetica,Arial,sans-serif">
 <rect width="820" height="500" fill="white"/>
-<text x="410.0" y="24.0" font-size="15" fill="#0f172a" text-anchor="middle" font-weight="600">F1b — one-sided READ: 메모리 노드는 CPU 를 쓰지 않는다</text>
+<text x="410.0" y="24.0" font-size="15" fill="#0f172a" text-anchor="middle" font-weight="600">F1b  구성 요소별 CPU 점유</text>
 <line x1="80.0" y1="442.0" x2="760.0" y2="442.0" stroke="#0f172a" stroke-width="1"/>
 <line x1="80.0" y1="132.0" x2="80.0" y2="442.0" stroke="#0f172a" stroke-width="1"/>
 <text x="420.0" y="486.0" font-size="12" fill="#0f172a" text-anchor="middle" font-weight="400"></text>
@@ -37,5 +37,5 @@
 <rect x="88.0" y="36.0" width="664.0" height="49" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1" rx="3"/>
 <text x="96.0" y="51.0" font-size="9.5" fill="#0f172a" text-anchor="start" font-weight="600">달리한 것: CPU 를 재는 대상 (같은 시스템의 세 구성 요소)</text>
 <text x="96.0" y="64.0" font-size="9.5" fill="#64748b" text-anchor="start" font-weight="400">값 = 점유 코어 수. genie_memd 는 utime+stime 누적 15.3 s / 66.6 h</text>
-<text x="96.0" y="77.0" font-size="9.5" fill="#64748b" text-anchor="start" font-weight="400">첫 막대는 선형 축에서 보이지 않는다 — 그것이 이 그림의 주장이다</text>
+<text x="96.0" y="77.0" font-size="9.5" fill="#64748b" text-anchor="start" font-weight="400">첫 막대는 선형 축에서 보이지 않는다 (서버의 50 만분의 1)</text>
 </svg>

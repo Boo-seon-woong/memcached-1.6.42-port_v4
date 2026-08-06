@@ -533,50 +533,60 @@ def f2a(rows, out):
 
 
 def f4d(rows, out):
-    """exp4 의 처리량–지연: chain 을 파라미터로 놓은 산점.
-    F4a 는 x 가 chain 이라 "노브를 얼마로 둘까" 를 보고, 이 그림은
-    x 가 처리량이라 "그 노브가 운영점을 어디로 옮기나" 를 본다."""
+    """exp4 의 처리량–span 산점. chain 만 바꾼 점들이고, y 는 계약이 재는
+    구간(span v3)이다 — 클라이언트 지연은 F4a 의 srv 곡선이 담당한다."""
     cl = load_client()
-    if not cl:
-        print("  F4d 건너뜀"); return
     chains = [1, 2, 4, 8, 12, 16]
-    reaps = [1, 2, 4, 12]
-    s2 = Svg(title="F4d  chain·reap 별 처리량–지연")
-    l, r, t, b = axes(s2, "처리량 (M ops/s)", "클라이언트 지연 avg (ms)")
-    xhi, yhi = 14.5, 4.0
-    for gx in (0, 4, 8, 12):
-        x = linmap(gx, 0, xhi, l, r)
+    # c8 은 재시행이 정본이다 (첫 셀이 −2.8% 낮았다)
+    cli = {c: (cl.get("E4-C8R8-r2-W1") if c == 8 else cl.get(f"E4-C{c}R8-GET"),
+               cl.get("E4-C8R8-r2-W2") if c == 8 else cl.get(f"E4-C{c}R8-MIX"))
+           for c in chains}
+    srv = {c: (cell(rows, "BD2-b", "1") if c == 8 else cell(rows, f"E4-C{c}R8", "1"),
+               cell(rows, "BD2-b", "2") if c == 8 else cell(rows, f"E4-C{c}R8", "2"))
+           for c in chains}
+    s2 = Svg(title="F4d  chain 별 처리량–span")
+    l, r, t, b = axes(s2, "처리량 (M ops/s)", "span v3 avg (µs)")
+    xlo, xhi, yhi = 8.0, 14.0, 26.0
+    gx = xlo
+    while gx <= xhi:
+        x = linmap(gx, xlo, xhi, l, r)
         s2.line(x, t, x, b, C["grid"])
-        s2.txt(x, b + 16, str(gx), 10, C["mute"], "middle")
-    for gy in (0, 1, 2, 3, 4):
+        s2.txt(x, b + 16, f"{gx:g}", 10, C["mute"], "middle")
+        gx += 1
+    for gy in (0, 5, 10, 15, 20, 25):
         y = linmap(gy, 0, yhi, b, t)
         s2.line(l, y, r, y, C["grid"])
         s2.txt(l - 8, y + 4, str(gy), 10, C["mute"], "end")
-    def draw(cells, labels, col, dash, tag):
+    def series(pick_cli, pick_span, col, tag):
         pts = []
-        for cid, lab in zip(cells, labels):
-            c = cl.get(cid)
-            if c and c["avg_ms"]:
-                pts.append((linmap(float(c["ops_M"]), 0, xhi, l, r),
-                            linmap(float(c["avg_ms"]), 0, yhi, b, t), lab))
+        for c in chains:
+            cc, rw = pick_cli(c), pick_span(c)
+            if not cc or not rw or not cc.get("ops_M"):
+                continue
+            v = pick_span_val(rw)
+            if v <= 0:
+                continue
+            pts.append((linmap(float(cc["ops_M"]), xlo, xhi, l, r),
+                        linmap(v, 0, yhi, b, t), c))
         if not pts:
             return
-        s2.path([(x, y) for x, y, _ in pts], col, 2.0, dash)
-        for x, y, lab in pts:
-            s2.dot(x, y, col, 3.8, dash is not None)
-            s2.txt(x, y - 9, lab, 8.5, C["mute"], "middle")
-        s2.txt(pts[-1][0] + 8, pts[-1][1] + 4, tag, 9.5, col, "start", 600)
-    for wl, col in (("GET", C["get"]), ("MIX", C["mix"])):
-        draw([f"E4-C{c}R8-{wl}" for c in chains], [f"c{c}" for c in chains],
-             col, None, f"{wl} · chain 축")
-        draw([f"E4-C8R{r_}-{wl}" for r_ in reaps], [f"r{r_}" for r_ in reaps],
-             col, "4 3", f"{wl} · reap 축")
-    legend(s2, ["달리한 것: 배칭 노브 두 개. 실선 = chain 1~16 (reap=8 고정),",
-                "           파선 = reap 1~12 (chain=8 고정). 그 외 운영값 고정",
-                "점 = 셀 하나(30초, pipe=256). 점 옆 = 그 셀의 노브 값",
-                "파랑 GET-only · 주황 1:9 혼합.  x 처리량 · y memtier avg 지연",
-                "두 축이 같은 점(c8=r8)에서 만난다 — 거기가 현 운영값이다"])
-    s2.save(f"{out}/f4d-batching-throughput-latency.svg")
+        s2.path([(x, y) for x, y, _ in pts], col, 2.0)
+        for x, y, c in pts:
+            s2.dot(x, y, col, 4.0)
+            s2.txt(x, y - 9, f"c{c}", 8.5, C["mute"], "middle")
+        s2.txt(pts[-1][0] + 8, pts[-1][1], tag, 9.5, col, "start", 600)
+    global pick_span_val
+    pick_span_val = lambda rw: num(rw, "Gv3_avg")
+    series(lambda c: cli[c][0], lambda c: srv[c][0], C["get"], "GET-only")
+    series(lambda c: cli[c][1], lambda c: srv[c][1], C["mix"], "혼합 GET span")
+    pick_span_val = lambda rw: num(rw, "Sv3_avg")
+    series(lambda c: cli[c][1], lambda c: srv[c][1], C["set"], "혼합 SET span")
+    legend(s2, ["달리한 것: ext_post_chain 만 (1·2·4·8·12·16). reap=8 고정, 그 외 운영값",
+                "점 = 셀 하나(30초, pipe=256). 점 옆 = chain 값",
+                "x 처리량(memtier) · y span v3 avg(서버 창) — 계약이 재는 구간이다",
+                "혼합 두 계열은 같은 셀의 GET span 과 SET span 이라 x 가 같다",
+                "c8 은 재시행값 (첫 셀이 −2.8% 낮았다)"])
+    s2.save(f"{out}/f4d-chain-throughput-span.svg")
 
 
 def main():

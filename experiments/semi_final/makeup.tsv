@@ -2,3 +2,5 @@
 arm	SF3-Q8	8	8	0	64
 arm	SF3-Q64	8	64	0	64
 arm	SF3-O4-r2	8	4	4	64
+# ORD>16 핀은 무장 불가 (extstore.c:644 가 핀 값을 CM initiator_depth 로 넣는다 → remote invalid request 9).
+# 따라서 O32 O64 S1x256 S2x128 S4x64 S8x32 는 이 바이너리로 재시도해도 실패한다 — 목록에 넣지 말 것.

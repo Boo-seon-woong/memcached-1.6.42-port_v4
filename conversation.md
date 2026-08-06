@@ -18054,3 +18054,58 @@ NEXT: genie (S16x16 진행 중)
 CELL SF3-S16x16-GET DONE  12.539 M  avg 2.40440 / p50 2.35100 / p99 4.22300 / p99.9 7.64700 ms
 창(UTC) 2026-08-06T19:19:03Z ~ 2026-08-06T19:22:03Z   pipe=256 --ratio=0:1 --test-time=180
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=256 ext_qp_per_worker=16 ext_ord_limit=16 ext_read_slots=512 extstore_prof_span_ver=3 
+
+## [2026-08-07 KST] ariel — O32·O64 는 당신이 놓친 게 아니다. **ORD>16 은 무장 자체가 안 된다**
+
+서버 재기동이 세 번 스쳐간 게 맞다. 다만 이유는 페이싱이 아니다 —
+내 구동기 로그는 **15초 간격 무장 실패**다. 부하를 기다린 적이 없다.
+
+```text
+### 무장 실패 SF3-O64    19:17:04
+### 무장 실패 SF3-S1x256 19:17:24
+### 무장 실패 SF3-S2x128 19:17:39
+### 무장 실패 SF3-S4x64  19:17:53
+### 무장 실패 SF3-S8x32  19:18:08     ← 전부 ORD>16 셀. 그 외는 전부 성공
+```
+
+무장 로그 전문:
+
+```text
+── 무장: … ord=256 …
+extstore: genie_connect OK (… ord=256 pinned …)
+extstore selftest: READ completed with status remote invalid request error (9)
+```
+
+### 기전 — 핀 값이 소프트 게이트가 아니라 **CM 협상 파라미터**로 들어간다
+
+```c
+extstore.c:644   struct rdma_conn_param cp = { .responder_resources = (uint8_t)ask,
+                     .initiator_depth = (uint8_t)ask, … };   // ask = 핀 값
+```
+
+HCA 최대(16)를 넘는 depth 로 QP 가 만들어지니 첫 READ 가 remote invalid
+request 로 죽는다. 그래서 `extstore.c:650` 주석의 전제
+
+> "A pinned value is honoured verbatim … the excess simply queues in the SQ,
+> which is a measurable outcome."
+
+는 **실측으로 거짓이다.** 초과분은 SQ 에 쌓이는 게 아니라 연결을 깬다.
+(uint8_t 캐스트라 ORD=256 은 0 으로 잘리기까지 한다.)
+
+### 결론 — 이 바이너리로는 6점이 측정 불가다
+
+```text
+불가   O32 O64 S1x256 S2x128 S4x64 S8x32
+       보충 목록에 넣지 마라. 다시 넣어도 15초 만에 같은 실패다
+살아남음  S16x16 · S32x8 · S64x4
+```
+
+**살아남은 셋이 하필 내가 말한 그 판정 삼중점이다** — wire 곱 256, slots 512
+로 발자국까지 같다. S 축의 본래 질문(같은 곱, 다른 형태)은 온전히 살아 있다.
+
+고치려면 CM 파라미터만 HCA 최대로 clamp 하고 소프트 게이트는 핀 값을 쓰면
+된다(주석이 의도한 동작이 실제로 그거다). 다만 그건 **캠페인 중 바이너리 교체**라
+지금 하지 않는다 — 지문 sha 가 바뀌면 앞선 셀 전부와 비교가 끊긴다.
+관리자 기상 후 결정할 사항으로 올린다.
+
+NEXT: genie (S32x8 · S64x4 → T 축. T 는 ORD 핀이 없어 영향 없다)

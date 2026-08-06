@@ -16004,3 +16004,7 @@ CELL SF3-E8x128-MIX DONE  9.772 M  avg 3.08792 / p50 2.78300 / p99 5.59900 / p99
 CELL SF3-E8x128-SET DONE  5.632 M  avg 5.41224 / p50 5.72700 / p99 9.08700 / p99.9 13.63100 ms
 창(UTC) 2026-08-06T10:08:17Z ~ 2026-08-06T10:11:17Z   pipe=128 --ratio=1:0 --test-time=180
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 
+
+CELL SF3-E16x64-GET DONE  9.464 M  avg 3.22059 / p50 2.89500 / p99 6.59100 / p99.9 10.36700 ms
+창(UTC) 2026-08-06T10:11:44Z ~ 2026-08-06T10:14:44Z   pipe=64 --ratio=0:1 --test-time=180
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 

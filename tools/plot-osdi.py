@@ -6,10 +6,10 @@
 의존성 없음. SVG 를 직접 쓴다(tools/plot-frontier-v4.py 와 같은 방식 —
 게스트·CI 어디서든 돌아야 해서 matplotlib 을 안 쓴다).
 
-지금 데이터가 있는 것만 그린다: F2b(분해 스택), F2c(v3↔v4), F3(값 크기),
-F4a/F4b/F4c(배칭). F1 은 stock 계열이 들어온 뒤에 추가한다.
+축은 전부 **선형**이다 — 로그 축 금지(관리자 지시 2026-08-06).
+입력은 rows.tsv(서버측)와 client.tsv(genie 보고 파싱).
 """
-import argparse, math
+import argparse
 from pathlib import Path
 
 W, H = 760, 420
@@ -97,9 +97,9 @@ def axes(s, xlab, ylab, y2lab=None):
     return l, r, t, b
 
 
-def logmap(v, lo, hi, a, b):
-    v = max(v, lo)
-    return a + (b - a) * (math.log10(v) - math.log10(lo)) / (math.log10(hi) - math.log10(lo))
+# 로그 축은 쓰지 않는다 (관리자 지시 2026-08-06). 값 폭이 큰 그림(F1b 의
+# 0.00006 대 29.9)은 선형에서 막대가 안 보이는데, **그 안 보이는 것이 곧
+# 주장**이라 라벨로 값을 적는다.
 
 
 def linmap(v, lo, hi, a, b):
@@ -114,12 +114,16 @@ def f2b(rows, out):
         if len(bd) < 7:
             continue
         s = Svg(title=f"F2b — 서버 체류 분해, {title} (v4, 60초 셀)")
-        l, r, t, b = axes(s, "pipeline", "µs (로그)")
-        lo, hi = 0.2, 2000
-        for gv in (1, 10, 100, 1000):
-            y = logmap(gv, lo, hi, b, t)
+        l, r, t, b = axes(s, "pipeline", "서버 체류 (µs)")
+        lo = 0.0
+        hi = max(num(r_, "srv") for r_ in bd) * 1.12
+        step = 100 if hi <= 900 else 200
+        gv = 0
+        while gv <= hi:
+            y = linmap(gv, lo, hi, b, t)
             s.line(l, y, r, y, C["grid"])
             s.txt(l - 8, y + 4, str(gv), 10, C["mute"], "end")
+            gv += step
         bw = (r - l) / len(pipes) * 0.52
         for i, (p, row) in enumerate(zip(pipes, bd)):
             x = l + (r - l) * (i + 0.5) / len(pipes) - bw / 2
@@ -129,11 +133,11 @@ def f2b(rows, out):
             acc = 0.0
             for val, col, _ in ((que, C["que"], "que"), (max(pre, 0.01), C["pre"], "pre"),
                                 (span, C["span"], "span v3"), (max(post, 0), C["post"], "post")):
-                y0 = logmap(max(acc, lo), lo, hi, b, t)
+                y0 = linmap(acc, lo, hi, b, t)
                 acc += val
-                y1 = logmap(max(acc, lo), lo, hi, b, t)
+                y1 = linmap(acc, lo, hi, b, t)
                 s.rect(x, y1, bw, y0 - y1, col)
-            s.txt(x + bw / 2, logmap(max(acc, lo), lo, hi, b, t) - 6, f"{srv:.0f}", 9,
+            s.txt(x + bw / 2, linmap(acc, lo, hi, b, t) - 6, f"{srv:.0f}", 9,
                   C["ink"], "middle", 600)
             s.txt(x + bw / 2, b + 16, str(p), 10, C["ink"], "middle")
         for i, (nm, col) in enumerate((("que", C["que"]), ("pre", C["pre"]),
@@ -151,20 +155,23 @@ def f2c(rows, out):
     if len(v3) < 7 or len(v4) < 7:
         return
     s = Svg(title="F2c — port_v3 ↔ port_v4, 같은 격자 (GET-only, 60초)")
-    l, r, t, b = axes(s, "pipeline", "span v3 (µs, 로그)", "srv (µs)")
-    lo, hi = 8, 1200
-    for gv in (10, 100, 1000):
-        y = logmap(gv, lo, hi, b, t)
+    l, r, t, b = axes(s, "pipeline", "µs")
+    lo = 0.0
+    hi = max(max(num(x, "srv") for x in v3), max(num(x, "srv") for x in v4)) * 1.1
+    gv = 0
+    while gv <= hi:
+        y = linmap(gv, lo, hi, b, t)
         s.line(l, y, r, y, C["grid"])
         s.txt(l - 8, y + 4, str(gv), 10, C["mute"], "end")
+        gv += 200
     xs = [l + (r - l) * (i + 0.5) / len(pipes) for i in range(len(pipes))]
     for rowset, col, nm in ((v3, C["v3"], "v3 span"), (v4, C["v4"], "v4 span")):
-        pts = [(x, logmap(num(rw, "Gv3_avg"), lo, hi, b, t)) for x, rw in zip(xs, rowset)]
+        pts = [(x, linmap(num(rw, "Gv3_avg"), lo, hi, b, t)) for x, rw in zip(xs, rowset)]
         s.path(pts, col, 2.2)
         for (x, y) in pts:
             s.dot(x, y, col)
     for rowset, col, dash in ((v3, C["v3"], "4 3"), (v4, C["v4"], "4 3")):
-        pts = [(x, logmap(num(rw, "srv"), lo, hi, b, t)) for x, rw in zip(xs, rowset)]
+        pts = [(x, linmap(num(rw, "srv"), lo, hi, b, t)) for x, rw in zip(xs, rowset)]
         s.path(pts, col, 1.4, dash)
     for x, p in zip(xs, pipes):
         s.txt(x, b + 16, str(p), 10, C["ink"], "middle")
@@ -334,15 +341,17 @@ def f1(rows, out):
         # 취하므로 그 값이 정본이다). PTZ- 로 찾으면 하나도 안 걸린다.
         zp = {side: cl.get(f"{side}-{wl}-Z256") for side in ("ST", "PT")}
         s2 = Svg(title=f"F1 — local(stock) vs remote(port), {nm}")
-        l, r, t, b = axes(s2, "처리량 (M ops/s)", "클라이언트 지연 avg (ms, 로그)")
+        l, r, t, b = axes(s2, "처리량 (M ops/s)", "클라이언트 지연 avg (ms)")
         xhi = max(max(x for x, _, _ in v) for v in series.values()) * 1.12
-        ylo = min(min(y for _, y, _ in v) for v in series.values()) * 0.7
-        yhi = max(max(y for _, y, _ in v) for v in series.values()) * 1.5
-        for gv in (0.1, 0.3, 1, 3, 10, 30, 100):
-            if ylo <= gv <= yhi:
-                y = logmap(gv, ylo, yhi, b, t)
-                s2.line(l, y, r, y, C["grid"])
-                s2.txt(l - 8, y + 4, str(gv), 10, C["mute"], "end")
+        ylo = 0.0
+        yhi = max(max(y for _, y, _ in v) for v in series.values()) * 1.15
+        nice = 1 if yhi <= 8 else (5 if yhi <= 45 else 10)
+        gv = 0.0
+        while gv <= yhi:
+            y = linmap(gv, ylo, yhi, b, t)
+            s2.line(l, y, r, y, C["grid"])
+            s2.txt(l - 8, y + 4, f"{gv:g}", 10, C["mute"], "end")
+            gv += nice
         step = 2 if xhi <= 9 else 4
         gx = 0
         while gx <= xhi:
@@ -351,7 +360,7 @@ def f1(rows, out):
             s2.txt(x, b + 16, str(gx), 10, C["mute"], "middle")
             gx += step
         for side, col in (("ST", C["v3"]), ("PT", C["v4"])):
-            pts = [(linmap(x, 0, xhi, l, r), logmap(y, ylo, yhi, b, t), p_)
+            pts = [(linmap(x, 0, xhi, l, r), linmap(y, ylo, yhi, b, t), p_)
                    for x, y, p_ in series[side]]
             s2.path([(x, y) for x, y, _ in pts], col, 2.2)
             for x, y, p_ in pts:
@@ -361,7 +370,7 @@ def f1(rows, out):
             z = zp[side]
             if z and z["avg_ms"]:
                 s2.dot(linmap(float(z["ops_M"]), 0, xhi, l, r),
-                       logmap(float(z["avg_ms"]), ylo, yhi, b, t), col, 4.6, True)
+                       linmap(float(z["avg_ms"]), ylo, yhi, b, t), col, 4.6, True)
         ps = max(x for x, _, _ in series["ST"]); pp = max(x for x, _, _ in series["PT"])
         s2.txt(l + 10, t - 12, f"빨강 stock · 파랑 port · 속 빈 마커 = zipf θ=0.99    "
                                f"정점 {ps:.2f} → {pp:.2f} M ({(pp/ps-1)*100:+.0f}%)",
@@ -382,24 +391,23 @@ def f1b(rows, out):
             ("guest memcached\n(port 서버)", 29.9, C["v4"],
              "30 코어 중 99.7% — 일을 하는 쪽")]
     s = Svg(h=400, title="F1b — one-sided READ: 메모리 노드는 CPU 를 쓰지 않는다")
-    l, r, t, b = axes(s, "", "CPU (코어, 로그)")
-    lo, hi = 1e-5, 60
-    for gv in (1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1, 10):
-        y = logmap(gv, lo, hi, b, t)
+    l, r, t, b = axes(s, "", "CPU (코어)")
+    lo, hi = 0.0, 32
+    for gv in (0, 5, 10, 15, 20, 25, 30):
+        y = linmap(gv, lo, hi, b, t)
         s.line(l, y, r, y, C["grid"])
-        lab = f"{gv:g}" if gv >= 0.01 else f"{gv:.0e}"
-        s.txt(l - 8, y + 4, lab, 10, C["mute"], "end")
+        s.txt(l - 8, y + 4, str(gv), 10, C["mute"], "end")
     bw = (r - l) / len(bars) * 0.42
     for i, (nm, v, col, note) in enumerate(bars):
         x = l + (r - l) * (i + 0.5) / len(bars) - bw / 2
-        y = logmap(v, lo, hi, b, t)
-        s.rect(x, y, bw, b - y, col)
+        y = linmap(v, lo, hi, b, t)
+        s.rect(x, y, bw, max(b - y, 1.5), col)
         s.txt(x + bw / 2, y - 8, (f"{v:g}" if v >= 1 else f"{v:.5f}") + " 코어",
               11, C["ink"], "middle", 600)
         for j, ln in enumerate(nm.split("\n")):
             s.txt(x + bw / 2, b + 18 + j * 13, ln, 10, C["ink"], "middle")
         s.txt(x + bw / 2, b + 46, note, 8.5, C["mute"], "middle")
-    s.txt(l + 10, t - 12, "메모리 노드가 서버보다 50 만 배 적게 쓴다 — 이것이 disaggregation 주장의 직접 증거다",
+    s.txt(l + 10, t - 12, "첫 막대는 선형 축에서 보이지 않는다 — 그것이 이 그림의 주장이다 (서버의 50 만분의 1)",
           10, C["mute"])
     s.save(f"{out}/f1b-memory-node-cpu.svg")
 
@@ -412,18 +420,18 @@ def f2a(rows, out):
     if not cl or len(v4) < 16:
         print("  F2a 건너뜀"); return
     s = Svg(title="F2a — 같은 부하 축에서 두 지표가 반대로 간다 (port_v4)")
-    l, r, t, b = axes(s, "처리량 (M ops/s)", "클라이언트 지연 avg (ms, 로그)", "span v3 (µs)")
+    l, r, t, b = axes(s, "처리량 (M ops/s)", "클라이언트 지연 avg (ms)", "span v3 (µs)")
     xhi = 14.5
-    ylo, yhi = 0.1, 40
-    for gv in (0.1, 1, 10):
-        y = logmap(gv, ylo, yhi, b, t)
+    ylo, yhi = 0.0, 4.0
+    for gv in (0, 1, 2, 3, 4):
+        y = linmap(gv, ylo, yhi, b, t)
         s.line(l, y, r, y, C["grid"])
         s.txt(l - 8, y + 4, str(gv), 10, C["mute"], "end")
     for gx in (0, 4, 8, 12):
         x = linmap(gx, 0, xhi, l, r)
         s.line(x, t, x, b, C["grid"])
         s.txt(x, b + 16, str(gx), 10, C["mute"], "middle")
-    y30 = linmap(30, 0, 40, b, t)
+    y30 = linmap(30, 0, 40, b, t)  # 오른쪽 축(span)은 원래 선형이다
     s.line(l, y30, r, y30, C["set"], 1.4, "6 4")
     s.txt(r - 4, y30 - 6, "계약 span 30 µs", 10, C["set"], "end")
     for tag, sl, col in (("GET-only", slice(2, 9), C["get"]), ("1:9 혼합", slice(9, 16), C["mix"])):
@@ -433,7 +441,7 @@ def f2a(rows, out):
             c = cl.get(f"BD2-GET-P{p_}") if "GET" in tag else cl.get(f"BD2-MIX-P{p_}")
             x = linmap(num(rw, "Mops"), 0, xhi, l, r)
             if c and c["avg_ms"]:
-                lat.append((x, logmap(float(c["avg_ms"]), ylo, yhi, b, t)))
+                lat.append((x, linmap(float(c["avg_ms"]), ylo, yhi, b, t)))
             spn.append((x, linmap(num(rw, "Gv3_avg"), 0, 40, b, t)))
         s.path(lat, col, 2.2)
         for pt in lat:

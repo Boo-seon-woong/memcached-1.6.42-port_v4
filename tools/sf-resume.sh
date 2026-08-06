@@ -192,14 +192,14 @@ sfsave
 
 # ── 9: T 축 (재기동 9회) ────────────────────────────────
 for m in 1 2 4 8 12 16 24 28 30; do
-  SLOT=256 INLINE=1 AD=0 WW=64 RE=8 PC=8 SQ=1 DEM=0 DVAL=64 MCT=$m CPUSET="0-$((m-1))" arm "SF3-T$m" || continue
+  SLOT=256 INLINE=1 AD=0 WW=64 SS=128 RE=8 PC=8 SQ=1 DEM=0 DVAL=64 MCT=$m CPUSET="0-$((m-1))" arm "SF3-T$m" || continue
   go_trio "SF3-T$m" "$m" 4 256 64 "port_v4 c11ede3e slot=256 W=64 mcT=$m taskset 0-$((m-1)) — genie 도 -t $m" \
     "**mtT=$m 로 맞춰라** (mcT=mtT 동시 스케일)."
 done
 sfsave
 
 # ── 10: OP 재시행 ───────────────────────────────────────
-SLOT=256 INLINE=1 AD=0 WW=64 RE=8 PC=8 SQ=1 DEM=0 DVAL=64 arm SF3-OP-r2 && \
+SLOT=256 INLINE=1 AD=0 WW=64 SS=128 RE=8 PC=8 SQ=1 DEM=0 DVAL=64 arm SF3-OP-r2 && \
   go_trio SF3-OP-r2 30 4 256 64 "port_v4 c11ede3e slot=256 W=64 (드리프트 가드 끝점 — SF3-OP 와 동일 조건)"
 sfsave
 say "semi_final 종료"

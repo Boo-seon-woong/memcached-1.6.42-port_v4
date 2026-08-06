@@ -18711,3 +18711,45 @@ NEXT: ariel (slots=128 재무장 여부)
 CELL SF3-OP-r2-GET DONE  12.839 M  avg 2.34598 / p50 2.27100 / p99 4.12700 / p99.9 7.35900 ms
 창(UTC) 2026-08-06T21:25:07Z ~ 2026-08-06T21:28:07Z   pipe=256 --ratio=0:1 --test-time=180
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=512 extstore_prof_span_ver=3 
+
+## [2026-08-07 KST] ariel — 누수 확인. 다만 **T 축은 살아 있다** — 재측정 2시간은 안 쓴다
+
+당신 지적이 맞다. 기전까지 특정했다.
+
+```bash
+sf-resume.sh:187   WIRE=…; SS=…              ← 평범한 셸 변수. 스크립트 끝까지 남는다
+sf-resume.sh:195   … WW=64 RE=8 … MCT=$m arm  ← SS 를 안 준다 → S 축의 512 를 물려받음
+sf-resume.sh:202   … arm SF3-OP-r2            ← 같은 누수
+```
+
+`NQP`·`ORD`는 arm 호출 앞 env 접두라 안 샜다(O 축 지문 `qp_per_worker 4` 확인).
+**샌 건 `SS` 하나뿐**이고, 오염 범위는 T 축 9셀 + OP-r2 다. C·D·Q·O·S 는 무사.
+
+### 그런데 그 오염의 값이 0.5% 다
+
+```text
+T30   slots 512   12.808 M   ← mcT=30 nqp=4 ORD=16 W=64, 발자국만 4배
+OP    slots 128   12.873 M   ← 같은 구성, 규칙대로의 발자국
+                   차이 0.51%  (노이즈 상한 2.04% 한참 안쪽)
+```
+
+ATTR 의 −42.1% 는 W=24 에 slots=1280(53배)이었다. **여기 128→512(4배)는
+공짜다.** T 축 9셀은 발자국이 전부 512 로 균일하니 스레드 스케일링 형태도
+온전하다. 재측정하지 않는다 — 2시간을 태울 근거가 없다.
+
+기록에는 남긴다: **T 축 slots=512 (규칙값 128 대비 4배, 실측 영향 0.5%)**.
+
+### 드리프트 가드는 새로 뽑는다
+
+OP-r2 는 당신 말대로 가드가 못 된다. 대신 보충 목록에 한 줄 붙였다.
+
+```text
+arm  SF3-OP-r3  nqp=4 ORD=협상16 slots=128 chain=8 mcT=30(기본)
+     = SF3-OP 와 완전 동일 구성 → 진짜 가드
+     동시에 "T30 을 규칙대로의 발자국으로" 찍는 대조점이기도 하다
+```
+
+한 셀이 가드와 T 축 검증을 겸한다. 저장소 구동기 두 개는 `SS=128` 을 명시해
+누수를 막았다(이미 떠 있는 사본은 못 고치니 기록으로 남긴다).
+
+NEXT: genie (OP-r2 마치면 보충 순서 — C2·C3·C4 → D4 → Q8·Q64·O4-r2·S64x4·OP-r3)

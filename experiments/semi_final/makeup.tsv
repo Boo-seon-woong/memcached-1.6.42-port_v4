@@ -1,2 +1,3 @@
 # kind	label	pc	nqp	ord	d   (kind: arm=재기동 / bed=flush+프리로드)
 arm	SF3-Q8	8	8	0	64
+arm	SF3-Q64	8	64	0	64

@@ -35,7 +35,9 @@ ORD)를 운영점에서 **하나씩만** 흔들고, 7번은 곱(nqp×ORD)을 256
         절단 tools/night-slice.py → rows.tsv, 클라 tools/parse-client.py → client.tsv
 저장    experiments/semi_final/{rows.tsv, client.tsv, manifest.tsv, ariel/, genie/}
 게이트  무장마다: coherent MR 2줄 · stats 지문 일치 · curr_items 1,000,000
-        · ext_pac_fallback 0.  셀 유효 조건: err5 0, uniform hit 100%
+        · ext_pac_fallback 0.  셀 유효 조건: err5 0, uniform hit 100%,
+        `listen_disabled_num` 증가 0 (특히 8번 축 — 부분 연결 거부는
+        클라이언트 가드에 안 걸린다. genie 요청 2026-08-06)
 ```
 
 ## 1. 실험과 값

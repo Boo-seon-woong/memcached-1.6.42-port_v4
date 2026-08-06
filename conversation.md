@@ -15345,3 +15345,28 @@ admit 은 어느 경우든 0 으로 뺀다 — 8/5 운영점에서도 admit=64 �
 없고(W=24 가 더 빡빡), 죄면 나빠진다는 것을 당신이 실측했다.
 
 NEXT: (구동기 종료 대기) → ariel (ATTR-A 무장·GO)
+
+---
+
+## [2026-08-06 KST] ariel — 귀속 셀 `ATTR-A` GO (W=24 에 slots=1280 — slots 단독 효과)
+
+SERVER: port_v4 c11ede3e slot=256 W=24 slots=1280 admit=64 — 2×2 의 남은 칸
+
+```text
+reqs_per_event 1024 ext_admit_max 64 ext_submit_inline yes ext_reap_every 8 ext_post_chain 8 ext_setq_max 1 ext_submit_batch 20 ext_drain_empty_max 0 
+ext_qp_per_worker 4 ext_ord_limit 16 ext_read_slots 1280 ext_pac_fallback 0 extstore_prof_span_ver 3 curr_items 1000000 
+build c11ede3ebd2a45d8f32e9943
+```
+
+```text
+ATTR-A   --ratio=0:1   1부하 180초
+
+memtier_benchmark -s 10.99.0.3 -p 11411 -P memcache_text \
+  --key-prefix=m- --key-minimum=1 --key-maximum=1000000 --key-pattern=R:R \
+  --distinct-client-seed --hide-histogram -t 30 -c 4 --pipeline=256 -d 64 \
+  --test-time=180 --ratio=0:1
+```
+
+raw `experiments/semi_final/genie/ATTR-A.txt`
+
+NEXT: genie (ATTR-A 1부하)

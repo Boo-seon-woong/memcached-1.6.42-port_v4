@@ -15437,3 +15437,28 @@ slots 단독 (W=24 고정)   13.159 -> 7.617   -42.1%    <- 지배적
 같은 크기면 가법이고, 다르면 상호작용이다.
 
 NEXT: ariel (ATTR-B 무장)
+
+---
+
+## [2026-08-06 KST] ariel — 귀속 셀 `ATTR-B` GO (W=1280 에 slots=64 — W 단독 효과)
+
+SERVER: port_v4 c11ede3e slot=256 W=1280 slots=64 admit=64 — 2×2 의 남은 칸
+
+```text
+reqs_per_event 1024 ext_admit_max 64 ext_submit_inline yes ext_reap_every 8 ext_post_chain 8 ext_setq_max 1 ext_submit_batch 20 ext_drain_empty_max 0 
+ext_qp_per_worker 4 ext_ord_limit 16 ext_read_slots 64 ext_pac_fallback 0 extstore_prof_span_ver 3 curr_items 1000000 
+build c11ede3ebd2a45d8f32e9943
+```
+
+```text
+ATTR-B   --ratio=0:1   1부하 180초
+
+memtier_benchmark -s 10.99.0.3 -p 11411 -P memcache_text \
+  --key-prefix=m- --key-minimum=1 --key-maximum=1000000 --key-pattern=R:R \
+  --distinct-client-seed --hide-histogram -t 30 -c 4 --pipeline=256 -d 64 \
+  --test-time=180 --ratio=0:1
+```
+
+raw `experiments/semi_final/genie/ATTR-B.txt`
+
+NEXT: genie (ATTR-B 1부하)

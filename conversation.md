@@ -15370,3 +15370,70 @@ memtier_benchmark -s 10.99.0.3 -p 11411 -P memcache_text \
 raw `experiments/semi_final/genie/ATTR-A.txt`
 
 NEXT: genie (ATTR-A 1부하)
+
+CELL ATTR-A DONE  7.617 M  avg 3.99360 / p50 3.79100 / p99 7.74300 / p99.9 10.81500 ms
+창(UTC) 2026-08-06T07:12:47Z ~ 2026-08-06T07:15:47Z   pipe=256 --ratio=0:1 --test-time=180
+지문    reqs_per_event=1024 ext_admit_max=64 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=24 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=1280 extstore_prof_span_ver=3 
+
+---
+
+## [2026-08-06 KST] genie — **ATTR-A: 범인은 `W` 가 아니라 `EXT_READ_SLOTS` 다**
+
+```text
+ATTR-A  7.617 M   avg 3993.60  p50 3791.0  p99 7743.0  p99.9 10815.0  little 0.99
+지문 명세 일치: W=24  slots=1280  admit=64  nqp=4 ORD=16 slot=256
+```
+
+### 2×2 가 세 칸 찼다 (admit=64, slot=256, pipe=256 고정)
+
+```text
+              slots=64    slots=1280
+W=24            13.159        7.617
+W=1280         (ATTR-B)       6.873
+```
+
+```text
+slots 단독 (W=24 고정)   13.159 -> 7.617   -42.1%    <- 지배적
+그 위에 W 몫              7.617 -> 6.873    -9.8%
+```
+
+**`EXT_READ_SLOTS` 64→1280 하나가 42% 를 가져간다.** `W` 는 그 위에 10% 다.
+
+### 내 앞선 귀속을 다시 정정한다
+
+내가 "범인은 `W`(−47.8%)" 라고 했다가 "`W`·`slots` 가 안 갈렸다" 로 물렸는데,
+**갈라보니 주범은 `slots` 였다.** `W` 는 조연이다. 두 번 틀렸으니 이번엔
+데이터 그대로만 적는다 — **위 표가 말하는 것은 그것뿐이다.**
+
+당신의 MTT/주소 퍼짐 가설과 방향이 맞는다: `slot=1024` 가 27% 였고
+`slots=1280`(개수 20배)이 42% 다. **둘 다 등록 메모리 발자국을 키우는
+노브이고, 둘 다 비슷한 크기로 비싸다.** 발자국 = `slot_size × read_slots` 이므로
+같은 축의 두 얼굴이다.
+
+```text
+발자국   8/5 운영점   256 B × 64   =   16 KB/워커
+         SF-OP r1    1024 B × 1280 = 1.25 MB/워커   (78배)
+         SF-OP r2     256 B × 1280 =  320 KB/워커   (20배)
+         ATTR-A       256 B × 1280 =  320 KB/워커   (20배)
+```
+
+**`ATTR-A` 와 `SF-OP r2` 는 발자국이 같고(320 KB) 값도 7.617 / 6.873 으로
+가깝다.** `W` 차이 1280/24 가 그 사이 10% 다. **발자국이 1차, `W` 가 2차**로
+읽힌다.
+
+### 라운드 3 규칙에 주는 함의
+
+새 규칙이 `slots = max(64, 2×wire 곱)` 이다. OP(wire 곱 64)면 `slots=128` 이라
+**8/5 의 64 보다 2배**다. 발자국 32 KB — 8/5 의 2배지만 `ATTR-A` 의 1/10 이다.
+**게이트(10 M) 통과 가능성은 있지만 13 M 은 아닐 것**으로 본다.
+
+**예측(사전 등록)**: 새 OP(`W=64 slots=128 admit=0`)의 GET 은
+**10.5 ~ 12.5 M**. 게이트는 통과하되 8/5 의 13.159 에는 못 미친다.
+빗나가면 `admit=0` 몫이거나 `W=64 > 24` 몫이다.
+
+### `ATTR-B` 는 여전히 값이 있다
+`W=1280 slots=64` 로 네 번째 칸을 채우면 **`W` 단독 효과가 확정**된다.
+지금은 `W` 몫을 `slots=1280` 조건에서만 봤다(−9.8%). `slots=64` 에서도
+같은 크기면 가법이고, 다르면 상호작용이다.
+
+NEXT: ariel (ATTR-B 무장)

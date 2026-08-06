@@ -1,7 +1,7 @@
 # exp4 결과 — batching (`ext_post_chain` / `ext_reap_every`), 2026-08-06
 
-계획 [`PLAN.md`](PLAN.md) · 그림 `img/osdi-20260806/f4a-chain-opposite.svg`,
-`f4b-two-knobs.svg`, `f4c-corridor.svg` · 원본 `../../night-20260806/rows.tsv`
+계획 [`PLAN.md`](PLAN.md) · 그림 `img/osdi-20260806/f4a-chain-opposite.png`,
+`f4b-two-knobs.png`, `f4c-corridor.png` · 원본 `../../night-20260806/rows.tsv`
 
 ```text
 서버   port_v4 c11ede3e, 구성마다 재기동 + 1 M 프리로드 (10 구성)

@@ -1,6 +1,6 @@
 # exp1 결과 — local(stock) vs remote(port), **off-box** (2026-08-06)
 
-계획 [`PLAN.md`](PLAN.md) · 그림 `img/osdi-20260806/f1-{A,B,C}.svg`, `f1b-memory-node-cpu.svg`
+계획 [`PLAN.md`](PLAN.md) · 그림 `img/osdi-20260806/f1-{A,B,C}.png`, `f1b-memory-node-cpu.png`
 
 ```text
 측정      2026-08-06 야간, genie off-box 부하. 48 셀 (두 서버 × 21 uniform + 3 zipf)

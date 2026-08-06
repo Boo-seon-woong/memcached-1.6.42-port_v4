@@ -1,6 +1,6 @@
 # exp3 결과 — 값 크기 (2026-08-06)
 
-계획 [`PLAN.md`](PLAN.md) · 그림 `img/osdi-20260806/f3-value-size.svg`
+계획 [`PLAN.md`](PLAN.md) · 그림 `img/osdi-20260806/f3-value-size.png`
 원본 `../../night-20260806/rows.tsv` (`V16`/`V32`/`V64`/`V152`)
 
 ```text

@@ -1,7 +1,7 @@
 # exp2 결과 — 성능 축 · 지연 분해 · E0 (2026-08-06)
 
-계획 [`PLAN.md`](PLAN.md) · 그림 `img/osdi-20260806/f2a-pipeline-curve.svg`,
-`f2b-get.svg`, `f2b-mix.svg`, `f2c-v3-v4.svg` · 원본 `../../night-20260806/`
+계획 [`PLAN.md`](PLAN.md) · 그림 `img/osdi-20260806/f2a-pipeline-curve.png`,
+`f2b-get.png`, `f2b-mix.png`, `f2c-v3-v4.png` · 원본 `../../night-20260806/`
 
 ```text
 빌드   port_v4 c11ede3ebd2a45d8f32e9943 (EXT_RDMA_PROF=1 — 계측 −4.2% 를 문 값이다)

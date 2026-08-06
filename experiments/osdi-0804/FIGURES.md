@@ -6,10 +6,11 @@
 그럴 뻔했다 — 스윕을 GET-only 에만 주려던 계획을 세 워크로드로 바꿨다).
 
 ```text
-생성   tools/plot-osdi.py  (의존성 없음. SVG 직접 출력 — 기존 plot-*.py 와 같은 방식)
+생성   tools/plot-osdi.py  (파이썬 의존성 없음. SVG 로 조립 → rsvg-convert 로 PNG)
 입력   experiments/night-20260806/rows.tsv   서버측(ariel 창)
        conversation.md 의 genie 보고         클라이언트 latency
-출력   img/osdi-20260806/<figure-id>.svg
+출력   img/osdi-20260806/<figure-id>.png   (1640×1000, rsvg-convert)
+       SVG 는 중간 산물이라 남기지 않는다 — 두 벌이면 어느 쪽이 최신인지 헷갈린다
 ```
 
 지표 규약: **처리량과 클라이언트 지연은 genie(memtier) 값**, span·성분·busy 는

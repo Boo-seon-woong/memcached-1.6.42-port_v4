@@ -9,8 +9,10 @@
 축은 전부 **선형**이다 — 로그 축 금지(관리자 지시 2026-08-06).
 입력은 rows.tsv(서버측)와 client.tsv(genie 보고 파싱).
 """
-import argparse
+import argparse, subprocess
 from pathlib import Path
+
+SCALE = 2   # PNG 배율 — 820 x 500 논리 크기를 1640 x 1000 으로 낸다
 
 W, H = 820, 500
 PAD = dict(l=80, r=60, t=132, b=58)   # t 가 큰 이유: 상단 주석 상자 자리
@@ -79,9 +81,20 @@ class Svg:
                       f'fill="{fill}"/>')
 
     def save(self, p):
+        """SVG 로 조립하고 PNG 로 내보낸다. 최종 산출물은 PNG 다(관리자 지시
+        2026-08-06). SVG 는 중간 산물이라 남기지 않는다 — 두 벌이 있으면
+        어느 쪽이 최신인지 헷갈린다."""
         self.p.append("</svg>")
-        Path(p).write_text("\n".join(self.p))
-        print(f"  {p}")
+        svg = Path(p).with_suffix(".svg.tmp")
+        svg.write_text("\n".join(self.p))
+        png = Path(p).with_suffix(".png")
+        rc = subprocess.run(["rsvg-convert", "-w", str(SCALE * self.w),
+                             str(svg), "-o", str(png)],
+                            capture_output=True)
+        svg.unlink()
+        if rc.returncode != 0:
+            raise SystemExit(f"rsvg-convert 실패: {rc.stderr.decode()[:200]}")
+        print(f"  {png}")
 
 
 def legend(s, lines, x=None, y=None, w=None):
@@ -163,7 +176,7 @@ def f2b(rows, out):
                                        ("span v3 (계약)", C["span"]), ("post", C["post"]))):
             s.rect(l + 10 + i * 118, yb + 6, 11, 11, col)
             s.txt(l + 26 + i * 118, yb + 15, nm, 9.5, C["ink"])
-        s.save(f"{out}/f2b-{tag}.svg")
+        s.save(f"{out}/f2b-{tag}")
 
 
 # ── F2c: v3 ↔ v4 ─────────────────────────────────────────────────────────
@@ -198,7 +211,7 @@ def f2c(rows, out):
                "실선 = span v3 (계약이 재는 구간) · 파선 = srv (서버 체류 전체)",
                "빨강 port_v3 86da4222 (W=40 nqp=4) · 파랑 port_v4 c11ede3e (W=24 reap=8 chain=8)",
                "pipe=256 에서 span −91% 인데 srv 는 −4.2% — 시간이 span 밖으로 옮겨갔다"])
-    s.save(f"{out}/f2c-v3-v4.svg")
+    s.save(f"{out}/f2c-v3-v4")
 
 
 # ── F3: 값 크기 ──────────────────────────────────────────────────────────
@@ -235,7 +248,7 @@ def f3(rows, out):
                f"xfer {pts[0][3]:.2f}→{pts[-1][3]:.2f} µs · crypto {pts[0][4]:.2f}→{pts[-1][4]:.2f} µs "
                "— 바이트 비용은 전송이지 암복호가 아니다",
                "점 아래 숫자 = GET-only 처리량. 152 B 는 수용 상한(pac_fallback 0)"])
-    s.save(f"{out}/f3-value-size.svg")
+    s.save(f"{out}/f3-value-size")
 
 
 # ── F3b: exp3 throughput–latency ─────────────────────────────────────────
@@ -278,7 +291,7 @@ def f3b(rows, out):
                 "점 = 셀 하나(30초). 점 옆 = 값 크기.  x 처리량 · y memtier avg 지연",
                 "선은 크기 순으로 이은 궤적이지 부하 곡선이 아니다 — 셀마다 부하가 같다",
                 "색 = 워크로드. 152 B 는 수용 상한(pac_fallback 0), port_v4 c11ede3e PROF=1"])
-    s2.save(f"{out}/f3b-size-throughput-latency.svg")
+    s2.save(f"{out}/f3b-size-throughput-latency")
 
 
 # ── F4a/b/c: 배칭 ────────────────────────────────────────────────────────
@@ -321,7 +334,7 @@ def f4(rows, out):
                    "실선(왼쪽 축) span v3 — 오른다 · 파선(오른쪽 축) srv 서버 체류 — 내린다",
                    "x 축 아래 숫자 = 그 셀의 GET-only 처리량",
                    "c8 은 재시행값이다 (첫 셀이 −2.8% 낮게 나왔다)"])
-        s.save(f"{out}/f4a-chain-opposite.svg")
+        s.save(f"{out}/f4a-chain-opposite")
 
     # F4b: admit 대칭 / v2 비대칭
     mins, ca, ra, cv, rv = [], [], [], [], []
@@ -354,7 +367,7 @@ def f4(rows, out):
                    "x = min(chain, reap).  실선·채운 점 = chain 축 (reap=8 고정)",
                    "파선·빈 점 = reap 축 (chain=8 고정)",
                    "파랑 admit — 두 축이 포개진다(대칭) · 주황 v2 — 갈라진다(reap 전용)"])
-        s.save(f"{out}/f4b-two-knobs.svg")
+        s.save(f"{out}/f4b-two-knobs")
 
     # F4c: 계약 회랑
     if len(cs) >= 5:
@@ -387,7 +400,7 @@ def f4(rows, out):
                    "y = 처리량. 초록 파선 = 계약선 10 M ops/s",
                    "파랑 GET-only · 주황 1:9 혼합 — 혼합만 chain=1 에서 미달(9.653 M)",
                    "chain 노브가 존재하는 이유가 혼합 조항이라는 뜻이다"])
-        s.save(f"{out}/f4c-corridor.svg")
+        s.save(f"{out}/f4c-corridor")
 
 
 # ── F1: exp1 local vs remote (명세: x=처리량, y=클라이언트 지연) ──────────
@@ -452,7 +465,7 @@ def f1(rows, out):
         if wl == "A":
             note.append("주의: 이 워크로드는 메모리 배치와 쓰기 경로 직렬화가 겹쳐 있다")
         legend(s2, note)
-        s2.save(f"{out}/f1-{wl}.svg")
+        s2.save(f"{out}/f1-{wl}")
 
 
 # ── F1b: 메모리 노드 CPU = 0 ─────────────────────────────────────────────
@@ -485,7 +498,7 @@ def f1b(rows, out):
     legend(s, ["달리한 것: CPU 를 재는 대상 (같은 시스템의 세 구성 요소)",
                "값 = 점유 코어 수. genie_memd 는 utime+stime 누적 15.3 s / 66.6 h",
                "첫 막대는 선형 축에서 보이지 않는다 (서버의 50 만분의 1)"])
-    s.save(f"{out}/f1b-memory-node-cpu.svg")
+    s.save(f"{out}/f1b-memory-node-cpu")
 
 
 # ── F2a: pipeline 곡선, 클라이언트 지연 vs span 이중축 ────────────────────
@@ -529,7 +542,7 @@ def f2a(rows, out):
                "실선·채운 점(왼쪽 축) = memtier 클라이언트 지연 — 부하와 함께 오른다",
                "파선·빈 점(오른쪽 축) = span v3 — 평평하다. 초록 파선 = 계약 30 µs",
                "파랑 GET-only · 주황 1:9 혼합.  port_v4 c11ede3e, PROF=1"])
-    s.save(f"{out}/f2a-pipeline-curve.svg")
+    s.save(f"{out}/f2a-pipeline-curve")
 
 
 def f4d(rows, out):
@@ -586,7 +599,7 @@ def f4d(rows, out):
                 "x 처리량(memtier) · y span v3 avg(서버 창) — 계약이 재는 구간이다",
                 "혼합 두 계열은 같은 셀의 GET span 과 SET span 이라 x 가 같다",
                 "c8 은 재시행값 (첫 셀이 −2.8% 낮았다)"])
-    s2.save(f"{out}/f4d-chain-throughput-span.svg")
+    s2.save(f"{out}/f4d-chain-throughput-span")
 
 
 def main():

@@ -16232,3 +16232,7 @@ NEXT: ariel (D4 재배치 결정)
 지금 유효한 GO: **SF3-D8** (bed = d=8, 일치). 진행해달라.
 
 NEXT: genie (SF3-D8 3부하)
+
+CELL SF3-D8-GET DONE  13.609 M  avg 2.14251 / p50 1.99900 / p99 3.95100 / p99.9 7.29500 ms
+창(UTC) 2026-08-06T11:25:41Z ~ 2026-08-06T11:28:41Z   pipe=256 --ratio=0:1 --test-time=180
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 

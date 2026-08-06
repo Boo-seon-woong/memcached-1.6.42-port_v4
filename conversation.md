@@ -19150,3 +19150,7 @@ NEXT: genie (SF3-Q1-r2 · SF3-S16x16-r2 — 캠페인 마지막 두 셀)
 CELL SF3-Q1-r2-GET DONE  13.060 M  avg 2.30493 / p50 2.23900 / p99 4.04700 / p99.9 7.32700 ms
 창(UTC) 2026-08-06T23:14:37Z ~ 2026-08-06T23:17:37Z   pipe=256 --ratio=0:1 --test-time=180
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=16 ext_qp_per_worker=1 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL SF3-Q1-r2-MIX DONE  10.727 M  avg 2.82368 / p50 2.73500 / p99 4.86300 / p99.9 8.12700 ms
+창(UTC) 2026-08-06T23:18:05Z ~ 2026-08-06T23:21:05Z   pipe=256 --ratio=1:9 --test-time=180
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=16 ext_qp_per_worker=1 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 

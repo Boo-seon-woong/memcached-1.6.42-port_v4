@@ -46,7 +46,15 @@ echo "── 무장: submit_batch=$SB W=파생(nqp×ORD) nqp=$NQP READ_SLOTS=$SL
 # /tmp 에 스테이징한 바이너리(mc_stock 등)는 이름이 memcached 가 아니라
 # -x 로 안 죽는다. 그래서 포트가 안 뜬 채 stock 이 계속 서비스했고, 나는
 # 낡은 /tmp/mc.log 를 읽고 "게이트 2 통과"로 오독했다. 로그도 함께 비운다.
-$G 'tmux kill-session -t mc 2>/dev/null || true; pkill -x memcached 2>/dev/null; pkill -f "^/tmp/mc_" 2>/dev/null; : > /tmp/mc.log'
+# pkill -x 는 이름이 정확히 "memcached" 인 것만 죽인다 — BIN 으로 memcached.wfix
+# 같은 변종을 띄우면 옛 서버가 포트를 쥔 채 남고, 새 프로세스는 bind 에 실패해
+# 죽는다. 그러면 로그는 새 구성을 찍고 stats 는 옛 서버가 답해 게이트가 통과한다.
+# (2026-08-07 에 이걸로 무장 결과 몇 개가 허위였다.) 정지를 확인까지 한다.
+$G 'tmux kill-session -t mc 2>/dev/null || true
+    pkill -f "bin/memcache[d]" 2>/dev/null; pkill -f "^/tmp/mc_" 2>/dev/null
+    for i in $(seq 40); do pgrep -f "bin/memcache[d]" >/dev/null || break; sleep 0.5; done
+    pgrep -f "bin/memcache[d]" >/dev/null && { echo "STOP-FAILED: $(pgrep -af "bin/memcache[d]" | head -1)"; exit 1; }
+    : > /tmp/mc.log' || { echo "── 무장 중단: 옛 서버를 못 멈췄다"; exit 1; }
 sleep 3
 
 $G "tmux new-session -d -s mc \"cd \\\$HOME/kvs-port && exec taskset -c $CPUSET env \
@@ -56,7 +64,21 @@ EXT_CRYPTO_KEY=\\\$HOME/kvs-port/ext.key EXT_SLOT_SIZE=256 EXT_READ_SLOTS=$SLOTS
 $MCBIN -p 11411 -U 0 -t $MCT -m 2048 -c 16384 -R $R \
 -o ext_path=10.99.0.2:11212:4g,ext_qp_per_worker=$NQP,ext_drain_spin=1024,hashpower=$HP,ext_submit_batch=$SB,ext_admit_max=$AD${INLINE:+,ext_submit_inline},ext_reap_every=$RE,ext_post_chain=$PC,ext_setq_max=$SQ,ext_drain_empty_max=$DEM$ILPOPT$ORDOPT \
 > /tmp/mc.log 2>&1\""
-sleep 10
+# 포트가 뜰 때까지 기다린다. nqp 가 크면 QP 수천 개를 연결하느라 10초로는
+# 모자란다(nqp=64 는 1,920 개). 고정 sleep 이면 느린 구성이 "실패"로 보인다.
+# 그리고 포트를 쥔 프로세스가 방금 띄운 그 바이너리인지 확인한다 — 아니면
+# 게이트가 옛 서버의 stats 를 읽고 통과해버린다.
+RUNBIN=$($G 'for i in $(seq 180); do
+      p=$(ss -lntpH "sport = :11411" 2>/dev/null | grep -o "pid=[0-9]*" | head -1 | cut -d= -f2)
+      [ -n "$p" ] && { readlink -f /proc/$p/exe; break; }
+      grep -q "Failed to prepare storage workers" /tmp/mc.log 2>/dev/null && break
+      sleep 1
+    done') || RUNBIN=""
+WANT=$($G "readlink -f $MCBIN") || WANT=""
+if [ "$RUNBIN" != "$WANT" ]; then
+  echo "── 무장 중단: 도는 바이너리가 다르다 (기대 $WANT, 실제 ${RUNBIN:-없음})"
+  $G 'tail -5 /tmp/mc.log'; exit 1
+fi
 
 echo "── coherent MR 게이트 (2 여야 한다): $($G 'grep -icE "coherent MR [0-9]+B" /tmp/mc.log')"
 $G 'grep -iE "genie_connect OK|Address already|error|failed" /tmp/mc.log | head -3'

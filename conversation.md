@@ -26622,3 +26622,7 @@ CELL R6-T2-U-C DONE  1.468 M  avg 1.36676 / p50 1.33500 / p99 2.52700 / p99.9 3.
 CELL R6-T2-U-B DONE  1.417 M  avg 1.41677 / p50 1.39100 / p99 2.43100 / p99.9 3.15100 ms
 창(UTC) 2026-08-07T20:24:31Z ~ 2026-08-07T20:25:31Z   pipe=256 --ratio=1:19 --test-time=60
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 
+
+CELL R6-T2-U-A DONE  1.057 M  avg 1.90053 / p50 1.84700 / p99 3.71100 / p99.9 4.51100 ms
+창(UTC) 2026-08-07T20:25:58Z ~ 2026-08-07T20:26:58Z   pipe=256 --ratio=1:1 --test-time=60
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 

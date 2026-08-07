@@ -44,7 +44,22 @@ def classify(r):
     return None                  # 옛 MIX(10%) · 옛 SET(100%) 등
 
 
+def void_cells():
+    """명시적 무효 목록. 클라 DONE 줄이 지워져도 서버측 행은 남는다 —
+    사고 셀이 조용히 표에 들어가는 것을 여기서 한 번 더 막는다."""
+    f = SF / 'void-cells.txt'
+    if not f.exists():
+        return set()
+    out = set()
+    for ln in f.read_text().split('\n'):
+        ln = ln.split('#')[0].strip()
+        if ln:
+            out.add(ln)
+    return out
+
+
 def load():
+    voids = void_cells()
     lines = ROWS.read_text().strip().split('\n')
     hdr = lines[0].split('\t')
     idx = {n: i for i, n in enumerate(hdr)}
@@ -53,6 +68,9 @@ def load():
     for ln in lines[1:]:
         f = ln.split('\t')
         rec = {n: f[i] for n, i in idx.items() if i < len(f)}
+        if rec[hdr[0]] in voids:
+            dropped += 1
+            continue
         wl = classify(rec)
         if wl is None:
             dropped += 1

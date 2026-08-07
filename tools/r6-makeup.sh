@@ -143,12 +143,13 @@ go_dist(){ # go_dist <base> <mtT> <c> <pipe> <d> <서버줄> [추가주의]
 }
 
 # ═══════════════ 라운드 6 보충 ═══════════════
-export BIN='$HOME/coherent-mr-v2/bin/memcached.permr'
+export BIN='$HOME/coherent-mr-v2/bin/memcached.permr2'
 LIST="$SF/r6-makeup.tsv"
 say "라운드 6 보충 대기 — 본 구동기 종료까지"
-while pgrep -f 'bash /tmp/r6[.]sh' >/dev/null; do sleep 120; done
+while pgrep -f 'bash /tmp/r6r[.]sh' >/dev/null; do sleep 120; done
 say "보충 시작 — $(grep -vc '^#' "$LIST") 구성"
 while IFS=$'\t' read -r kind lbl a b c d rest; do
+  rest=${rest%%#*}; rest=$(echo "$rest" | tr -d " \t")
   case "$kind" in ''|'#'*) continue ;; esac
   if [ "$kind" = client ]; then
     go_dist "$lbl" "$a" "$b" "$c" "$d" \

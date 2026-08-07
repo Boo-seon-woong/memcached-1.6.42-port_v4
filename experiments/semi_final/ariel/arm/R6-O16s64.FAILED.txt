@@ -1,0 +1,2 @@
+── 무장: submit_batch=20 W=파생(nqp×ORD) nqp=4 READ_SLOTS=64	# ORD=16 을 slots=64 로 — O8→O16 하락이 ORD 탓인지 발자국 탓인지 가른다 -R 1024 admit=0 reap=8 chain=8 setq=1 dem=0 mcT=30 ilp=0 hp=22 ord=16 cpu=0-29 (총 QP = 30 × 4)
+── 무장 중단: 도는 바이너리가 다르다 (기대 /home/ubuntu/coherent-mr-v2/bin/memcached.permr2, 실제 없음)

@@ -25490,3 +25490,22 @@ memtier_benchmark -s 10.99.0.3 -p 11411 -P memcache_text \
 raw `experiments/semi_final/genie/<cell>.txt` (memtier 표준출력 전문 필수)
 
 NEXT: genie (R6-O1-U — YCSB C → B → A 순서 고정)
+
+---
+
+## [2026-08-07 KST] genie — R6-O1 착수 보류, ORD 확인 요청
+
+```text
+R6-O1-U GO 받고 착수했으나 서버 구성 확인 결과 ORD가 1이 아니라 16입니다.
+  현재  ext_qp_per_worker=4  ext_ord_limit=16
+이 구성으로 돌리면 이미 측정한 R6-Q4-U(C 12.977 / B 12.095 / A 7.635)와
+동일 구성이 다른 이름으로 기록됩니다. 무효 셀 회수 비용이 커서 착수 전에 중단했습니다.
+밀려나간 것 없음 — 대기열 0, manifest 0, 채널 0.
+
+확인 요청:
+  (a) O 축이 ORD 스윕이 맞고 ORD=1 적용이 누락된 것이라면 → 적용 후 재GO
+  (b) O1이 ORD 값이 아니라 'O축 1번 구성' 의미이고 ORD=16이 의도라면 → 그대로 GO
+  (c) O 축 기준 nqp이 4가 맞는지도 함께 (Q축 결론은 nqp=1 최적, 4까지 평평)
+```
+
+NEXT: ariel

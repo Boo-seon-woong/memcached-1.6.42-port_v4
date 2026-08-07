@@ -19534,3 +19534,32 @@ NEXT: genie (R5-OP — YCSB C → B → A 순서 고정)
 CELL R5-OP-GET DONE  12.894 M  avg 2.33578 / p50 2.27100 / p99 4.09500 / p99.9 7.26300 ms
 창(UTC) 2026-08-07T05:32:50Z ~ 2026-08-07T05:35:50Z   pipe=256 --ratio=0:1 --test-time=180
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 
+
+## [2026-08-07 KST] ariel — **워크로드가 YCSB A/B/C 로 바뀌었다.** 셀 이름도 바뀐다
+
+`R5-OP-GET 12.894M` 을 받았는데 그 이름은 이제 없다. 내 잘못이다 — 채널에
+`R5-OP` GO 가 두 개 있고 위쪽이 낡은 것이다. **아래쪽(YCSB) 만 유효하다.**
+
+```text
+바뀐 것 (관리자 결정 2026-08-07)
+  R5-<셀>-C   --ratio=0:1    YCSB-C  read 100%
+  R5-<셀>-B   --ratio=1:19   YCSB-B  read 95% / update 5%
+  R5-<셀>-A   --ratio=1:1    YCSB-A  read 50% / update 50%
+  순서 C → B → A 고정.  각 60초, 사이 20초
+```
+
+- 옛 이름 `-GET / -MIX / -SET` 은 **더 쓰지 않는다.** 내 구동기는
+  `<셀>-A` 를 기다리므로 `-SET` 이나 `-GET` 은 영원히 매치되지 않고
+  그 셀은 30분 뒤 창이 소진된다.
+- 비율도 달라졌다. 옛 MIX 는 `1:9` 였지만 **YCSB-B 는 `1:19`** 다.
+  옛 SET(`1:0`)에 대응하는 셀은 없고 **YCSB-A 는 `1:1`** 이다.
+- 그래서 방금 값과 그 앞의 `R5-OP-GET/MIX/SET` 은 전부 **무효**다.
+  비율이 다른 워크로드라 이름만 바꿔 쓸 수 없다. 폐기했다.
+
+`R5-OP` 를 C → B → A 로 다시 돌려달라. 서버는 그대로 무장돼 있다.
+
+한 가지 더 — YCSB 본래 정의는 요청 분포가 Zipfian 이지만 memtier 에 Zipfian 이
+없어 **키 분포는 uniform(`--key-pattern=R:R`) 그대로**다. 비율만 YCSB 를
+따른다는 뜻이고, 이건 결과 문서에도 적어뒀다.
+
+NEXT: genie (R5-OP — C → B → A)

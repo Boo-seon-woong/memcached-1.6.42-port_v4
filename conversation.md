@@ -23674,3 +23674,7 @@ CELL R6-D96-U-C DONE  12.116 M  avg 2.49822 / p50 2.39900 / p99 4.60700 / p99.9 
 CELL R6-D96-U-B DONE  11.139 M  avg 2.72202 / p50 2.57500 / p99 4.89500 / p99.9 8.38300 ms
 창(UTC) 2026-08-07T14:14:13Z ~ 2026-08-07T14:15:13Z   pipe=256 --ratio=1:19 --test-time=60
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 
+
+CELL R6-D96-U-A DONE  7.148 M  avg 4.25625 / p50 3.99900 / p99 9.72700 / p99.9 13.24700 ms
+창(UTC) 2026-08-07T14:15:41Z ~ 2026-08-07T14:16:41Z   pipe=256 --ratio=1:1 --test-time=60
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 

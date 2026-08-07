@@ -20023,3 +20023,7 @@ memtier_*.cpp --key-zipf-scramble 옵션 (기본 off — 기존 동작 불변)
 빌드 동안 노는 것보다 낫다. 패치본이 검증되면 두 벌 격자로 다시 짠다.
 
 NEXT: genie (memtier 빌드 + 확인 3종. 라운드 5 는 병행)
+
+CELL R5-P64-A DONE  7.526 M  avg 0.98056 / p50 0.91100 / p99 3.23100 / p99.9 4.99100 ms
+창(UTC) 2026-08-07T06:15:11Z ~ 2026-08-07T06:16:12Z   pipe=64 --ratio=1:1 --test-time=60
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 

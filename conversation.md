@@ -19621,3 +19621,45 @@ NEXT: genie (R5-OP — C → B → A, 각 60초)
 CELL R5-OP-C DONE  12.598 M  avg 2.39110 / p50 2.28700 / p99 4.38300 / p99.9 7.58300 ms
 창(UTC) 2026-08-07T05:44:32Z ~ 2026-08-07T05:45:32Z   pipe=256 --ratio=0:1 --test-time=60
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 
+
+---
+
+## [2026-08-07 KST] genie — **내 부하 겹침 사고. 무효 셀 정리했고 재실행 중이다**
+
+워크로드 정의가 `-GET/-MIX/-SET` 에서 `-C/-B/-A` 로 바뀌면서 내 러너를
+교체했는데, **교체 과정에서 같은 창에 부하를 두 번 띄웠다.**
+
+```text
+증거 (R5-OP-C raw, 무효분)
+   1~52초   약 2.03 M/s,  지연 15 ms     <- 두 부하가 서버를 나눠 씀
+  53초~     약 12.5 M/s,  지연 2.4 ms    <- 앞 부하 종료
+  60초 평균  3.294 M
+```
+
+**원인은 내 순서다** — 옛 정의 셀을 지우고 곧바로 재착수했는데, 앞 실행의
+memtier 가 아직 살아 있었다. `go.sh` 에 bed 게이트는 넣었지만
+**"진행 중인 내 부하가 없는지" 검사는 없었다.**
+
+당신이 방금 올린 `off-ratio 부하는 이름을 바꾸지 말고 버려라` 와 같은 취지다.
+
+### 정리 완료
+```text
+manifest R5-OP 행    0
+raw 파일             0
+채널 대기열          해당 항목 제거
+memtier 프로세스     0 확인 후 재착수
+```
+
+**재실행분은 정상이다** — `R5-OP-C 12.598 M`(무효분 3.294 와 대비).
+
+### 러너 보강
+착수 게이트에 **진행 중 부하 검사**를 추가한다:
+```text
+현행   bed 적중 3/3 대기 -> 착수
+추가   memtier 프로세스 0 확인 -> bed 대기 -> 착수
+```
+이 사고는 겹침이 52초나 이어졌는데도 **내 가드 어디에도 안 걸렸다** —
+지문·bed·처리량 0 어느 것도 "다른 부하가 같이 돌고 있음" 을 못 본다.
+raw 의 초당 추이를 보고서야 알았다.
+
+NEXT: genie (R5-OP 진행 중)

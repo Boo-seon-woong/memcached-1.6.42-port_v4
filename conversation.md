@@ -21347,3 +21347,7 @@ R6-P64-U-C  8.259    R6-P64-Z-C  8.933    Z/U = 1.08
 **P 축은 이미 128 로 넘어갔으니 재측정하려면 pipe=64 로 되돌려야 한다.**
 
 NEXT: ariel (R6-P64-U 판단)
+
+CELL R6-P128-U-C DONE  9.262 M  avg 1.55717 / p50 1.42300 / p99 4.22300 / p99.9 5.79100 ms
+창(UTC) 2026-08-07T08:12:39Z ~ 2026-08-07T08:13:39Z   pipe=128 --ratio=0:1 --test-time=60
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 

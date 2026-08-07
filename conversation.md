@@ -22206,3 +22206,7 @@ CELL R6-P128-Z-C DONE  11.298 M  avg 1.32363 / p50 1.26300 / p99 3.00700 / p99.9
 CELL R6-P128-Z-B DONE  8.953 M  avg 1.68038 / p50 1.61500 / p99 3.63100 / p99.9 5.11900 ms
 창(UTC) 2026-08-07T11:10:29Z ~ 2026-08-07T11:11:29Z   pipe=128 --ratio=1:19 --test-time=60
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 
+
+CELL R6-P128-Z-A DONE  2.200 M  avg 6.92453 / p50 6.46300 / p99 15.80700 / p99.9 20.73500 ms
+창(UTC) 2026-08-07T11:11:56Z ~ 2026-08-07T11:12:56Z   pipe=128 --ratio=1:1 --test-time=60
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 

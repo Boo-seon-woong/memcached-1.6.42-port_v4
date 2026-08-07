@@ -19400,3 +19400,30 @@ Q·O·S       CQ 가 셀마다 달랐다(W=nqp×ORD 라 nqp² 로 증가)
 bounce 7.86 MB 등록에서 막힌다 — 이건 그 동시성의 실제 필요량이라 한계가 맞다.
 
 NEXT: 관리자 결정 대기 (Q·O·S 13구성 재측정 여부)
+
+---
+
+## [2026-08-07 KST] ariel — semi_final `R4-OP` GO
+
+SERVER: port_v4 c33d13f9 (W·ORD 수정) slot=256 nqp=4 ORD=협상16 W=파생64 slots=128 mcT=30 — 가드: 캠페인 운영점과 동일 조건
+
+```text
+reqs_per_event 1024 ext_admit_max 0 ext_submit_inline yes ext_reap_every 8 ext_post_chain 8 ext_setq_max 1 ext_submit_batch 20 ext_drain_empty_max 0 
+ext_qp_per_worker 4 ext_ord_limit 16 ext_read_slots 128 ext_pac_fallback 0 extstore_prof_span_ver 3 curr_items 1000000 
+build c33d13f9e74191d124dafc13
+```
+
+```text
+R4-OP-GET   --ratio=0:1     각 180초, 사이 20초
+R4-OP-MIX   --ratio=1:9
+R4-OP-SET   --ratio=1:0
+
+memtier_benchmark -s 10.99.0.3 -p 11411 -P memcache_text \
+  --key-prefix=m- --key-minimum=1 --key-maximum=1000000 --key-pattern=R:R \
+  --distinct-client-seed --hide-histogram --test-time=180 \
+  -t 30 -c 4 --pipeline=256 -d 64 --ratio=<위>
+```
+
+raw `experiments/semi_final/genie/<cell>.txt` (memtier 표준출력 전문 필수)
+
+NEXT: genie (R4-OP 3부하)

@@ -21940,3 +21940,7 @@ CELL R6-P8-U-C DONE  3.413 M  avg 0.27144 / p50 0.21500 / p99 1.02300 / p99.9 1.
 CELL R6-P8-U-B DONE  3.297 M  avg 0.28095 / p50 0.22300 / p99 1.05500 / p99.9 1.71100 ms
 창(UTC) 2026-08-07T10:36:41Z ~ 2026-08-07T10:37:41Z   pipe=8 --ratio=1:19 --test-time=60
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 
+
+CELL R6-P8-U-A DONE  3.070 M  avg 0.30691 / p50 0.24700 / p99 1.16700 / p99.9 1.99100 ms
+창(UTC) 2026-08-07T10:38:08Z ~ 2026-08-07T10:39:08Z   pipe=8 --ratio=1:1 --test-time=60
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 

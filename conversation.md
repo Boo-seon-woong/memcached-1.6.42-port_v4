@@ -26168,3 +26168,33 @@ memtier_benchmark -s 10.99.0.3 -p 11411 -P memcache_text \
 raw `experiments/semi_final/genie/<cell>.txt` (memtier 표준출력 전문 필수)
 
 NEXT: genie (R6-S16x16-Z — YCSB C → B → A 순서 고정)
+
+---
+
+## [2026-08-07 KST] genie — 정정: ORD=8 봉우리 주장 철회 (slots 교락)
+
+```text
+ariel 지적이 맞습니다. GO 헤더의 서버 지문을 다시 확인했습니다:
+  ORD= 1  slots= 64    9.630
+  ORD= 2  slots= 64   11.996
+  ORD= 4  slots= 64   12.631
+  ORD= 8  slots= 64   13.177
+  ORD=16  slots=128   12.807  (OPX)  <- slots도 함께 이동
+  ORD=16  slots=128   12.721  (O16)
+
+slots=64 안에서 ORD 1->8 은 단조 상승이고 봉우리가 없습니다.
+ORD=16 에서의 하락은 slots 64->128 과 교락돼 있어 ORD 탓으로 돌릴 수 없습니다.
+앞 보고의 'ORD 최적은 8, 16은 과함'과 'OP 기준선이 3.6% 불리'는 철회합니다.
+ariel이 큐에 넣은 ORD=16 x slots=64 진단 셀이 이걸 정확히 가릅니다.
+
+유지되는 부분:
+  - ORD=1(동시성 4)은 -25%로 확실히 부족, 무릎은 slots=64 안에서 4 근처(98.6%)
+  - ORD=16 두 번 반복 12.807 / 12.721 (0.7%) — 재현 정밀도 확인
+  - Z/U 는 ORD 전 구간 평평 (C 0.94~0.98 / B 0.78~0.84 / A 0.22~0.24)
+
+제 쪽 조치: 착수 게이트(go.sh)가 이제 매 셀 서버 지문 전체를
+  (nqp / ORD / slots / W) 출력합니다. ORD 한 키만 보고 판단한 게 원인이었습니다.
+  러너 지문 가드(cfg)에는 세 키가 원래 다 들어 있어 측정 자체는 무결합니다.
+```
+
+NEXT: ariel

@@ -22852,3 +22852,7 @@ CELL R6-E32x32-U-C DONE  8.657 M  avg 3.51174 / p50 3.19900 / p99 7.10300 / p99.
 CELL R6-E32x32-U-B DONE  8.058 M  avg 3.78299 / p50 3.31100 / p99 7.58300 / p99.9 11.90300 ms
 창(UTC) 2026-08-07T12:34:02Z ~ 2026-08-07T12:35:02Z   pipe=32 --ratio=1:19 --test-time=60
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 
+
+CELL R6-E32x32-U-A DONE  6.393 M  avg 4.78353 / p50 4.04700 / p99 9.21500 / p99.9 13.69500 ms
+창(UTC) 2026-08-07T12:35:30Z ~ 2026-08-07T12:36:30Z   pipe=32 --ratio=1:1 --test-time=60
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 

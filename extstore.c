@@ -88,7 +88,8 @@ static char *dma_alloc(size_t sz) {
 }
 
 static char *dma_mr_alloc(struct ibv_pd *pd, size_t sz, int access,
-                          struct ibv_mr **mr, bool *coherent) {
+                          struct ibv_mr **mr, bool *coherent,
+                          const char *label) {
     typedef struct ibv_mr *(*alloc_fn)(struct ibv_pd *, size_t, int);
     static alloc_fn coherent_alloc;
     static bool looked_up;
@@ -103,13 +104,16 @@ static char *dma_mr_alloc(struct ibv_pd *pd, size_t sz, int access,
         *mr = coherent_alloc ? coherent_alloc(pd, sz, access) : NULL;
         if (*mr) {
             *coherent = true;
-            fprintf(stderr, "extstore: coherent MR %zuB at %p\n",
-                    sz, (*mr)->addr);
+            if (label)
+                fprintf(stderr, "extstore: coherent MR %zuB at %p (%s)\n",
+                        sz, (*mr)->addr, label);
             return (*mr)->addr;
         }
-        fprintf(stderr, "extstore: coherent MR %zuB unavailable%s%s; "
-                "using sync fallback\n", sz, coherent_alloc ? ": " : "",
-                coherent_alloc ? strerror(errno) : "");
+        if (label)
+            fprintf(stderr, "extstore: coherent MR %zuB unavailable%s%s; "
+                    "using sync fallback (%s)\n", sz,
+                    coherent_alloc ? ": " : "",
+                    coherent_alloc ? strerror(errno) : "", label);
     }
 
     char *p = dma_alloc(sz);
@@ -166,9 +170,13 @@ typedef struct store_worker {
     unsigned int ord_limit;              /* per-QP READ gate (input/negotiated) */
     unsigned int outstanding, window;
     char *bounce_base;
+    struct ibv_mr *bounce_mr;
+    bool bounce_coherent;
     uint64_t *bounce_free;               /* bitmap, [bounce_words] */
     unsigned int bounce_words, bounce_slots;
     char *staging_base;
+    struct ibv_mr *staging_mr;
+    bool staging_coherent;
     uint64_t *staging_free;              /* bitmap, [staging_words] */
     unsigned int staging_words, staging_slots;
     /* per-post/drain scratch, sized by ext_batch (no stack arrays -> no cap) */
@@ -218,12 +226,6 @@ struct store_engine {
     unsigned int slot_size, read_slots;
     store_worker **workers;
     unsigned int worker_count, w_nqp, w_window;
-    char *wbounce_base;
-    struct ibv_mr *wbounce_mr;
-    bool wbounce_coherent;
-    char *wstaging_base;                 /* P2b */
-    struct ibv_mr *wstaging_mr;
-    bool wstaging_coherent;
     unsigned int w_staging_slots, write_slots;
     unsigned int ord_limit, batch;
     struct sockaddr_in peer;
@@ -280,7 +282,7 @@ static int selftest(store_engine *e, store_worker *w) {
     /* page 0 offset 0: no object lives there yet (pages are handed out top-down) */
     for (int pass = 0; pass < 2; pass++) {          /* 0 = WRITE out, 1 = READ back */
         struct ibv_sge sg = { .addr = (uintptr_t)(pass ? dst : src), .length = len,
-            .lkey = pass ? e->wbounce_mr->lkey : e->wstaging_mr->lkey };
+            .lkey = pass ? w->bounce_mr->lkey : w->staging_mr->lkey };
         struct ibv_send_wr *bad, wr = { .wr_id = (uint64_t)pass, .sg_list = &sg,
             .num_sge = 1, .send_flags = IBV_SEND_SIGNALED,
             .opcode = pass ? IBV_WR_RDMA_READ : IBV_WR_RDMA_WRITE };
@@ -767,44 +769,48 @@ int extstore_workers_prepare(void *ptr, unsigned int nworkers,
             nqp, e->w_window, e->workers[0]->ord_limit,
             e->ord_limit ? " pinned" : " negotiated", e->batch);
 
-    size_t bsz = (size_t)nworkers * e->read_slots * e->slot_size;
-    e->wbounce_base = dma_mr_alloc(e->pd, bsz, IBV_ACCESS_LOCAL_WRITE,
-                                   &e->wbounce_mr, &e->wbounce_coherent);
-    if (!e->wbounce_mr) {
-        fprintf(stderr, "extstore: reg_mr(worker bounce %zuB) failed: %s\n",
-                bsz, strerror(errno));
-        return -1;
-    }
-
-    /* pac은 post부터 CQE까지 슬롯을 쥐므로 워커당 window만큼 필요하고,
-     * 큐에 쌓인(아직 post 전) 쓰기도 쥔다 — 그 수는 storage.c가
-     * extstore_set_staging_need로 알려준다. 상한으로 고정하면 batch가 작아도
-     * DMA 등록이 커져 SWIOTLB 파편화 시 reg_mr이 EIO로 죽는다. */
+    /* bounce·staging 은 **워커마다 따로** 등록한다. coherent MR 은 물리 연속을
+     * 요구하고 게스트 커널의 버디 상한(MAX_ORDER = 4 MB, /proc/buddyinfo 11칸)이
+     * 단발 할당을 묶는다 — 전 워커 몫을 MR 하나로 잡으면 워커 수만큼 곱해져
+     * mcT=30·slot=256 에서 wire 273 에 천장을 친다. 쪼개면 4 MB 가 워커당 한도가
+     * 되고 풀 총량(실측 256 MB)까지 쓸 수 있다. */
     unsigned int need = e->w_window + g_staging_need + 8;
     e->w_staging_slots = e->write_slots / nworkers;
     if (e->w_staging_slots < need) e->w_staging_slots = need;
-    size_t ssz = (size_t)nworkers * e->w_staging_slots * e->slot_size;
-    e->wstaging_base = dma_mr_alloc(e->pd, ssz, IBV_ACCESS_LOCAL_WRITE,
-                                    &e->wstaging_mr,
-                                    &e->wstaging_coherent);
-    if (!e->wstaging_mr) {
-        fprintf(stderr, "extstore: reg_mr(worker staging %zuB) failed: %s\n",
-                ssz, strerror(errno));
-        return -1;
-    }
+    size_t bsz = (size_t)e->read_slots * e->slot_size;
+    size_t ssz = (size_t)e->w_staging_slots * e->slot_size;
+    unsigned int bcoh = 0, scoh = 0;
 
     for (unsigned int i = 0; i < nworkers; i++) {
         store_worker *w = e->workers[i];
-        w->bounce_base = e->wbounce_base
-            + (size_t)i * e->read_slots * e->slot_size;
+        w->bounce_base = dma_mr_alloc(e->pd, bsz, IBV_ACCESS_LOCAL_WRITE,
+                                      &w->bounce_mr, &w->bounce_coherent, NULL);
+        if (!w->bounce_mr) {
+            fprintf(stderr, "extstore: reg_mr(worker %u bounce %zuB) failed: %s\n",
+                    i, bsz, strerror(errno));
+            return -1;
+        }
+        bcoh += w->bounce_coherent;
         w->bounce_slots = e->read_slots;
         w->bounce_free = bm_new(w->bounce_slots, &w->bounce_words);
+
+        w->staging_base = dma_mr_alloc(e->pd, ssz, IBV_ACCESS_LOCAL_WRITE,
+                                       &w->staging_mr, &w->staging_coherent, NULL);
+        if (!w->staging_mr) {
+            fprintf(stderr, "extstore: reg_mr(worker %u staging %zuB) failed: %s\n",
+                    i, ssz, strerror(errno));
+            return -1;
+        }
+        scoh += w->staging_coherent;
         w->staging_slots = e->w_staging_slots;
-        w->staging_base = e->wstaging_base
-            + (size_t)i * e->w_staging_slots * e->slot_size;
         w->staging_free = bm_new(w->staging_slots, &w->staging_words);
         if (!w->bounce_free || !w->staging_free) return -1;
     }
+    /* 무장 게이트가 "coherent MR" 2줄을 센다 — 워커마다 찍지 않고 여기서 묶는다. */
+    fprintf(stderr, "extstore: coherent MR %zuB x %u workers = %.2f MB (bounce, %u/%u coherent)\n",
+            bsz, nworkers, (double)bsz * nworkers / 1048576.0, bcoh, nworkers);
+    fprintf(stderr, "extstore: coherent MR %zuB x %u workers = %.2f MB (staging, %u/%u coherent)\n",
+            ssz, nworkers, (double)ssz * nworkers / 1048576.0, scoh, nworkers);
 
     if (getenv("EXT_SELFTEST") && selftest(e, e->workers[0]) != 0)
         return -1;
@@ -849,7 +855,7 @@ static void worker_post(store_worker *w, obj_io *chain) {
             io->buf = w->bounce_base + (size_t)slot * e->slot_size;
             io->wqp = qi;
             sg[n] = (struct ibv_sge){ .addr = (uintptr_t)io->buf, .length = io->len,
-                .lkey = e->wbounce_mr->lkey };
+                .lkey = w->bounce_mr->lkey };
             wrs[n] = (struct ibv_send_wr){ .wr_id = (uintptr_t)io, .sg_list = &sg[n],
                 .num_sge = 1, .send_flags = IBV_SEND_SIGNALED,
                 .opcode = IBV_WR_RDMA_READ };
@@ -930,7 +936,7 @@ int extstore_worker_sync_for_device(void *worker, obj_io *const *ios,
                                     unsigned int n) {
     store_worker *w = worker;
     store_engine *e = w->e;
-    if (g_skip_dma_sync || e->wstaging_coherent || n == 0) return 0;
+    if (g_skip_dma_sync || w->staging_coherent || n == 0) return 0;
     uint64_t t_sync_start = g_prof_on ? prof_rdtsc() : 0;
     int adv = 0;
     while (n > 0) {
@@ -938,7 +944,7 @@ int extstore_worker_sync_for_device(void *worker, obj_io *const *ios,
         unsigned int c = n > 64 ? 64 : n;
         for (unsigned int i = 0; i < c; i++)
             sg[i] = (struct ibv_sge){ .addr = (uintptr_t)ios[i]->buf,
-                .length = ios[i]->len, .lkey = e->wstaging_mr->lkey };
+                .length = ios[i]->len, .lkey = w->staging_mr->lkey };
         int r = ibv_advise_mr(e->pd, IBV_ADVISE_MR_ADVICE_SYNC_FOR_DEVICE,
                               IBV_ADVISE_MR_FLAG_FLUSH, sg, c);
         if (r) adv = r;
@@ -960,13 +966,13 @@ static int worker_post_write_inner(store_worker *w, obj_io *io, int do_sync) {
     if (w->outstanding >= w->window) return EAGAIN;
     unsigned int qi = w->rr % w->nqp;
     struct ibv_sge sg = { .addr = (uintptr_t)io->buf, .length = io->len,
-        .lkey = e->wstaging_mr->lkey };
+        .lkey = w->staging_mr->lkey };
     uint64_t t_sync_start = g_prof_on ? prof_rdtsc() : 0;
     if (g_prof_on && io->t_start && io->t_end >= io->t_start)
         w->prof_w_crypto_ns += (uint64_t)((io->t_end - io->t_start) * g_ns_per_cycle);
     if (do_sync) {
         /* push the sealed bytes to the device before the NIC reads them */
-        int adv = (g_skip_dma_sync || e->wstaging_coherent) ? 0
+        int adv = (g_skip_dma_sync || w->staging_coherent) ? 0
                 : ibv_advise_mr(e->pd, IBV_ADVISE_MR_ADVICE_SYNC_FOR_DEVICE,
                                 IBV_ADVISE_MR_FLAG_FLUSH, &sg, 1);
         static _Atomic int w_dev_warned;
@@ -1057,9 +1063,9 @@ int extstore_worker_drain(void *worker, int budget) {
         obj_io *io = (obj_io *)(uintptr_t)wc[i].wr_id;
         if (io->mode == OBJ_IO_READ && wc[i].status == IBV_WC_SUCCESS)
             sync_sg[nsync++] = (struct ibv_sge){ .addr = (uintptr_t)io->buf,
-                .length = io->len, .lkey = e->wbounce_mr->lkey };
+                .length = io->len, .lkey = w->bounce_mr->lkey };
     }
-    if (nsync && !g_skip_dma_sync && !e->wbounce_coherent) {
+    if (nsync && !g_skip_dma_sync && !w->bounce_coherent) {
         int adv = ibv_advise_mr(e->pd, IBV_ADVISE_MR_ADVICE_SYNC_FOR_CPU,
                                 IBV_ADVISE_MR_FLAG_FLUSH, sync_sg, nsync);
         static _Atomic int w_advise_warned;

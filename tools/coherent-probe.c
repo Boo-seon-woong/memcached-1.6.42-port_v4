@@ -57,6 +57,20 @@ int main(void) {
     printf("누적 총량   %.2f MB  (조각 %d개)\n", total / 1048576.0, h);
     for (int i = 0; i < h; i++) ibv_dereg_mr(held[i]);
 
+    /* ③ 개수 상한인가 크기 상한인가 — 작은 조각을 많이 잡아 본다.
+     * 워커별 MR 설계는 mcT×2 개(30워커면 60개)를 쓰므로 이게 결정적이다. */
+    enum { MANY = 4096 };
+    static struct ibv_mr *small[MANY];
+    int sn = 0; size_t sc = 64u << 10, stot = 0;
+    while (sn < MANY) {
+        struct ibv_mr *mr = try_alloc(sc);
+        if (!mr) break;
+        small[sn++] = mr; stot += sc;
+    }
+    printf("64KB 조각   %d개 성공 (%.2f MB) — %s\n", sn, stot / 1048576.0,
+           sn >= 1000 ? "개수 상한 아님" : "개수 상한일 수 있음");
+    for (int i = 0; i < sn; i++) ibv_dereg_mr(small[i]);
+
     /* 이 침대의 실험 규칙으로 환산 */
     printf("\nslot=256B · mcT=30 기준 (bounce 2×wire + staging wire+9 슬롯)\n");
     printf("  단발 최대로 본 bounce 상한 wire = %.0f  → 총 in-flight %.0f\n",

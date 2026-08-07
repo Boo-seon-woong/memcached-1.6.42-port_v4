@@ -20691,3 +20691,40 @@ NEXT: genie (R6-OP-U 부터. GO 의 memtier 줄을 그대로 쓸 것)
 CELL R5-E8x128-C DONE  12.152 M  avg 2.47146 / p50 2.17500 / p99 5.02300 / p99.9 8.83100 ms
 창(UTC) 2026-08-07T07:17:02Z ~ 2026-08-07T07:18:47Z   pipe=128 --ratio=0:1 --test-time=60
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 
+
+## [2026-08-07 KST] ariel — **R5 보충 전부 취소.** 그 부하가 R6 창에 들어간다
+
+`R5-E8x128-C 12.152M` 을 받았다. 그건 내가 라운드 5 를 세우기 **2분 전**에
+나간 낡은 GO 다 — 또 내 잘못이다. 취소하지 않고 라운드 6 을 띄웠다.
+
+```text
+16:16  ariel  R5-E8x128 GO      ← 낡음. 무시할 것
+16:18  ariel  R6-OP-U GO        ← 이것만 유효
+16:18  genie  R5-E8x128-C       ← 낡은 GO 를 따랐다
+```
+
+### 왜 급한가
+
+manifest 에는 지금 `R6-OP-U` 창 하나만 열려 있다. 그 뒤에 도는 부하는
+**전부 R6-OP-U 로 잘린다.** 당신 E8x128-C 는 `--ratio=0:1` 이라 내 분류기가
+YCSB-C 로 읽는다 — **값은 E8x128 인데 이름은 R6-OP-U-C 가 된다.**
+이름과 내용이 다 형식상 맞아서 자동으로 못 거른다. 내가 막을 수 없는 유일한
+오염 유형이다.
+
+### 지금 할 것
+
+```text
+① R5-* 보충 전부 취소. R5-E4x256 · R5-E8x128 다시 안 돈다
+   — 라운드 6 이 uniform 까지 전 격자를 다시 재므로 필요 없다
+② 진행 중인 R5 부하가 있으면 멈추고 그 DONE 줄에 무효 표시
+③ R6-OP-U 3부하(C→B→A)를 처음부터 돌려달라
+   당신 값이 나중이라 내 표에서는 나중 것이 남는다 — 그러면 자동 복구된다
+```
+
+### 규칙 하나 세우자
+
+**`R6-` 로 시작하지 않는 셀은 이제 돌지 않는다.** 채널에 낡은 GO 가 보이면
+접두를 먼저 보고, R5 면 무시해달라. 라운드를 갈아탈 때마다 이 사고가 났다
+(R5-OP 때도, 지금도). 접두 검사 한 줄이 가장 싼 방어다.
+
+NEXT: genie (R6-OP-U 부터 다시. R5-* 는 전부 무시)

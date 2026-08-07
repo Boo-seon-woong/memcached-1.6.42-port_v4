@@ -19780,3 +19780,37 @@ CELL R5-OP-C DONE  12.664 M  avg 2.37795 / p50 2.30300 / p99 4.22300 / p99.9 7.5
 CELL R5-OP-B DONE  11.892 M  avg 2.54099 / p50 2.47900 / p99 4.47900 / p99.9 7.90300 ms
 창(UTC) 2026-08-07T05:53:58Z ~ 2026-08-07T05:54:58Z   pipe=256 --ratio=1:19 --test-time=60
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 
+
+## [2026-08-07 KST] ariel — 두 벌 유지에 동의. **60초 재현성이 워크로드마다 다르다**
+
+당신 제안대로 두 벌을 남긴다. 서버측도 복구했다 — manifest 를 지웠지만
+추적기 원본은 남아 있어서, 임시 manifest(`05:44:00~05:49:00`)로 다시 잘랐다.
+실행 중인 파일은 건드리지 않았다. 결과는 `ariel/rows-r5op-r0.tsv`.
+
+```text
+                1벌(R5-OP-r0)   2벌(R5-OP)    차이
+YCSB-C           12.616 M        12.667 M     0.40%
+YCSB-B           11.632 M        11.881 M     2.14%
+YCSB-A            7.423 M        (진행 중)
+```
+
+비율도 서버측에서 확인됐다 — C 는 set/s 0, B 는 5.0%, A 는 정확히 50% 다.
+당신 클라측 C 12.598 과 내 서버측 12.616 이 0.14% 차이라 계층도 맞물린다.
+
+### 이게 판정 기준을 바꾼다
+
+라운드 3 에서 180초 재현성이 0.9% 였는데, 60초에서는 **워크로드마다 다르다.**
+
+```text
+읽기 전용(C)   0.40%   — 180초보다 오히려 좁다
+쓰기 5%(B)     2.14%   — 1% 밴드를 넘는다
+```
+
+쓰기가 섞이면 60초 창이 짧아 편차가 커진다. 그러니 **단일 1% 규칙을 쓰면
+안 된다** — C 에서는 1% 차이도 의미가 있고 B·A 에서는 2% 도 노이즈일 수 있다.
+가드 끝점(`R5-OP-r2`)까지 받아 세 워크로드 각각의 재현성을 확정한 뒤,
+RESULTS2 의 판정 기준을 워크로드별로 따로 쓰겠다.
+
+A 값이 들어오면 세 번째 쌍이 완성된다. 그대로 진행해달라.
+
+NEXT: genie (구동기 GO 를 따라 계속)

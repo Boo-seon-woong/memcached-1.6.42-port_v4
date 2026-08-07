@@ -1,0 +1,835 @@
+Writing results to stdout
+[RUN #1] Preparing benchmark client...
+[RUN #1] Launching threads now...
+[RUN #1 2%,   1 secs] 30 threads  8 conns:     8929078 ops, 8912171 (avg: 8912171) ops/sec, 899.04MB/sec (avg: 899.04MB/sec),  3.34 (avg:  3.34) msec latency
+warning: high CPU on thread 4: 95.1% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 11: 95.1% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 17: 95.1% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 23: 96.0% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 26: 95.3% of a core (threshold 95.0%) - results may be unreliable
+[RUN #1 3%,   2 secs] 30 threads  8 conns:    20524808 ops, 11591754 (avg: 10250922) ops/sec, 1.14GB/sec (avg: 1.01GB/sec),  2.60 (avg:  2.92) msec latency[RUN #1 5%,   3 secs] 30 threads  8 conns:    32227033 ops, 11698715 (avg: 10733256) ops/sec, 1.15GB/sec (avg: 1.06GB/sec),  2.58 (avg:  2.80) msec latency[RUN #1 7%,   4 secs] 30 threads  8 conns:    43411522 ops, 11182353 (avg: 10845475) ops/sec, 1.10GB/sec (avg: 1.07GB/sec),  2.70 (avg:  2.77) msec latency[RUN #1 8%,   5 secs] 30 threads  8 conns:    54950742 ops, 11536958 (avg: 10983718) ops/sec, 1.14GB/sec (avg: 1.08GB/sec),  2.62 (avg:  2.74) msec latency[RUN #1 10%,   6 secs] 30 threads  8 conns:    66647109 ops, 11692286 (avg: 11101789) ops/sec, 1.15GB/sec (avg: 1.09GB/sec),  2.58 (avg:  2.71) msec latency[RUN #1 12%,   7 secs] 30 threads  8 conns:    78436178 ops, 11784967 (avg: 11199370) ops/sec, 1.16GB/sec (avg: 1.10GB/sec),  2.56 (avg:  2.69) msec latency[RUN #1 13%,   8 secs] 30 threads  8 conns:    90164793 ops, 11726269 (avg: 11265214) ops/sec, 1.16GB/sec (avg: 1.11GB/sec),  2.58 (avg:  2.68) msec latency[RUN #1 15%,   9 secs] 30 threads  8 conns:   101893614 ops, 11726839 (avg: 11316491) ops/sec, 1.16GB/sec (avg: 1.11GB/sec),  2.58 (avg:  2.66) msec latency[RUN #1 17%,  10 secs] 30 threads  8 conns:   112974175 ops, 11078223 (avg: 11292670) ops/sec, 1.09GB/sec (avg: 1.11GB/sec),  2.73 (avg:  2.67) msec latency[RUN #1 18%,  11 secs] 30 threads  8 conns:   124374651 ops, 11397694 (avg: 11302216) ops/sec, 1.12GB/sec (avg: 1.11GB/sec),  2.65 (avg:  2.67) msec latency[RUN #1 20%,  12 secs] 30 threads  8 conns:   136017594 ops, 11640649 (avg: 11330413) ops/sec, 1.15GB/sec (avg: 1.12GB/sec),  2.59 (avg:  2.66) msec latency[RUN #1 22%,  13 secs] 30 threads  8 conns:   147705323 ops, 11685707 (avg: 11357738) ops/sec, 1.15GB/sec (avg: 1.12GB/sec),  2.58 (avg:  2.66) msec latency[RUN #1 23%,  14 secs] 30 threads  8 conns:   159420978 ops, 11713640 (avg: 11383155) ops/sec, 1.15GB/sec (avg: 1.12GB/sec),  2.58 (avg:  2.65) msec latency[RUN #1 25%,  15 secs] 30 threads  8 conns:   171146740 ops, 11723253 (avg: 11405825) ops/sec, 1.15GB/sec (avg: 1.12GB/sec),  2.58 (avg:  2.65) msec latency[RUN #1 27%,  16 secs] 30 threads  8 conns:   182337647 ops, 11186801 (avg: 11392136) ops/sec, 1.10GB/sec (avg: 1.12GB/sec),  2.70 (avg:  2.65) msec latency[RUN #1 28%,  17 secs] 30 threads  8 conns:   193795409 ops, 11454062 (avg: 11395778) ops/sec, 1.13GB/sec (avg: 1.12GB/sec),  2.64 (avg:  2.65) msec latency[RUN #1 30%,  18 secs] 30 threads  8 conns:   205435633 ops, 11635476 (avg: 11409096) ops/sec, 1.15GB/sec (avg: 1.12GB/sec),  2.60 (avg:  2.65) msec latency[RUN #1 32%,  19 secs] 30 threads  8 conns:   217228246 ops, 11790467 (avg: 11429165) ops/sec, 1.16GB/sec (avg: 1.13GB/sec),  2.56 (avg:  2.64) msec latency[RUN #1 33%,  20 secs] 30 threads  8 conns:   229045442 ops, 11812022 (avg: 11448309) ops/sec, 1.16GB/sec (avg: 1.13GB/sec),  2.56 (avg:  2.64) msec latency[RUN #1 35%,  21 secs] 30 threads  8 conns:   240567272 ops, 11519710 (avg: 11451709) ops/sec, 1.13GB/sec (avg: 1.13GB/sec),  2.62 (avg:  2.64) msec latency[RUN #1 37%,  22 secs] 30 threads  8 conns:   251776334 ops, 11207156 (avg: 11440595) ops/sec, 1.10GB/sec (avg: 1.13GB/sec),  2.70 (avg:  2.64) msec latency[RUN #1 38%,  23 secs] 30 threads  8 conns:   263232089 ops, 11453853 (avg: 11441171) ops/sec, 1.13GB/sec (avg: 1.13GB/sec),  2.64 (avg:  2.64) msec latency[RUN #1 40%,  24 secs] 30 threads  8 conns:   274909087 ops, 11674476 (avg: 11450891) ops/sec, 1.15GB/sec (avg: 1.13GB/sec),  2.59 (avg:  2.64) msec latency[RUN #1 42%,  25 secs] 30 threads  8 conns:   286596443 ops, 11682612 (avg: 11460161) ops/sec, 1.15GB/sec (avg: 1.13GB/sec),  2.59 (avg:  2.63) msec latency[RUN #1 43%,  26 secs] 30 threads  8 conns:   298155732 ops, 11554828 (avg: 11463802) ops/sec, 1.14GB/sec (avg: 1.13GB/sec),  2.61 (avg:  2.63) msec latency[RUN #1 45%,  27 secs] 30 threads  8 conns:   309781063 ops, 11619637 (avg: 11469574) ops/sec, 1.14GB/sec (avg: 1.13GB/sec),  2.60 (avg:  2.63) msec latency[RUN #1 47%,  28 secs] 30 threads  8 conns:   320801374 ops, 11018327 (avg: 11453461) ops/sec, 1.09GB/sec (avg: 1.13GB/sec),  2.74 (avg:  2.64) msec latency[RUN #1 48%,  29 secs] 30 threads  8 conns:   332136241 ops, 11332033 (avg: 11449274) ops/sec, 1.12GB/sec (avg: 1.13GB/sec),  2.67 (avg:  2.64) msec latency[RUN #1 50%,  30 secs] 30 threads  8 conns:   343749490 ops, 11608814 (avg: 11454592) ops/sec, 1.14GB/sec (avg: 1.13GB/sec),  2.60 (avg:  2.64) msec latency[RUN #1 52%,  31 secs] 30 threads  8 conns:   355255057 ops, 11503519 (avg: 11456170) ops/sec, 1.13GB/sec (avg: 1.13GB/sec),  2.63 (avg:  2.64) msec latency[RUN #1 53%,  32 secs] 30 threads  8 conns:   367081648 ops, 11824226 (avg: 11467671) ops/sec, 1.16GB/sec (avg: 1.13GB/sec),  2.55 (avg:  2.63) msec latency[RUN #1 55%,  33 secs] 30 threads  8 conns:   378800564 ops, 11714558 (avg: 11475153) ops/sec, 1.15GB/sec (avg: 1.13GB/sec),  2.58 (avg:  2.63) msec latency[RUN #1 57%,  34 secs] 30 threads  8 conns:   390001488 ops, 11198796 (avg: 11467025) ops/sec, 1.10GB/sec (avg: 1.13GB/sec),  2.70 (avg:  2.63) msec latency[RUN #1 58%,  35 secs] 30 threads  8 conns:   401439289 ops, 11435834 (avg: 11466134) ops/sec, 1.13GB/sec (avg: 1.13GB/sec),  2.64 (avg:  2.63) msec latency[RUN #1 60%,  36 secs] 30 threads  8 conns:   413238767 ops, 11797354 (avg: 11475334) ops/sec, 1.16GB/sec (avg: 1.13GB/sec),  2.56 (avg:  2.63) msec latency[RUN #1 62%,  37 secs] 30 threads  8 conns:   424961088 ops, 11720258 (avg: 11481952) ops/sec, 1.15GB/sec (avg: 1.13GB/sec),  2.58 (avg:  2.63) msec latency[RUN #1 63%,  38 secs] 30 threads  8 conns:   436743210 ops, 11780001 (avg: 11489795) ops/sec, 1.16GB/sec (avg: 1.13GB/sec),  2.56 (avg:  2.63) msec latency[RUN #1 65%,  39 secs] 30 threads  8 conns:   448514313 ops, 11769361 (avg: 11496962) ops/sec, 1.16GB/sec (avg: 1.13GB/sec),  2.57 (avg:  2.63) msec latency[RUN #1 67%,  40 secs] 30 threads  8 conns:   459547441 ops, 11031142 (avg: 11485318) ops/sec, 1.09GB/sec (avg: 1.13GB/sec),  2.74 (avg:  2.63) msec latencyConnection error: Connection reset by peer
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 29 finished due to connection failures, requesting restart.
+Connection error: Connection reset by peer
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 28 finished due to connection failures, requesting restart.
+Connection error: Connection reset by peer
+Connection error: Connection reset by peer
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 26 finished due to connection failures, requesting restart.
+Thread 27 finished due to connection failures, requesting restart.
+Connection error: Connection reset by peer
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 25 finished due to connection failures, requesting restart.
+Connection error: Connection reset by peer
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 24 finished due to connection failures, requesting restart.
+Connection error: Connection reset by peer
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 23 finished due to connection failures, requesting restart.
+Connection error: Connection reset by peer
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Connection error: Connection reset by peer
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 20 finished due to connection failures, requesting restart.
+Thread 22 finished due to connection failures, requesting restart.
+Connection error: Connection reset by peer
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 21 finished due to connection failures, requesting restart.
+Connection error: Connection reset by peer
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Connection error: Connection reset by peer
+Thread 18 finished due to connection failures, requesting restart.
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Connection error: Connection reset by peer
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Connection error: Connection reset by peer
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 19 finished due to connection failures, requesting restart.
+Thread 17 finished due to connection failures, requesting restart.
+Thread 16 finished due to connection failures, requesting restart.
+Connection error: Connection reset by peer
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 14 finished due to connection failures, requesting restart.
+Connection error: Connection reset by peer
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 15 finished due to connection failures, requesting restart.
+Connection error: Connection reset by peer
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 13 finished due to connection failures, requesting restart.
+Connection error: Connection reset by peer
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 12 finished due to connection failures, requesting restart.
+Connection error: Connection reset by peer
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 11 finished due to connection failures, requesting restart.
+Connection error: Connection reset by peer
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 9 finished due to connection failures, requesting restart.
+Connection error: Connection reset by peer
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 8 finished due to connection failures, requesting restart.
+Connection error: Connection reset by peer
+Connection error: Connection reset by peer
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 6 finished due to connection failures, requesting restart.
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Connection error: Connection reset by peer
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 7 finished due to connection failures, requesting restart.
+Thread 10 finished due to connection failures, requesting restart.
+Connection error: Connection reset by peer
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 5 finished due to connection failures, requesting restart.
+Connection error: Connection reset by peer
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 3 finished due to connection failures, requesting restart.
+Connection error: Connection reset by peer
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 4 finished due to connection failures, requesting restart.
+Connection error: Connection reset by peer
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Connection error: Connection reset by peer
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 2 finished due to connection failures, requesting restart.
+Thread 0 finished due to connection failures, requesting restart.
+Connection error: Connection reset by peer
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 1 finished due to connection failures, requesting restart.
+Restarting thread 0 (restart #1)...
+Thread 0 restarted successfully.
+Restarting thread 1 (restart #1)...
+Connection error: Connection refused
+Thread 1 restarted successfully.
+Restarting thread 2 (restart #1)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 0 finished due to connection failures, requesting restart.
+Thread 2 restarted successfully.
+Restarting thread 3 (restart #1)...
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 1 finished due to connection failures, requesting restart.
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 2 finished due to connection failures, requesting restart.
+Thread 3 restarted successfully.
+Restarting thread 4 (restart #1)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 3 finished due to connection failures, requesting restart.
+Thread 4 restarted successfully.
+Restarting thread 5 (restart #1)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 4 finished due to connection failures, requesting restart.
+Thread 5 restarted successfully.
+Restarting thread 6 (restart #1)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 5 finished due to connection failures, requesting restart.
+Thread 6 restarted successfully.
+Restarting thread 7 (restart #1)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 6 finished due to connection failures, requesting restart.
+Thread 7 restarted successfully.
+Restarting thread 8 (restart #1)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 7 finished due to connection failures, requesting restart.
+Thread 8 restarted successfully.
+Restarting thread 9 (restart #1)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 8 finished due to connection failures, requesting restart.
+Thread 9 restarted successfully.
+Restarting thread 10 (restart #1)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 9 finished due to connection failures, requesting restart.
+Thread 10 restarted successfully.
+Restarting thread 11 (restart #1)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 10 finished due to connection failures, requesting restart.
+Thread 11 restarted successfully.
+Restarting thread 12 (restart #1)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 11 finished due to connection failures, requesting restart.
+Thread 12 restarted successfully.
+Restarting thread 13 (restart #1)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 12 finished due to connection failures, requesting restart.
+Thread 13 restarted successfully.
+Restarting thread 14 (restart #1)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 13 finished due to connection failures, requesting restart.
+Thread 14 restarted successfully.
+Restarting thread 15 (restart #1)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 14 finished due to connection failures, requesting restart.
+Thread 15 restarted successfully.
+Restarting thread 16 (restart #1)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 15 finished due to connection failures, requesting restart.
+Thread 16 restarted successfully.
+Restarting thread 17 (restart #1)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 16 finished due to connection failures, requesting restart.
+Thread 17 restarted successfully.
+Restarting thread 18 (restart #1)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 17 finished due to connection failures, requesting restart.
+Thread 18 restarted successfully.
+Restarting thread 19 (restart #1)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 18 finished due to connection failures, requesting restart.
+Thread 19 restarted successfully.
+Restarting thread 20 (restart #1)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 19 finished due to connection failures, requesting restart.
+Thread 20 restarted successfully.
+Restarting thread 21 (restart #1)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 20 finished due to connection failures, requesting restart.
+Thread 21 restarted successfully.
+Restarting thread 22 (restart #1)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 21 finished due to connection failures, requesting restart.
+Thread 22 restarted successfully.
+Restarting thread 23 (restart #1)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 22 finished due to connection failures, requesting restart.
+Thread 23 restarted successfully.
+Restarting thread 24 (restart #1)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 23 finished due to connection failures, requesting restart.
+Thread 24 restarted successfully.
+Restarting thread 25 (restart #1)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 24 finished due to connection failures, requesting restart.
+Thread 25 restarted successfully.
+Restarting thread 26 (restart #1)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 25 finished due to connection failures, requesting restart.
+Thread 26 restarted successfully.
+Restarting thread 27 (restart #1)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 26 finished due to connection failures, requesting restart.
+Thread 27 restarted successfully.
+Restarting thread 28 (restart #1)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 27 finished due to connection failures, requesting restart.
+Thread 28 restarted successfully.
+Restarting thread 29 (restart #1)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 28 finished due to connection failures, requesting restart.
+Thread 29 restarted successfully.
+[RUN #1 0%,   0 secs] 30 threads  8 conns:           0 ops,  999999 (avg:       0) ops/sec, 976.56KB/sec (avg: 0.00KB/sec), -0.00 (avg:  0.00) msec latencyConnection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 29 finished due to connection failures, requesting restart.
+Restarting thread 0 (restart #2)...
+Thread 0 restarted successfully.
+Restarting thread 1 (restart #2)...
+Connection error: Connection refused
+Thread 1 restarted successfully.
+Restarting thread 2 (restart #2)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 0 finished due to connection failures, requesting restart.
+Thread 2 restarted successfully.
+Restarting thread 3 (restart #2)...
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 1 finished due to connection failures, requesting restart.
+Connection error: Connection refused
+Thread 3 restarted successfully.
+Restarting thread 4 (restart #2)...
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 2 finished due to connection failures, requesting restart.
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 3 finished due to connection failures, requesting restart.
+Thread 4 restarted successfully.
+Restarting thread 5 (restart #2)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 4 finished due to connection failures, requesting restart.
+Thread 5 restarted successfully.
+Restarting thread 6 (restart #2)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 5 finished due to connection failures, requesting restart.
+Thread 6 restarted successfully.
+Restarting thread 7 (restart #2)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 6 finished due to connection failures, requesting restart.
+Thread 7 restarted successfully.
+Restarting thread 8 (restart #2)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 7 finished due to connection failures, requesting restart.
+Thread 8 restarted successfully.
+Restarting thread 9 (restart #2)...
+Connection error: Connection refused
+Thread 9 restarted successfully.
+Restarting thread 10 (restart #2)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 8 finished due to connection failures, requesting restart.
+Thread 10 restarted successfully.
+Restarting thread 11 (restart #2)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 9 finished due to connection failures, requesting restart.
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 10 finished due to connection failures, requesting restart.
+Thread 11 restarted successfully.
+Restarting thread 12 (restart #2)...
+Connection error: Connection refused
+Thread 12 restarted successfully.
+Restarting thread 13 (restart #2)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 11 finished due to connection failures, requesting restart.
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 12 finished due to connection failures, requesting restart.
+Thread 13 restarted successfully.
+Restarting thread 14 (restart #2)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 13 finished due to connection failures, requesting restart.
+Thread 14 restarted successfully.
+Restarting thread 15 (restart #2)...
+Connection error: Connection refused
+Thread 15 restarted successfully.
+Restarting thread 16 (restart #2)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 14 finished due to connection failures, requesting restart.
+Thread 16 restarted successfully.
+Restarting thread 17 (restart #2)...
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 15 finished due to connection failures, requesting restart.
+Connection error: Connection refused
+Thread 17 restarted successfully.
+Restarting thread 18 (restart #2)...
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 16 finished due to connection failures, requesting restart.
+Connection error: Connection refused
+Thread 18 restarted successfully.
+Restarting thread 19 (restart #2)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 17 finished due to connection failures, requesting restart.
+Thread 19 restarted successfully.
+Restarting thread 20 (restart #2)...
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 18 finished due to connection failures, requesting restart.
+Connection error: Connection refused
+Thread 20 restarted successfully.
+Restarting thread 21 (restart #2)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 19 finished due to connection failures, requesting restart.
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 20 finished due to connection failures, requesting restart.
+Thread 21 restarted successfully.
+Restarting thread 22 (restart #2)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 21 finished due to connection failures, requesting restart.
+Thread 22 restarted successfully.
+Restarting thread 23 (restart #2)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 22 finished due to connection failures, requesting restart.
+Thread 23 restarted successfully.
+Restarting thread 24 (restart #2)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 23 finished due to connection failures, requesting restart.
+Thread 24 restarted successfully.
+Restarting thread 25 (restart #2)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 24 finished due to connection failures, requesting restart.
+Thread 25 restarted successfully.
+Restarting thread 26 (restart #2)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 25 finished due to connection failures, requesting restart.
+Thread 26 restarted successfully.
+Restarting thread 27 (restart #2)...
+Connection error: Connection refused
+Thread 27 restarted successfully.
+Restarting thread 28 (restart #2)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 26 finished due to connection failures, requesting restart.
+Thread 28 restarted successfully.
+Restarting thread 29 (restart #2)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 27 finished due to connection failures, requesting restart.
+Thread 29 restarted successfully.
+[RUN #1 0%,   0 secs] 30 threads  8 conns:           0 ops,  999999 (avg:       0) ops/sec, 976.56KB/sec (avg: 0.00KB/sec), -0.00 (avg:  0.00) msec latencyMaximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Connection error: Connection refused
+Thread 28 finished due to connection failures, requesting restart.
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 29 finished due to connection failures, requesting restart.
+Restarting thread 0 (restart #3)...
+Thread 0 restarted successfully.
+Restarting thread 1 (restart #3)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 0 finished due to connection failures, requesting restart.
+Thread 1 restarted successfully.
+Restarting thread 2 (restart #3)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 1 finished due to connection failures, requesting restart.
+Thread 2 restarted successfully.
+Restarting thread 3 (restart #3)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 2 finished due to connection failures, requesting restart.
+Thread 3 restarted successfully.
+Restarting thread 4 (restart #3)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 3 finished due to connection failures, requesting restart.
+Thread 4 restarted successfully.
+Restarting thread 5 (restart #3)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 4 finished due to connection failures, requesting restart.
+Thread 5 restarted successfully.
+Restarting thread 6 (restart #3)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 5 finished due to connection failures, requesting restart.
+Thread 6 restarted successfully.
+Restarting thread 7 (restart #3)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 6 finished due to connection failures, requesting restart.
+Thread 7 restarted successfully.
+Restarting thread 8 (restart #3)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 8 restarted successfully.
+Restarting thread 9 (restart #3)...
+Thread 7 finished due to connection failures, requesting restart.
+Connection error: Connection refused
+Thread 9 restarted successfully.
+Restarting thread 10 (restart #3)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 8 finished due to connection failures, requesting restart.
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 9 finished due to connection failures, requesting restart.
+Thread 10 restarted successfully.
+Restarting thread 11 (restart #3)...
+Connection error: Connection refused
+Thread 11 restarted successfully.
+Restarting thread 12 (restart #3)...
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 10 finished due to connection failures, requesting restart.
+Connection error: Connection refused
+Thread 12 restarted successfully.
+Restarting thread 13 (restart #3)...
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 11 finished due to connection failures, requesting restart.
+Connection error: Connection refused
+Thread 13 restarted successfully.
+Restarting thread 14 (restart #3)...
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 12 finished due to connection failures, requesting restart.
+Connection error: Connection refused
+Thread 14 restarted successfully.
+Restarting thread 15 (restart #3)...
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 13 finished due to connection failures, requesting restart.
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 14 finished due to connection failures, requesting restart.
+Thread 15 restarted successfully.
+Restarting thread 16 (restart #3)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 15 finished due to connection failures, requesting restart.
+Thread 16 restarted successfully.
+Restarting thread 17 (restart #3)...
+Connection error: Connection refused
+Thread 17 restarted successfully.
+Restarting thread 18 (restart #3)...
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 16 finished due to connection failures, requesting restart.
+Connection error: Connection refused
+Thread 18 restarted successfully.
+Restarting thread 19 (restart #3)...
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 17 finished due to connection failures, requesting restart.
+Connection error: Connection refused
+Thread 19 restarted successfully.
+Restarting thread 20 (restart #3)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 18 finished due to connection failures, requesting restart.
+Thread 20 restarted successfully.
+Restarting thread 21 (restart #3)...
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 19 finished due to connection failures, requesting restart.
+Connection error: Connection refused
+Thread 21 restarted successfully.
+Restarting thread 22 (restart #3)...
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 20 finished due to connection failures, requesting restart.
+Connection error: Connection refused
+Thread 22 restarted successfully.
+Restarting thread 23 (restart #3)...
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 21 finished due to connection failures, requesting restart.
+Connection error: Connection refused
+Thread 23 restarted successfully.
+Restarting thread 24 (restart #3)...
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 22 finished due to connection failures, requesting restart.
+Connection error: Connection refused
+Thread 24 restarted successfully.
+Restarting thread 25 (restart #3)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 23 finished due to connection failures, requesting restart.
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 24 finished due to connection failures, requesting restart.
+Thread 25 restarted successfully.
+Restarting thread 26 (restart #3)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 25 finished due to connection failures, requesting restart.
+Thread 26 restarted successfully.
+Restarting thread 27 (restart #3)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 26 finished due to connection failures, requesting restart.
+Thread 27 restarted successfully.
+Restarting thread 28 (restart #3)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 27 finished due to connection failures, requesting restart.
+Thread 28 restarted successfully.
+Restarting thread 29 (restart #3)...
+Connection error: Connection refused
+Thread 29 restarted successfully.
+[RUN #1 0%,   0 secs] 30 threads  8 conns:           0 ops,  999999 (avg:       0) ops/sec, 976.56KB/sec (avg: 0.00KB/sec), -0.00 (avg:  0.00) msec latencyConnection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 28 finished due to connection failures, requesting restart.
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 29 finished due to connection failures, requesting restart.
+Restarting thread 0 (restart #4)...
+Thread 0 restarted successfully.
+Restarting thread 1 (restart #4)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 0 finished due to connection failures, requesting restart.
+Thread 1 restarted successfully.
+Restarting thread 2 (restart #4)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 1 finished due to connection failures, requesting restart.
+Thread 2 restarted successfully.
+Restarting thread 3 (restart #4)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 2 finished due to connection failures, requesting restart.
+Thread 3 restarted successfully.
+Restarting thread 4 (restart #4)...
+Connection error: Connection refused
+Thread 4 restarted successfully.
+Restarting thread 5 (restart #4)...
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 3 finished due to connection failures, requesting restart.
+Connection error: Connection refused
+Thread 5 restarted successfully.
+Restarting thread 6 (restart #4)...
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 4 finished due to connection failures, requesting restart.
+Connection error: Connection refused
+Thread 6 restarted successfully.
+Restarting thread 7 (restart #4)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 5 finished due to connection failures, requesting restart.
+Thread 7 restarted successfully.
+Restarting thread 8 (restart #4)...
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 6 finished due to connection failures, requesting restart.
+Connection error: Connection refused
+Thread 8 restarted successfully.
+Restarting thread 9 (restart #4)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 7 finished due to connection failures, requesting restart.
+Thread 9 restarted successfully.
+Restarting thread 10 (restart #4)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 8 finished due to connection failures, requesting restart.
+Thread 10 restarted successfully.
+Restarting thread 11 (restart #4)...
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 9 finished due to connection failures, requesting restart.
+Connection error: Connection refused
+Thread 11 restarted successfully.
+Restarting thread 12 (restart #4)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 10 finished due to connection failures, requesting restart.
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 11 finished due to connection failures, requesting restart.
+Thread 12 restarted successfully.
+Restarting thread 13 (restart #4)...
+Connection error: Connection refused
+Thread 13 restarted successfully.
+Restarting thread 14 (restart #4)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 12 finished due to connection failures, requesting restart.
+Thread 14 restarted successfully.
+Restarting thread 15 (restart #4)...
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 13 finished due to connection failures, requesting restart.
+Connection error: Connection refused
+Thread 15 restarted successfully.
+Restarting thread 16 (restart #4)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 14 finished due to connection failures, requesting restart.
+Thread 16 restarted successfully.
+Restarting thread 17 (restart #4)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 15 finished due to connection failures, requesting restart.
+Thread 17 restarted successfully.
+Restarting thread 18 (restart #4)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 16 finished due to connection failures, requesting restart.
+Thread 18 restarted successfully.
+Restarting thread 19 (restart #4)...
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 17 finished due to connection failures, requesting restart.
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 18 finished due to connection failures, requesting restart.
+Thread 19 restarted successfully.
+Restarting thread 20 (restart #4)...
+Connection error: Connection refused
+Thread 20 restarted successfully.
+Restarting thread 21 (restart #4)...
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 19 finished due to connection failures, requesting restart.
+Connection error: Connection refused
+Thread 21 restarted successfully.
+Restarting thread 22 (restart #4)...
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 20 finished due to connection failures, requesting restart.
+Thread 22 restarted successfully.
+Restarting thread 23 (restart #4)...
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 21 finished due to connection failures, requesting restart.
+Connection error: Connection refused
+Thread 23 restarted successfully.
+Restarting thread 24 (restart #4)...
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 22 finished due to connection failures, requesting restart.
+Connection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 23 finished due to connection failures, requesting restart.
+Thread 24 restarted successfully.
+Restarting thread 25 (restart #4)...
+Connection error: Connection refused
+Thread 25 restarted successfully.
+Restarting thread 26 (restart #4)...
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 24 finished due to connection failures, requesting restart.
+Connection error: Connection refused
+Thread 26 restarted successfully.
+Restarting thread 27 (restart #4)...
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 25 finished due to connection failures, requesting restart.
+Connection error: Connection refused
+Thread 27 restarted successfully.
+Restarting thread 28 (restart #4)...
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 26 finished due to connection failures, requesting restart.
+Connection error: Connection refused
+Thread 28 restarted successfully.
+Restarting thread 29 (restart #4)...
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 27 finished due to connection failures, requesting restart.
+Connection error: Connection refused
+Thread 29 restarted successfully.
+[RUN #1 0%,   0 secs] 30 threads  8 conns:           0 ops,  999999 (avg:       0) ops/sec, 976.56KB/sec (avg: 0.00KB/sec), -0.00 (avg:  0.00) msec latencyConnection error: Connection refused
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 28 finished due to connection failures, requesting restart.
+Maximum reconnection attempts (0) exceeded for Connection error, triggering thread restart.
+Thread 29 finished due to connection failures, requesting restart.
+Restarting thread 0 (restart #5)...
+Thread 0 restarted successfully.
+Restarting thread 1 (restart #5)...
+Thread 1 restarted successfully.
+Restarting thread 2 (restart #5)...
+Thread 2 restarted successfully.
+Restarting thread 3 (restart #5)...
+Thread 3 restarted successfully.
+Restarting thread 4 (restart #5)...
+Thread 4 restarted successfully.
+Restarting thread 5 (restart #5)...
+Thread 5 restarted successfully.
+Restarting thread 6 (restart #5)...
+Thread 6 restarted successfully.
+Restarting thread 7 (restart #5)...
+Thread 7 restarted successfully.
+Restarting thread 8 (restart #5)...
+Thread 8 restarted successfully.
+Restarting thread 9 (restart #5)...
+Thread 9 restarted successfully.
+Restarting thread 10 (restart #5)...
+Thread 10 restarted successfully.
+Restarting thread 11 (restart #5)...
+Thread 11 restarted successfully.
+Restarting thread 12 (restart #5)...
+Thread 12 restarted successfully.
+Restarting thread 13 (restart #5)...
+Thread 13 restarted successfully.
+Restarting thread 14 (restart #5)...
+Thread 14 restarted successfully.
+Restarting thread 15 (restart #5)...
+Thread 15 restarted successfully.
+Restarting thread 16 (restart #5)...
+Thread 16 restarted successfully.
+Restarting thread 17 (restart #5)...
+Thread 17 restarted successfully.
+Restarting thread 18 (restart #5)...
+Thread 18 restarted successfully.
+Restarting thread 19 (restart #5)...
+Thread 19 restarted successfully.
+Restarting thread 20 (restart #5)...
+Thread 20 restarted successfully.
+Restarting thread 21 (restart #5)...
+Thread 21 restarted successfully.
+Restarting thread 22 (restart #5)...
+Thread 22 restarted successfully.
+Restarting thread 23 (restart #5)...
+Thread 23 restarted successfully.
+Restarting thread 24 (restart #5)...
+Thread 24 restarted successfully.
+Restarting thread 25 (restart #5)...
+Thread 25 restarted successfully.
+Restarting thread 26 (restart #5)...
+Thread 26 restarted successfully.
+Restarting thread 27 (restart #5)...
+Thread 27 restarted successfully.
+Restarting thread 28 (restart #5)...
+Thread 28 restarted successfully.
+Restarting thread 29 (restart #5)...
+Thread 29 restarted successfully.
+[RUN #1 0%,   0 secs] 30 threads  8 conns:           0 ops,  999999 (avg:       0) ops/sec, 976.56KB/sec (avg: 0.00KB/sec), -0.00 (avg:  0.00) msec latency[RUN #1 2%,   1 secs] 30 threads  8 conns:    18057752 ops, 17884681 (avg: 17884681) ops/sec, 322.17MB/sec (avg: 322.17MB/sec),  1.56 (avg:  1.56) msec latency
+warning: high CPU on thread 0: 99.4% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 1: 99.6% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 2: 99.5% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 3: 99.7% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 5: 99.4% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 6: 99.6% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 7: 99.4% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 8: 99.7% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 9: 99.7% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 10: 99.4% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 12: 99.8% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 13: 99.3% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 14: 99.6% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 15: 99.7% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 16: 99.7% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 18: 99.6% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 19: 99.2% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 20: 99.4% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 21: 99.5% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 22: 99.5% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 24: 99.7% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 25: 99.7% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 27: 99.5% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 28: 99.6% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 29: 98.4% of a core (threshold 95.0%) - results may be unreliable
+[RUN #1 3%,   2 secs] 30 threads  8 conns:    36833551 ops, 18770524 (avg: 18325532) ops/sec, 338.13MB/sec (avg: 330.11MB/sec),  1.49 (avg:  1.52) msec latency[RUN #1 5%,   3 secs] 30 threads  8 conns:    55620612 ops, 18783154 (avg: 18477589) ops/sec, 338.36MB/sec (avg: 332.85MB/sec),  1.49 (avg:  1.51) msec latency[RUN #1 7%,   4 secs] 30 threads  8 conns:    74345593 ops, 18721143 (avg: 18538332) ops/sec, 337.24MB/sec (avg: 333.95MB/sec),  1.49 (avg:  1.51) msec latency[RUN #1 8%,   5 secs] 30 threads  8 conns:    88978918 ops, 14630793 (avg: 17758334) ops/sec, 334.65MB/sec (avg: 334.09MB/sec),  1.98 (avg:  1.58) msec latency[RUN #1 10%,   6 secs] 30 threads  8 conns:    96978683 ops, 7998189 (avg: 16134230) ops/sec, 539.43MB/sec (avg: 368.26MB/sec),  3.79 (avg:  1.77) msec latency[RUN #1 12%,   7 secs] 30 threads  8 conns:   106946364 ops, 9965110 (avg: 15254083) ops/sec, 995.23MB/sec (avg: 457.71MB/sec),  3.04 (avg:  1.88) msec latency[RUN #1 13%,   8 secs] 30 threads  8 conns:   118653726 ops, 11704248 (avg: 14810860) ops/sec, 1.15GB/sec (avg: 547.98MB/sec),  2.58 (avg:  1.95) msec latency[RUN #1 15%,   9 secs] 30 threads  8 conns:   130383883 ops, 11728104 (avg: 14468706) ops/sec, 1.16GB/sec (avg: 618.47MB/sec),  2.58 (avg:  2.01) msec latency[RUN #1 17%,  10 secs] 30 threads  8 conns:   142132095 ops, 11745310 (avg: 14196617) ops/sec, 1.16GB/sec (avg: 675.05MB/sec),  2.57 (avg:  2.06) msec latency[RUN #1 18%,  11 secs] 30 threads  8 conns:   154046674 ops, 11912672 (avg: 13989176) ops/sec, 1.17GB/sec (avg: 722.89MB/sec),  2.53 (avg:  2.09) msec latency[RUN #1 20%,  12 secs] 30 threads  8 conns:   165634547 ops, 11585393 (avg: 13789019) ops/sec, 1.14GB/sec (avg: 760.01MB/sec),  2.61 (avg:  2.13) msec latency[RUN #1 22%,  13 secs] 30 threads  8 conns:   176771783 ops, 11133962 (avg: 13584918) ops/sec, 1.10GB/sec (avg: 787.93MB/sec),  2.72 (avg:  2.17) msec latency[RUN #1 23%,  14 secs] 30 threads  8 conns:   188646015 ops, 11871738 (avg: 13462632) ops/sec, 1.17GB/sec (avg: 817.17MB/sec),  2.54 (avg:  2.19) msec latency[RUN #1 25%,  15 secs] 30 threads  8 conns:   200651494 ops, 12003186 (avg: 13365400) ops/sec, 1.18GB/sec (avg: 843.40MB/sec),  2.51 (avg:  2.21) msec latency[RUN #1 27%,  16 secs] 30 threads  8 conns:   212506083 ops, 11852502 (avg: 13270903) ops/sec, 1.17GB/sec (avg: 865.40MB/sec),  2.55 (avg:  2.23) msec latency[RUN #1 28%,  17 secs] 30 threads  8 conns:   224261638 ops, 11752875 (avg: 13181656) ops/sec, 1.16GB/sec (avg: 884.23MB/sec),  2.57 (avg:  2.25) msec latency[RUN #1 30%,  18 secs] 30 threads  8 conns:   236246564 ops, 11982241 (avg: 13115057) ops/sec, 1.18GB/sec (avg: 902.24MB/sec),  2.52 (avg:  2.26) msec latency[RUN #1 32%,  19 secs] 30 threads  8 conns:   247374054 ops, 11125420 (avg: 13010394) ops/sec, 1.10GB/sec (avg: 913.82MB/sec),  2.72 (avg:  2.28) msec latency[RUN #1 33%,  20 secs] 30 threads  8 conns:   259228347 ops, 11852135 (avg: 12952511) ops/sec, 1.17GB/sec (avg: 927.90MB/sec),  2.55 (avg:  2.29) msec latency[RUN #1 35%,  21 secs] 30 threads  8 conns:   271238895 ops, 12008338 (avg: 12907572) ops/sec, 1.18GB/sec (avg: 941.40MB/sec),  2.51 (avg:  2.30) msec latency[RUN #1 37%,  22 secs] 30 threads  8 conns:   283267725 ops, 12026617 (avg: 12867547) ops/sec, 1.18GB/sec (avg: 953.74MB/sec),  2.51 (avg:  2.31) msec latency[RUN #1 38%,  23 secs] 30 threads  8 conns:   295302174 ops, 12032307 (avg: 12831248) ops/sec, 1.19GB/sec (avg: 965.05MB/sec),  2.51 (avg:  2.32) msec latency[RUN #1 40%,  24 secs] 30 threads  8 conns:   307230088 ops, 11925719 (avg: 12793533) ops/sec, 1.17GB/sec (avg: 974.96MB/sec),  2.53 (avg:  2.33) msec latency[RUN #1 42%,  25 secs] 30 threads  8 conns:   318442445 ops, 11210563 (avg: 12730241) ops/sec, 1.10GB/sec (avg: 981.19MB/sec),  2.70 (avg:  2.34) msec latency[RUN #1 43%,  26 secs] 30 threads  8 conns:   330351522 ops, 11905624 (avg: 12698534) ops/sec, 1.17GB/sec (avg: 989.65MB/sec),  2.54 (avg:  2.35) msec latency[RUN #1 45%,  27 secs] 30 threads  8 conns:   342125386 ops, 11772051 (avg: 12664234) ops/sec, 1.16GB/sec (avg: 996.97MB/sec),  2.56 (avg:  2.35) msec latency[RUN #1 47%,  28 secs] 30 threads  8 conns:   354067059 ops, 11939595 (avg: 12638364) ops/sec, 1.18GB/sec (avg: 1004.38MB/sec),  2.53 (avg:  2.36) msec latency[RUN #1 48%,  29 secs] 30 threads  8 conns:   366005785 ops, 11936863 (avg: 12614183) ops/sec, 1.18GB/sec (avg: 1011.26MB/sec),  2.53 (avg:  2.37) msec latency[RUN #1 50%,  30 secs] 30 threads  8 conns:   377935758 ops, 11927825 (avg: 12591312) ops/sec, 1.18GB/sec (avg: 1017.66MB/sec),  2.53 (avg:  2.37) msec latency[RUN #1 52%,  31 secs] 30 threads  8 conns:   389135686 ops, 11197778 (avg: 12546374) ops/sec, 1.10GB/sec (avg: 1021.27MB/sec),  2.70 (avg:  2.38) msec latency[RUN #1 53%,  32 secs] 30 threads  8 conns:   401020337 ops, 11882630 (avg: 12525639) ops/sec, 1.17GB/sec (avg: 1.00GB/sec),  2.54 (avg:  2.39) msec latency[RUN #1 55%,  33 secs] 30 threads  8 conns:   412949857 ops, 11927325 (avg: 12507513) ops/sec, 1.17GB/sec (avg: 1.01GB/sec),  2.53 (avg:  2.39) msec latency[RUN #1 57%,  34 secs] 30 threads  8 conns:   424783275 ops, 11830838 (avg: 12487616) ops/sec, 1.17GB/sec (avg: 1.01GB/sec),  2.55 (avg:  2.39) msec latency[RUN #1 58%,  35 secs] 30 threads  8 conns:   436494142 ops, 11708993 (avg: 12465377) ops/sec, 1.15GB/sec (avg: 1.02GB/sec),  2.58 (avg:  2.40) msec latency[RUN #1 60%,  36 secs] 30 threads  8 conns:   448361041 ops, 11864905 (avg: 12448702) ops/sec, 1.17GB/sec (avg: 1.02GB/sec),  2.54 (avg:  2.40) msec latency[RUN #1 62%,  37 secs] 30 threads  8 conns:   459324751 ops, 10961868 (avg: 12408529) ops/sec, 1.08GB/sec (avg: 1.02GB/sec),  2.76 (avg:  2.41) msec latency[RUN #1 63%,  38 secs] 30 threads  8 conns:   471132721 ops, 11806081 (avg: 12392680) ops/sec, 1.16GB/sec (avg: 1.03GB/sec),  2.56 (avg:  2.42) msec latency[RUN #1 65%,  39 secs] 30 threads  8 conns:   483060948 ops, 11926175 (avg: 12380721) ops/sec, 1.17GB/sec (avg: 1.03GB/sec),  2.53 (avg:  2.42) msec latency[RUN #1 67%,  40 secs] 30 threads  8 conns:   494924854 ops, 11862008 (avg: 12367757) ops/sec, 1.17GB/sec (avg: 1.03GB/sec),  2.54 (avg:  2.42) msec latency[RUN #1 68%,  41 secs] 30 threads  8 conns:   506822294 ops, 11895489 (avg: 12356241) ops/sec, 1.17GB/sec (avg: 1.04GB/sec),  2.54 (avg:  2.42) msec latency[RUN #1 70%,  42 secs] 30 threads  8 conns:   518749587 ops, 11925432 (avg: 12345987) ops/sec, 1.17GB/sec (avg: 1.04GB/sec),  2.53 (avg:  2.43) msec latency[RUN #1 72%,  43 secs] 30 threads  8 conns:   529839570 ops, 11087632 (avg: 12316728) ops/sec, 1.09GB/sec (avg: 1.04GB/sec),  2.73 (avg:  2.43) msec latency[RUN #1 73%,  44 secs] 30 threads  8 conns:   541604409 ops, 11761216 (avg: 12304105) ops/sec, 1.16GB/sec (avg: 1.04GB/sec),  2.57 (avg:  2.44) msec latency[RUN #1 75%,  45 secs] 30 threads  8 conns:   553393875 ops, 11787202 (avg: 12292620) ops/sec, 1.16GB/sec (avg: 1.05GB/sec),  2.56 (avg:  2.44) msec latency[RUN #1 77%,  46 secs] 30 threads  8 conns:   565298974 ops, 11903194 (avg: 12284157) ops/sec, 1.17GB/sec (avg: 1.05GB/sec),  2.54 (avg:  2.44) msec latency[RUN #1 78%,  47 secs] 30 threads  8 conns:   577171997 ops, 11870886 (avg: 12275366) ops/sec, 1.17GB/sec (avg: 1.05GB/sec),  2.54 (avg:  2.44) msec latency[RUN #1 80%,  48 secs] 30 threads  8 conns:   588787058 ops, 11613017 (avg: 12261570) ops/sec, 1.14GB/sec (avg: 1.05GB/sec),  2.60 (avg:  2.45) msec latency[RUN #1 82%,  49 secs] 30 threads  8 conns:   599833246 ops, 11044023 (avg: 12236726) ops/sec, 1.09GB/sec (avg: 1.05GB/sec),  2.74 (avg:  2.45) msec latency[RUN #1 83%,  50 secs] 30 threads  8 conns:   611529391 ops, 11693946 (avg: 12225873) ops/sec, 1.15GB/sec (avg: 1.06GB/sec),  2.58 (avg:  2.45) msec latency[RUN #1 85%,  51 secs] 30 threads  8 conns:   623331772 ops, 11799879 (avg: 12217522) ops/sec, 1.16GB/sec (avg: 1.06GB/sec),  2.56 (avg:  2.46) msec latency[RUN #1 87%,  52 secs] 30 threads  8 conns:   635044458 ops, 11710624 (avg: 12207776) ops/sec, 1.15GB/sec (avg: 1.06GB/sec),  2.58 (avg:  2.46) msec latency[RUN #1 88%,  53 secs] 30 threads  8 conns:   646942304 ops, 11895799 (avg: 12201890) ops/sec, 1.17GB/sec (avg: 1.06GB/sec),  2.54 (avg:  2.46) msec latency[RUN #1 90%,  54 secs] 30 threads  8 conns:   658793700 ops, 11848931 (avg: 12195355) ops/sec, 1.17GB/sec (avg: 1.06GB/sec),  2.55 (avg:  2.46) msec latency[RUN #1 92%,  55 secs] 30 threads  8 conns:   669972056 ops, 11176388 (avg: 12176832) ops/sec, 1.10GB/sec (avg: 1.07GB/sec),  2.70 (avg:  2.46) msec latency[RUN #1 93%,  56 secs] 30 threads  8 conns:   681765453 ops, 11791180 (avg: 12169947) ops/sec, 1.16GB/sec (avg: 1.07GB/sec),  2.56 (avg:  2.47) msec latency[RUN #1 95%,  57 secs] 30 threads  8 conns:   693686026 ops, 11916616 (avg: 12165502) ops/sec, 1.17GB/sec (avg: 1.07GB/sec),  2.53 (avg:  2.47) msec latency[RUN #1 97%,  58 secs] 30 threads  8 conns:   705375596 ops, 11687559 (avg: 12157264) ops/sec, 1.15GB/sec (avg: 1.07GB/sec),  2.58 (avg:  2.47) msec latency[RUN #1 98%,  59 secs] 30 threads  8 conns:   717352216 ops, 11974751 (avg: 12154171) ops/sec, 1.18GB/sec (avg: 1.07GB/sec),  2.52 (avg:  2.47) msec latency[RUN #1 100%,  60 secs]  0 threads  8 conns:   729146710 ops, 11974751 (avg: 12152207) ops/sec, 1.18GB/sec (avg: 1.07GB/sec),  2.52 (avg:  2.47) msec latency
+
+warning: GET miss rate 12.54% above target 1.00% (91469679 misses / 729146710 ops)
+
+CPU Utilization Summary
+  Total CPU time:   2052.484s  (user 1768.512s, sys 283.972s)
+  Wall time:        100.232s
+  Cores used:       20.477   (avg 68.3% across 30 worker threads)
+  Peak utilization: 2993.4%
+30        Threads
+8         Connections per thread
+60        Seconds
+
+
+ALL STATS
+============================================================================================================================
+Type         Ops/sec     Hits/sec   Misses/sec    Avg. Latency     p50 Latency     p99 Latency   p99.9 Latency       KB/sec 
+----------------------------------------------------------------------------------------------------------------------------
+Sets            0.00          ---          ---             ---             ---             ---             ---         0.00 
+Gets     12151978.41  10627500.20   1524478.21         2.47146         2.17500         5.02300         8.83100   1125927.59 
+Waits           0.00          ---          ---             ---             ---             ---             ---          --- 
+Totals   12151978.41  10627500.20   1524478.21         2.47146         2.17500         5.02300         8.83100   1125927.59 

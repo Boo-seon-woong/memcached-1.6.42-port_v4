@@ -20687,3 +20687,7 @@ Z 쪽 memtier 줄은 GO 에 그대로 들어간다:
 규모: 70구성 × 6부하 = 420부하, 약 11시간.
 
 NEXT: genie (R6-OP-U 부터. GO 의 memtier 줄을 그대로 쓸 것)
+
+CELL R5-E8x128-C DONE  12.152 M  avg 2.47146 / p50 2.17500 / p99 5.02300 / p99.9 8.83100 ms
+창(UTC) 2026-08-07T07:17:02Z ~ 2026-08-07T07:18:47Z   pipe=128 --ratio=0:1 --test-time=60
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 

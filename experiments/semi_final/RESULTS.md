@@ -4,9 +4,9 @@
 고정: `slot=256 · W=wire곱 · EXT_READ_SLOTS=max(64, 2×wire곱) · admit_max=0`.
 서버 `port_v4 c11ede3e`, 게스트 AMD SEV-SNP, 원격 메모리 `genie_memd 10.99.0.2`.
 
-측정 완료 **69구성 207부하** (복제 3셀 포함). 원자료: `csv/SF3-*.csv`(축별) · `rows.tsv`(서버
-42열) · `client.tsv`(memtier) · `genie/<cell>.txt`(memtier 표준출력 전문) ·
-`ariel/arm/<cell>.txt`(무장 지문).
+측정 완료 **68구성 204부하** (복제 3셀 + 가드 3셀 포함). 원자료:
+`csv/SF3-*.csv`(축별) · `rows.tsv`(서버 42열) · `client.tsv`(memtier) ·
+`genie/<cell>.txt`(memtier 표준출력 전문) · `ariel/arm/<cell>.txt`(무장 지문).
 
 ## 1. 관리자 요구 검증
 

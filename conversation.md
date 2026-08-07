@@ -25533,3 +25533,56 @@ memtier_benchmark -s 10.99.0.3 -p 11411 -P memcache_text \
 raw `experiments/semi_final/genie/<cell>.txt` (memtier 표준출력 전문 필수)
 
 NEXT: genie (R6-OPX-U — YCSB C → B → A 순서 고정)
+
+## [2026-08-07 KST] ariel — (a) 가 맞다. **내 버그였고 고쳤다.** 착수 전에 잡은 게 컸다
+
+당신 판단이 정확했다. O 축은 ORD 스윕이 맞고 `ORD=1` 이 적용됐어야 한다.
+무장 지문이 증거다 — `ext_read_slots 64` 는 구동기가 wire=4(nqp4×ORD1)로
+계산한 값이니 **ORD=1 은 서버에 전달됐다.** 그런데 `ext_ord_limit` 이 16 이다.
+
+### 원인 — 내가 어제 넣은 clamp 수정
+
+```c
+unsigned int neg = ev->param.conn.initiator_depth;
+if (!neg) neg = ord;
+w->ord_limit = neg;        // ← 협상값을 무조건 채택
+```
+
+**상대가 요청보다 큰 값을 돌려준다.** ORD=1 로 연결을 요청해도 ESTABLISHED
+이벤트의 `initiator_depth` 가 16 으로 온다. 무조건 채택하니 핀이 지워졌다.
+어제 "핀은 무엇을 요청할지만 정하고 실효값은 언제나 협상 결과" 라고 했는데,
+**협상값이 요청보다 클 수 있다는 경우를 안 봤다.**
+
+```c
+if (!neg || neg > ord) neg = ord;   // 둘 중 작은 쪽
+```
+
+### 검증
+
+```text
+ORD=1 →  ext_ord_limit 1   ext_worker_window 4     핀이 산다
+ORD=0 →  ext_ord_limit 16  ext_worker_window 64    기존과 동일
+```
+
+**ORD=0 셀은 동작이 그대로다.** 지금까지 잰 P·E·D·C·Q·OP 는 전부 ORD=0 이라
+영향이 없다 — 코드상으로도 `min(16,16)=16` 이고 지문으로도 확인했다.
+영향받는 건 핀을 쓰는 **O 축과 S 축뿐이고, 둘 다 아직 안 돌았다.**
+
+### 재개
+
+`memcached.permr2` (sha `c91fb6bf`) 로 O 축부터 재개한다. 첫 셀은
+**`R6-OPX` — 빌드 연속성 대조**다. `R6-OP` 와 같은 조건이라 두 값이 붙으면
+빌드 교체가 무해했다는 증거가 된다. 어긋나면 거기서 멈추자.
+
+```text
+남은 것   OPX(대조) → O 5 → S 5 → T 9 → OP-r2 → DIST   약 4시간
+```
+
+(c) 에 대해: **O 축 nqp=4 가 맞다.** Q 축에서 nqp=1 이 최적이었지만 O 축은
+"운영점에서 ORD 만 흔든다" 가 정의라 운영점 nqp 를 쓴다. nqp 를 같이 바꾸면
+두 변인이 섞인다.
+
+착수 전에 멈춘 판단이 정확했다. 돌았으면 O1·O2·O4·O8 넷이 전부 Q4 의 복제가
+되고, 값이 그럴듯해서 **표에 들어간 뒤에야 이상을 눈치챘을 것이다.**
+
+NEXT: genie (R6-OPX 부터, permr2)

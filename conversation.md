@@ -26280,3 +26280,7 @@ CELL R6-S32x8-Z-C DONE  11.748 M  avg 2.56982 / p50 2.49500 / p99 5.18300 / p99.
 CELL R6-S32x8-Z-B DONE  9.274 M  avg 3.27389 / p50 3.16700 / p99 6.55900 / p99.9 8.95900 ms
 창(UTC) 2026-08-07T19:38:20Z ~ 2026-08-07T19:39:20Z   pipe=256 --ratio=1:19 --test-time=60
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=256 ext_qp_per_worker=32 ext_ord_limit=8 ext_read_slots=512 extstore_prof_span_ver=3 
+
+CELL R6-S32x8-Z-A DONE  1.649 M  avg 18.56068 / p50 16.25500 / p99 49.66300 / p99.9 59.13500 ms
+창(UTC) 2026-08-07T19:39:47Z ~ 2026-08-07T19:40:48Z   pipe=256 --ratio=1:1 --test-time=60
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=256 ext_qp_per_worker=32 ext_ord_limit=8 ext_read_slots=512 extstore_prof_span_ver=3 

@@ -17,7 +17,31 @@ SET_COLS = ['Sv3_avg', 'Sv3_p50', 'Sv3_p99', 'Sadmit', 'Sv2', 'Sret',
             'Sxfer', 'Scrypto']
 CLI_COLS = ['srv', 'srv_p50', 'srv_p99', 'que', 'bk']
 CHK_COLS = ['secs', 'set_s', 'err5', 'badcrc', 'hit_pct']
-WL = {1: 'YCSB-C', 2: 'YCSB-B', 3: 'YCSB-A'}
+
+
+def classify(r):
+    """워크로드를 순번이 아니라 **실측 set 비율**로 판별한다.
+
+    한 창에 부하가 3개보다 많이 들어갈 수 있다(GO 를 다시 낸 셀, genie 가
+    옛 라벨로 한 번 더 돈 경우). 순번으로 매기면 엉뚱한 부하가 YCSB 이름을
+    달게 되므로, 측정된 read/update 비율로 되짚는다. YCSB 셋 중 어디에도
+    안 맞는 부하(옛 MIX 1:9, 옛 SET 1:0)는 버린다.
+    """
+    try:
+        g, st = float(r.get('get_s') or 0), float(r.get('set_s') or 0)
+    except ValueError:
+        return None
+    tot = g + st
+    if tot <= 0:
+        return None
+    f = st / tot
+    if f < 0.01:
+        return 'YCSB-C'          # 0:1
+    if 0.025 <= f <= 0.085:
+        return 'YCSB-B'          # 1:19 → 5%
+    if 0.40 <= f <= 0.60:
+        return 'YCSB-A'          # 1:1 → 50%
+    return None                  # 옛 MIX(10%) · 옛 SET(100%) 등
 
 
 def load():
@@ -25,10 +49,17 @@ def load():
     hdr = lines[0].split('\t')
     idx = {n: i for i, n in enumerate(hdr)}
     out = collections.defaultdict(dict)
+    dropped = 0
     for ln in lines[1:]:
         f = ln.split('\t')
-        lbl, seq = f[0], int(f[1])
-        out[lbl][WL.get(seq, str(seq))] = {n: f[i] for n, i in idx.items()}
+        rec = {n: f[i] for n, i in idx.items() if i < len(f)}
+        wl = classify(rec)
+        if wl is None:
+            dropped += 1
+            continue
+        out[rec[hdr[0]]][wl] = rec      # 같은 워크로드가 반복되면 나중 것이 남는다
+    if dropped:
+        print(f'<!-- YCSB 비율에 안 맞아 버린 부하 {dropped}개 -->\n')
     return out
 
 

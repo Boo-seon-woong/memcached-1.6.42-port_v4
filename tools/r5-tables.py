@@ -17,7 +17,7 @@ SET_COLS = ['Sv3_avg', 'Sv3_p50', 'Sv3_p99', 'Sadmit', 'Sv2', 'Sret',
             'Sxfer', 'Scrypto']
 CLI_COLS = ['srv', 'srv_p50', 'srv_p99', 'que', 'bk']
 CHK_COLS = ['secs', 'set_s', 'err5', 'badcrc', 'hit_pct']
-WL = {1: 'GET', 2: 'MIX', 3: 'SET'}
+WL = {1: 'YCSB-C', 2: 'YCSB-B', 3: 'YCSB-A'}
 
 
 def load():
@@ -47,7 +47,7 @@ def table(rows, cells, cols, keyname):
         if lbl not in rows:
             out.append(f'| {disp} | — | ' + ' | '.join(['미측정'] * len(cols)) + ' |')
             continue
-        for wl in ('GET', 'MIX', 'SET'):
+        for wl in ('YCSB-C', 'YCSB-B', 'YCSB-A'):
             r = rows[lbl].get(wl)
             if not r:
                 continue
@@ -79,9 +79,9 @@ def main():
     print('<!-- tools/r5-tables.py 가 생성한다. 손으로 고치지 말 것. -->\n')
     for title, key, cells in AXES:
         print(f'### {title}\n')
-        print('**처리량과 GET 측 span 분해**\n')
+        print('**처리량과 read 측 span 분해**\n')
         print(table(rows, cells, GET_COLS, key), '\n')
-        print('**SET 측 span 분해**\n')
+        print('**update 측 span 분해**\n')
         print(table(rows, cells, SET_COLS, key), '\n')
         print('**클라이언트 계층 · 유효성 게이트**\n')
         print(table(rows, cells, CLI_COLS + CHK_COLS, key), '\n')

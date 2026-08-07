@@ -1,6 +1,16 @@
 # semi_final 결과 2 — 라운드 5 (수정 빌드 전면 재측정)
 
-측정: 2026-08-07~. 셀마다 GET / MIX(1:9) / SET 각 **60초**, 사이 20초.
+측정: 2026-08-07~. 구성마다 **YCSB 워크로드 3종**을 각 **60초**, 사이 20초.
+
+```text
+YCSB-C  --ratio=0:1    read 100%
+YCSB-B  --ratio=1:19   read 95% / update 5%
+YCSB-A  --ratio=1:1    read 50% / update 50%
+```
+
+> 비율만 YCSB 를 따른다. YCSB 본래 정의는 요청 분포도 Zipfian 이지만
+> memtier 에 Zipfian 이 없어 **키 분포는 uniform**(`--key-pattern=R:R`)이다.
+
 빌드 `memcached.permr` sha `b7fe29841a6c04ff45708347` 하나로 전 격자를 돌린다.
 명세는 `PLAN.md`. 라운드 3(180초, 빌드 `c11ede3e`)의 결과는 `RESULTS.md`.
 
@@ -12,9 +22,9 @@
 여기서는 축마다 세 표를 낸다.
 
 ```text
-① 처리량과 GET 측 span 분해   Mops get_s busy Gv3_avg/p50/p99
+① 처리량과 read 측 span 분해  Mops get_s busy Gv3_avg/p50/p99
                               Gadmit Gv2 Gxfer Gcrypto Gsync
-② SET 측 span 분해            Sv3_avg/p50/p99 Sadmit Sv2 Sret Sxfer Scrypto
+② update 측 span 분해         Sv3_avg/p50/p99 Sadmit Sv2 Sret Sxfer Scrypto
 ③ 클라이언트 계층·유효성      srv srv_p50 srv_p99 que bk
                               secs set_s err5 badcrc hit_pct
 ```
@@ -27,7 +37,7 @@
 라운드 3 은 세 결함 위에서 돌았고 둘은 **측정값을 바꿨다**(`PLAN.md` §0).
 운영점 동일 조건에서 수정 전후 실측:
 
-| 워크로드 | 쓰기 비중 | 라운드 3 (c11ede3e) | 수정 후 (c33d13f9) | 차이 |
+| 라운드 3 워크로드 | 쓰기 비중 | 라운드 3 (c11ede3e) | 수정 후 (c33d13f9) | 차이 |
 |---|---:|---:|---:|---:|
 | GET | 0% | 12.873 M | 12.874 M | +0.01% |
 | MIX | 10% | 10.687 M | 11.181 M | +4.62% |
@@ -38,7 +48,9 @@ WRITE 는 ORD 면제라 깊게 쓴다(`extstore.c:972`) — 과대한 SQ/CQ 비�
 경로가 다 물고 있었다. 실패 계수기는 전 항목 0 이었으므로 일이 줄어서 오른
 것이 아니다.
 
-따라서 **라운드 3 의 GET 은 살아 있고 MIX·SET 은 전부 눌린 값**이다.
+따라서 **라운드 3 의 읽기 전용 값은 살아 있고 쓰기가 섞인 값은 전부 눌렸다.**
+(라운드 3 은 GET/MIX(1:9)/SET 이었고 라운드 5 는 YCSB C/B/A 라 워크로드
+정의 자체가 달라, 두 라운드의 쓰기 포함 수치는 직접 비교하지 않는다.)
 게다가 큐 크기가 `2 × nqp² × ORD` 로 커져 nqp·ORD 가 변한 Q·O·S 축은 축
 내부까지 교란됐다. 한 빌드에서 전 격자를 다시 재는 것 외에 일관된 표를
 만들 방법이 없다.
@@ -83,7 +95,7 @@ WRITE 는 ORD 면제라 깊게 쓴다(`extstore.c:972`) — 과대한 SQ/CQ 비�
 
 ### P 파이프라인
 
-**처리량과 GET 측 span 분해**
+**처리량과 read 측 span 분해**
 
 | pipeline | 워크로드 | Mops | get_s | busy | Gv3_avg | Gv3_p50 | Gv3_p99 | Gadmit | Gv2 | Gxfer | Gcrypto | Gsync |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -96,7 +108,7 @@ WRITE 는 ORD 면제라 깊게 쓴다(`extstore.c:972`) — 과대한 SQ/CQ 비�
 | 384 | — | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 |
 | 512 | — | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 
 
-**SET 측 span 분해**
+**update 측 span 분해**
 
 | pipeline | 워크로드 | Sv3_avg | Sv3_p50 | Sv3_p99 | Sadmit | Sv2 | Sret | Sxfer | Scrypto |
 |---|---|---|---|---|---|---|---|---|---|
@@ -124,7 +136,7 @@ WRITE 는 ORD 면제라 깊게 쓴다(`extstore.c:972`) — 과대한 SQ/CQ 비�
 
 ### E 클라×파이프
 
-**처리량과 GET 측 span 분해**
+**처리량과 read 측 span 분해**
 
 | c×pipe | 워크로드 | Mops | get_s | busy | Gv3_avg | Gv3_p50 | Gv3_p99 | Gadmit | Gv2 | Gxfer | Gcrypto | Gsync |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -137,7 +149,7 @@ WRITE 는 ORD 면제라 깊게 쓴다(`extstore.c:972`) — 과대한 SQ/CQ 비�
 | 64×16 | — | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 |
 | 128×8 | — | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 
 
-**SET 측 span 분해**
+**update 측 span 분해**
 
 | c×pipe | 워크로드 | Sv3_avg | Sv3_p50 | Sv3_p99 | Sadmit | Sv2 | Sret | Sxfer | Scrypto |
 |---|---|---|---|---|---|---|---|---|---|
@@ -165,7 +177,7 @@ WRITE 는 ORD 면제라 깊게 쓴다(`extstore.c:972`) — 과대한 SQ/CQ 비�
 
 ### D 값 크기
 
-**처리량과 GET 측 span 분해**
+**처리량과 read 측 span 분해**
 
 | d(B) | 워크로드 | Mops | get_s | busy | Gv3_avg | Gv3_p50 | Gv3_p99 | Gadmit | Gv2 | Gxfer | Gcrypto | Gsync |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -179,7 +191,7 @@ WRITE 는 ORD 면제라 깊게 쓴다(`extstore.c:972`) — 과대한 SQ/CQ 비�
 | 96 | — | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 |
 | 128 | — | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 
 
-**SET 측 span 분해**
+**update 측 span 분해**
 
 | d(B) | 워크로드 | Sv3_avg | Sv3_p50 | Sv3_p99 | Sadmit | Sv2 | Sret | Sxfer | Scrypto |
 |---|---|---|---|---|---|---|---|---|---|
@@ -209,7 +221,7 @@ WRITE 는 ORD 면제라 깊게 쓴다(`extstore.c:972`) — 과대한 SQ/CQ 비�
 
 ### C 체인
 
-**처리량과 GET 측 span 분해**
+**처리량과 read 측 span 분해**
 
 | chain | 워크로드 | Mops | get_s | busy | Gv3_avg | Gv3_p50 | Gv3_p99 | Gadmit | Gv2 | Gxfer | Gcrypto | Gsync |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -230,7 +242,7 @@ WRITE 는 ORD 면제라 깊게 쓴다(`extstore.c:972`) — 과대한 SQ/CQ 비�
 | 15 | — | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 |
 | 16 | — | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 
 
-**SET 측 span 분해**
+**update 측 span 분해**
 
 | chain | 워크로드 | Sv3_avg | Sv3_p50 | Sv3_p99 | Sadmit | Sv2 | Sret | Sxfer | Scrypto |
 |---|---|---|---|---|---|---|---|---|---|
@@ -274,7 +286,7 @@ WRITE 는 ORD 면제라 깊게 쓴다(`extstore.c:972`) — 과대한 SQ/CQ 비�
 
 ### Q nqp
 
-**처리량과 GET 측 span 분해**
+**처리량과 read 측 span 분해**
 
 | nqp | 워크로드 | Mops | get_s | busy | Gv3_avg | Gv3_p50 | Gv3_p99 | Gadmit | Gv2 | Gxfer | Gcrypto | Gsync |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -285,7 +297,7 @@ WRITE 는 ORD 면제라 깊게 쓴다(`extstore.c:972`) — 과대한 SQ/CQ 비�
 | 16 | — | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 |
 | 64 | — | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 
 
-**SET 측 span 분해**
+**update 측 span 분해**
 
 | nqp | 워크로드 | Sv3_avg | Sv3_p50 | Sv3_p99 | Sadmit | Sv2 | Sret | Sxfer | Scrypto |
 |---|---|---|---|---|---|---|---|---|---|
@@ -309,7 +321,7 @@ WRITE 는 ORD 면제라 깊게 쓴다(`extstore.c:972`) — 과대한 SQ/CQ 비�
 
 ### O ORD
 
-**처리량과 GET 측 span 분해**
+**처리량과 read 측 span 분해**
 
 | ORD | 워크로드 | Mops | get_s | busy | Gv3_avg | Gv3_p50 | Gv3_p99 | Gadmit | Gv2 | Gxfer | Gcrypto | Gsync |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -319,7 +331,7 @@ WRITE 는 ORD 면제라 깊게 쓴다(`extstore.c:972`) — 과대한 SQ/CQ 비�
 | 8 | — | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 |
 | 협상16 | — | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 
 
-**SET 측 span 분해**
+**update 측 span 분해**
 
 | ORD | 워크로드 | Sv3_avg | Sv3_p50 | Sv3_p99 | Sadmit | Sv2 | Sret | Sxfer | Scrypto |
 |---|---|---|---|---|---|---|---|---|---|
@@ -341,7 +353,7 @@ WRITE 는 ORD 면제라 깊게 쓴다(`extstore.c:972`) — 과대한 SQ/CQ 비�
 
 ### S 형태(wire 256)
 
-**처리량과 GET 측 span 분해**
+**처리량과 read 측 span 분해**
 
 | 형태 | 워크로드 | Mops | get_s | busy | Gv3_avg | Gv3_p50 | Gv3_p99 | Gadmit | Gv2 | Gxfer | Gcrypto | Gsync |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -351,7 +363,7 @@ WRITE 는 ORD 면제라 깊게 쓴다(`extstore.c:972`) — 과대한 SQ/CQ 비�
 | 128×2 | — | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 |
 | 256×1 | — | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 
 
-**SET 측 span 분해**
+**update 측 span 분해**
 
 | 형태 | 워크로드 | Sv3_avg | Sv3_p50 | Sv3_p99 | Sadmit | Sv2 | Sret | Sxfer | Scrypto |
 |---|---|---|---|---|---|---|---|---|---|
@@ -373,7 +385,7 @@ WRITE 는 ORD 면제라 깊게 쓴다(`extstore.c:972`) — 과대한 SQ/CQ 비�
 
 ### T 스레드
 
-**처리량과 GET 측 span 분해**
+**처리량과 read 측 span 분해**
 
 | mcT | 워크로드 | Mops | get_s | busy | Gv3_avg | Gv3_p50 | Gv3_p99 | Gadmit | Gv2 | Gxfer | Gcrypto | Gsync |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -387,7 +399,7 @@ WRITE 는 ORD 면제라 깊게 쓴다(`extstore.c:972`) — 과대한 SQ/CQ 비�
 | 28 | — | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 |
 | 30 | — | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 
 
-**SET 측 span 분해**
+**update 측 span 분해**
 
 | mcT | 워크로드 | Sv3_avg | Sv3_p50 | Sv3_p99 | Sadmit | Sv2 | Sret | Sxfer | Scrypto |
 |---|---|---|---|---|---|---|---|---|---|
@@ -417,14 +429,14 @@ WRITE 는 ORD 면제라 깊게 쓴다(`extstore.c:972`) — 과대한 SQ/CQ 비�
 
 ### 가드
 
-**처리량과 GET 측 span 분해**
+**처리량과 read 측 span 분해**
 
 | 셀 | 워크로드 | Mops | get_s | busy | Gv3_avg | Gv3_p50 | Gv3_p99 | Gadmit | Gv2 | Gxfer | Gcrypto | Gsync |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | 시작점 | — | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 |
 | 끝점 | — | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 미측정 | 
 
-**SET 측 span 분해**
+**update 측 span 분해**
 
 | 셀 | 워크로드 | Sv3_avg | Sv3_p50 | Sv3_p99 | Sadmit | Sv2 | Sret | Sxfer | Scrypto |
 |---|---|---|---|---|---|---|---|---|---|

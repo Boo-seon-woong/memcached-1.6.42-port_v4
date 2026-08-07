@@ -47,7 +47,16 @@ ORD)를 운영점에서 **하나씩만** 흔들고, 7번은 wire 곱을 256 으�
         --key-minimum=1 --key-maximum=1000000 --key-pattern=R:R
         --distinct-client-seed --hide-histogram --test-time=60
 키공간  1,000,000 × d.  프리로드: 재기동·크기 변경 직후 매번
-시간    부하 **60초**, 사이 20초. 구성마다 3종: -GET(0:1) -MIX(1:9) -SET(1:0)
+시간    부하 **60초**, 사이 20초. 구성마다 YCSB 3종 (관리자 결정 2026-08-07)
+          -C  --ratio=0:1    read 100%
+          -B  --ratio=1:19   read 95% / update 5%
+          -A  --ratio=1:1    read 50% / update 50%
+        순서는 C → B → A 고정 (읽기 전용 먼저, 쓰기 비중이 커지는 순).
+        genie 의 `-A` 보고를 확인한 뒤 다음 구성으로 넘어간다.
+
+        ▲ 한계: YCSB 본래 정의는 요청 분포도 Zipfian 이지만 memtier 에는
+          Zipfian 이 없다. 이 격자는 **비율만 YCSB 를 따르고 키 분포는
+          uniform(`--key-pattern=R:R`)** 이다. 문서·논문에 쓸 때 그대로 적는다.
 채널    conversation.md 에 GO/DONE. GO 맨 위에 SERVER: 줄 필수
 기록    guest 추적기 42열 1초 + manifest.tsv + genie DONE 줄
 저장    ① csv/R5-{OP,P,E,D,C,Q,O,S,T}.csv + rows.tsv + client.tsv
@@ -135,8 +144,8 @@ SET 측  Sv3_avg · Sv3_p50 · Sv3_p99 · Sadmit · Sv2 · Sret · Sxfer · Scry
 10 R5-OP-r2                                       3부하  가드 끝점
 ```
 
-각 GO 는 한 구성의 3부하(-GET → -MIX → -SET 순서 고정)를 묶고, genie 의
-`-SET` 보고를 확인한 뒤 다음 무장으로 넘어간다. 대기 창은 구성당 30분 —
+각 GO 는 한 구성의 3부하(-C → -B → -A 순서 고정)를 묶고, genie 의
+`-A` 보고를 확인한 뒤 다음 무장으로 넘어간다. 대기 창은 구성당 30분 —
 넘기면 그 셀은 버리고 보충 목록(`makeup.tsv`)에 올린다.
 
 드리프트 가드는 `|R5-OP − R5-OP-r2|`. 라운드 3 에서 동일 구성 재현성이

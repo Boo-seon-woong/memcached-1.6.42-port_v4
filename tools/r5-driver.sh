@@ -112,9 +112,9 @@ $(cat /tmp/sf-fp.txt)
 \`\`\`
 
 \`\`\`text
-${lbl}-GET   --ratio=0:1     각 60초, 사이 20초
-${lbl}-MIX   --ratio=1:9
-${lbl}-SET   --ratio=1:0
+${lbl}-C   --ratio=0:1    YCSB-C  read 100%              각 60초, 사이 20초
+${lbl}-B   --ratio=1:19   YCSB-B  read 95% / update 5%
+${lbl}-A   --ratio=1:1    YCSB-A  read 50% / update 50%
 
 $MEMTIER \\
   -t $mtT -c $c --pipeline=$pipe -d $d --ratio=<위>
@@ -122,9 +122,9 @@ $MEMTIER \\
 $extra
 raw \`experiments/semi_final/genie/<cell>.txt\` (memtier 표준출력 전문 필수)
 
-NEXT: genie ($lbl 3부하)
+NEXT: genie ($lbl — YCSB C → B → A 순서 고정)
 EOF
-  post "$MSG/$lbl.md" "$lbl" "${lbl}-SET" "${TMO:-1800}"
+  post "$MSG/$lbl.md" "$lbl" "${lbl}-A" "${TMO:-1800}"
 }
 
 go_batch(){ # go_batch <axis-label> <match-cell> <timeout> <본문파일>
@@ -151,17 +151,17 @@ slots(){ local w; w=$(wire "$1" "$2"); [ $((w*2)) -gt 64 ] && echo $((w*2)) || e
 # 1 · 가드 시작점 (≥10M 게이트)
 cell R5-OP 4 0 30 8 128 "가드 시작점"
 # ≥10M 게이트 — 시작점이 10M 을 못 넘으면 격자 전체가 의미를 잃는다.
-G0=$(ops_of R5-OP-GET 2>/dev/null || true)
+G0=$(ops_of R5-OP-C 2>/dev/null || true)
 if [ -n "$G0" ] && awk -v v="$G0" 'BEGIN{exit !(v+0 < 10)}'; then
-  say "게이트 실패: R5-OP-GET=$G0 M (<10M) — 중단"
+  say "게이트 실패: R5-OP-C=$G0 M (<10M) — 중단"
   { echo; echo "## [$(TZ=Asia/Seoul date +%F) KST] ariel — 라운드 5 중단"; echo;
-    echo "\`R5-OP-GET\` 이 ${G0} M 으로 10M 게이트를 못 넘었다. 격자를 돌리지 않는다.";
+    echo "\`R5-OP-C\` 이 ${G0} M 으로 10M 게이트를 못 넘었다. 격자를 돌리지 않는다.";
     echo; echo "NEXT: 관리자"; } >> conversation.md
   git add -A conversation.md >/dev/null 2>&1; git commit -q -m "[ariel] round 5 halted at the 10M gate" 2>/dev/null
   git fetch -q origin main 2>/dev/null; git rebase -q origin/main >/dev/null 2>&1; git push -q 2>/dev/null
   exit 1
 fi
-say "게이트 통과: R5-OP-GET=${G0:-미확인} M"
+say "게이트 통과: R5-OP-C=${G0:-미확인} M"
 
 # 2 · P 축 (클라만)
 for p in 1 8 32 64 128 256 384 512; do

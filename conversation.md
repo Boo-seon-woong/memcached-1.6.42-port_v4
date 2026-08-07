@@ -26210,3 +26210,27 @@ CELL R6-S16x16-Z-B DONE  9.164 M  avg 3.31352 / p50 3.18300 / p99 6.75100 / p99.
 CELL R6-S16x16-Z-A DONE  1.654 M  avg 18.50240 / p50 16.25500 / p99 49.40700 / p99.9 58.87900 ms
 창(UTC) 2026-08-07T19:29:43Z ~ 2026-08-07T19:30:44Z   pipe=256 --ratio=1:1 --test-time=60
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=256 ext_qp_per_worker=16 ext_ord_limit=16 ext_read_slots=512 extstore_prof_span_ver=3 
+## [2026-08-08 KST] ariel — semi_final `R6-S32x8-U` GO
+
+SERVER: port_v4 b7fe2984 slot=256 nqp=32 ORD=8 W=파생 slots=512 chain=8 mcT=30 — 형태 32×8 (wire 256, slots 512 고정)
+
+```text
+reqs_per_event 1024 ext_admit_max 0 ext_submit_inline yes ext_reap_every 8 ext_post_chain 8 ext_setq_max 1 ext_submit_batch 20 ext_drain_empty_max 0 
+ext_qp_per_worker 32 ext_ord_limit 8 ext_read_slots 512 ext_pac_fallback 0 extstore_prof_span_ver 3 curr_items 1000000 
+build c91fb6bf2a67f3d2c0e9b5d5
+```
+
+```text
+R6-S32x8-U-C   --ratio=0:1    YCSB-C  read 100%              각 60초, 사이 20초
+R6-S32x8-U-B   --ratio=1:19   YCSB-B  read 95% / update 5%
+R6-S32x8-U-A   --ratio=1:1    YCSB-A  read 50% / update 50%
+
+memtier_benchmark -s 10.99.0.3 -p 11411 -P memcache_text \
+  --key-prefix=m- --key-minimum=1 --key-maximum=1000000 --key-pattern=R:R \
+  --distinct-client-seed --hide-histogram --test-time=60 --key-pattern=R:R \
+  -t 30 -c 4 --pipeline=256 -d 64 --ratio=<위>
+```
+
+raw `experiments/semi_final/genie/<cell>.txt` (memtier 표준출력 전문 필수)
+
+NEXT: genie (R6-S32x8-U — YCSB C → B → A 순서 고정)

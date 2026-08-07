@@ -41,7 +41,7 @@ case "${1:-}" in
   *) echo "usage: $0 {S3|S2|S1|W1 <sb>|W2 <sb>| <sb> <W> <nqp> <slots>}" >&2; exit 1 ;;
 esac
 
-echo "── 무장: submit_batch=$SB W=$W nqp=$NQP READ_SLOTS=$SLOTS -R $R admit=$AD reap=$RE chain=$PC setq=$SQ dem=$DEM mcT=$MCT ilp=$ILP hp=$HP ord=$ORD cpu=$CPUSET (총 QP = $MCT × $NQP)"
+echo "── 무장: submit_batch=$SB W=파생(nqp×ORD) nqp=$NQP READ_SLOTS=$SLOTS -R $R admit=$AD reap=$RE chain=$PC setq=$SQ dem=$DEM mcT=$MCT ilp=$ILP hp=$HP ord=$ORD cpu=$CPUSET (총 QP = $MCT × $NQP)"
 
 # /tmp 에 스테이징한 바이너리(mc_stock 등)는 이름이 memcached 가 아니라
 # -x 로 안 죽는다. 그래서 포트가 안 뜬 채 stock 이 계속 서비스했고, 나는
@@ -54,7 +54,7 @@ LD_LIBRARY_PATH=\\\$HOME/coherent-mr-v2/lib:\\\$HOME/kvs-port \
 MLX5_COHERENT_QP=1 MLX5_COHERENT_CQ=1 ${PROF:+EXT_RDMA_PROF=1} EXT_SELFTEST=1 \
 EXT_CRYPTO_KEY=\\\$HOME/kvs-port/ext.key EXT_SLOT_SIZE=256 EXT_READ_SLOTS=$SLOTS \
 $MCBIN -p 11411 -U 0 -t $MCT -m 2048 -c 16384 -R $R \
--o ext_path=10.99.0.2:11212:4g,ext_worker_window=$W,ext_qp_per_worker=$NQP,ext_drain_spin=1024,hashpower=$HP,ext_submit_batch=$SB,ext_admit_max=$AD${INLINE:+,ext_submit_inline},ext_reap_every=$RE,ext_post_chain=$PC,ext_setq_max=$SQ,ext_drain_empty_max=$DEM$ILPOPT$ORDOPT \
+-o ext_path=10.99.0.2:11212:4g,ext_qp_per_worker=$NQP,ext_drain_spin=1024,hashpower=$HP,ext_submit_batch=$SB,ext_admit_max=$AD${INLINE:+,ext_submit_inline},ext_reap_every=$RE,ext_post_chain=$PC,ext_setq_max=$SQ,ext_drain_empty_max=$DEM$ILPOPT$ORDOPT \
 > /tmp/mc.log 2>&1\""
 sleep 10
 

@@ -599,6 +599,12 @@ unsigned int extstore_worker_outstanding(void *worker) {
     return worker ? ((store_worker *)worker)->outstanding : 0;
 }
 
+/* 제출측 backpressure 는 엔진 내부 게이트와 같은 값을 봐야 한다 — 어긋나면
+ * storage.c 가 스핀을 멈춘 뒤 post 가 EAGAIN 을 내고 그 쓰기가 실패한다. */
+unsigned int extstore_worker_window(void *worker) {
+    return worker ? ((store_worker *)worker)->window : 1;
+}
+
 static int cm_connect_worker_qp(store_engine *e, store_worker *w,
         unsigned int worker_id, unsigned int qi, bool first,
         uint64_t *size_out) {
@@ -621,13 +627,28 @@ static int cm_connect_worker_qp(store_engine *e, store_worker *w,
         e->pd = ibv_alloc_pd(w->cm_id[qi]->verbs);
         if (!e->pd) WCM_FAIL("alloc_pd");
     }
+    /* 동시성 상한은 nqp × ORD 하나뿐이다(§W). ORD 는 QP 당 하드웨어 한도라
+     * 핀이 없으면 장치 최대치를 쓴다 — 연결 전에 알 수 있는 값이다. */
+    unsigned int ord = e->ord_limit;
+    if (ord == 0) {
+        struct ibv_device_attr da;
+        ord = (ibv_query_device(w->cm_id[qi]->verbs, &da) == 0 &&
+               da.max_qp_rd_atom > 0) ? (unsigned int)da.max_qp_rd_atom : 16;
+    }
     if (!w->cq) {
-        w->cq = ibv_create_cq(w->cm_id[qi]->verbs,
-                2 * w->window * w->nqp, NULL, NULL, 0);
+        w->window = w->nqp * ord;
+        e->w_window = w->window;
+        /* CQ 는 워커의 총 미완료(window)만 덮으면 된다. outstanding 이 워커
+         * 단위 스칼라라 그보다 많은 CQE 가 동시에 존재할 수 없다 — 예전처럼
+         * nqp 를 곱하면 nqp² 로 커져 coherent 풀을 넘긴다. */
+        w->cq = ibv_create_cq(w->cm_id[qi]->verbs, 2 * w->window + 8,
+                              NULL, NULL, 0);
         if (!w->cq) WCM_FAIL("create_cq");
     }
+    /* QP 하나에 쌓일 수 있는 최대: READ 는 ORD 로 묶이고(read_out 게이트),
+     * WRITE 는 rr 라운드로빈이라 window/nqp 몫이다. */
     struct ibv_qp_init_attr ia = { .send_cq = w->cq, .recv_cq = w->cq,
-        .qp_type = IBV_QPT_RC, .cap = { .max_send_wr = w->window + 1,
+        .qp_type = IBV_QPT_RC, .cap = { .max_send_wr = 2 * ord + 8,
             .max_recv_wr = 1, .max_send_sge = 1, .max_recv_sge = 1 } };
     if (rdma_create_qp(w->cm_id[qi], e->pd, &ia)) WCM_FAIL("create_qp");
     w->qp[qi] = w->cm_id[qi]->qp;
@@ -635,12 +656,7 @@ static int cm_connect_worker_qp(store_engine *e, store_worker *w,
     /* Ask for the configured ORD; 0 means "ask for the device maximum and take
      * whatever the CM negotiates". The negotiated value is adopted below unless
      * the operator pinned one explicitly. */
-    unsigned int ask = e->ord_limit;
-    if (ask == 0) {
-        struct ibv_device_attr da;
-        ask = (ibv_query_device(w->cm_id[qi]->verbs, &da) == 0 &&
-               da.max_qp_rd_atom > 0) ? (unsigned int)da.max_qp_rd_atom : 16;
-    }
+    unsigned int ask = ord;
     struct rdma_conn_param cp = { .responder_resources = (uint8_t)ask,
         .initiator_depth = (uint8_t)ask, .retry_count = 7, .rnr_retry_count = 7 };
     struct rdma_cm_event *ev;
@@ -693,16 +709,15 @@ static int pages_init(store_engine *e, uint64_t rsize) {
     return 0;
 }
 
+/* window(W)는 손잡이가 아니다. 워커의 미완료 상한은 그 워커 QP 들이 실제로
+ * 물 수 있는 수(nqp × ORD)와 같아야 하며 그 값은 연결 시점에 정해진다 —
+ * cm_connect_worker_qp 가 w->window 와 e->w_window 를 채운다. */
 int extstore_workers_prepare(void *ptr, unsigned int nworkers,
-                             unsigned int nqp, unsigned int window) {
+                             unsigned int nqp) {
     store_engine *e = ptr;
     if (!e || nworkers == 0) return -1;
-    /* Functional floors only. No upper clamp: an oversized setting is the
-     * operator's experiment, and its cost is a measurement (see md/). */
     if (nqp < 1) nqp = 1;
-    if (window < 1) window = 1;
     e->w_nqp = nqp;
-    e->w_window = window;
     e->worker_count = nworkers;
     e->workers = calloc(nworkers, sizeof(store_worker *));
     if (!e->workers) return -1;
@@ -712,7 +727,7 @@ int extstore_workers_prepare(void *ptr, unsigned int nworkers,
         if (!w) return -1;
         w->e = e;
         w->nqp = nqp;
-        w->window = window;
+        /* w->window 는 연결 시점에 nqp × ORD 로 채워진다 */
         w->batch = e->batch;
         w->ord_limit = e->ord_limit;   /* may be replaced by negotiated value */
         w->cm_id = calloc(nqp, sizeof(*w->cm_id));
@@ -738,7 +753,7 @@ int extstore_workers_prepare(void *ptr, unsigned int nworkers,
     fprintf(stderr, "extstore: genie_connect OK (raddr=0x%lx rkey=0x%x size=%lu, "
             "workers=%u qps/worker=%u window=%u ord=%u%s batch=%u)\n",
             (unsigned long)e->raddr, e->rkey, (unsigned long)rsize, nworkers,
-            nqp, window, e->workers[0]->ord_limit,
+            nqp, e->w_window, e->workers[0]->ord_limit,
             e->ord_limit ? " pinned" : " negotiated", e->batch);
 
     size_t bsz = (size_t)nworkers * e->read_slots * e->slot_size;
@@ -754,7 +769,7 @@ int extstore_workers_prepare(void *ptr, unsigned int nworkers,
      * 큐에 쌓인(아직 post 전) 쓰기도 쥔다 — 그 수는 storage.c가
      * extstore_set_staging_need로 알려준다. 상한으로 고정하면 batch가 작아도
      * DMA 등록이 커져 SWIOTLB 파편화 시 reg_mr이 EIO로 죽는다. */
-    unsigned int need = window + g_staging_need + 8;
+    unsigned int need = e->w_window + g_staging_need + 8;
     e->w_staging_slots = e->write_slots / nworkers;
     if (e->w_staging_slots < need) e->w_staging_slots = need;
     size_t ssz = (size_t)nworkers * e->w_staging_slots * e->slot_size;

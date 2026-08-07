@@ -47,7 +47,7 @@ struct extstore_stats {
     uint64_t worker_drain_calls, worker_drain_empty, worker_wait_enq;
     uint64_t slot_acct_leak;
     uint64_t alloc_failures;   /* store full: SET answered NOT_STORED */
-    uint64_t worker_window;
+    uint64_t worker_window;   /* 실효값 = nqp × ORD (파생, 설정 불가) */
     /* 형태 실험(shape-20260804)이 이 셋으로만 셀을 가른다. 노출하지 않으면
      * 양측 다 어느 셀을 돌렸는지 증명할 수 없다. ord_limit 은 실효값이다
      * (0 을 넣으면 CM 협상값이 들어오므로 워커가 실제로 쓰는 값을 낸다). */
@@ -66,7 +66,6 @@ struct extstore_conf {
     unsigned int slot_size;    // bounce/staging slot size (>= max remote object)
     unsigned int read_slots;   // bounce slots per worker (<= 64)
     unsigned int write_slots;  // total worker staging slots
-    unsigned int worker_window;   // v2: per-worker outstanding cap (<= 64)
     unsigned int qp_per_worker;   // v2: QPs per worker (>=1, unbounded)
     unsigned int ord_limit;       // v2: per-QP outstanding RDMA READ gate.
                                   //     0 = use the CM-negotiated value.
@@ -156,7 +155,7 @@ void extstore_set_staging_need(void *ptr, unsigned int n);
  * calling worker's resources (shared-nothing; see md/V2_CODE_SPEC.md P2).
  * prepare/create run in the MAIN thread before conns are dispatched. */
 int extstore_workers_prepare(void *ptr, unsigned int nworkers,
-                             unsigned int nqp, unsigned int window);
+                             unsigned int nqp);
 void *extstore_worker_create(void *ptr, unsigned int worker_id);
 int extstore_worker_submit(void *worker, obj_io *chain);
 char *extstore_worker_staging_get(void *worker);      /* P2b */
@@ -164,6 +163,7 @@ void extstore_worker_staging_put(void *worker, char *slot);
 int extstore_worker_post_write(void *worker, obj_io *io);
 int extstore_worker_drain(void *worker, int budget);
 unsigned int extstore_worker_outstanding(void *worker);
+unsigned int extstore_worker_window(void *worker);
 void *extstore_worker_current(void); /* set during drain; for retry re-post */
 int extstore_check(void *ptr, unsigned int page_id, uint64_t page_version);
 void extstore_get_stats(void *ptr, struct extstore_stats *st);

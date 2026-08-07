@@ -48,7 +48,6 @@ static void pending_chain_flush(LIBEVENT_THREAD *t) {
 static _Thread_local conn *g_skip_conn;  /* 지금 파싱 중이라 재개하면 안 되는 연결 */
 
 static _Thread_local bool g_ret_init = false;
-static unsigned int g_worker_window = 16; // v2 P2a (ext_worker_window)
 static unsigned int g_qp_per_worker = 1;  // v2 P2a (ext_qp_per_worker)
 static unsigned int g_loc_mag_depth = 64; // v3 (ext_loc_mag_depth); extstore.c의 기본값과 일치
 static _Atomic uint64_t g_read_retry_ct = 0;
@@ -1205,7 +1204,8 @@ int storage_store_item(void *e, item *it, item **hdr_out, uint32_t hv) {
      * 두드리면 워커 28개가 캐시라인 하나를 놓고 경합한다(SET당 15.6회
      * → 초당 2600만 RMW). 통계값이라 배치 반영으로 충분하다. */
     uint64_t spins = 0;
-    while (extstore_worker_outstanding(w) >= g_worker_window) {
+    unsigned int win = extstore_worker_window(w);
+    while (extstore_worker_outstanding(w) >= win) {
         spins++;
         if (extstore_worker_drain(w, 32) < 0) break;
     }
@@ -1305,7 +1305,6 @@ void *storage_init_config(struct settings *s) {
     if ((v = getenv("EXT_WRITE_SLOTS")) &&
             !safe_strtoul(v, &cf->ext_cf.write_slots))
         cf->ext_cf.write_slots = 0;
-    cf->ext_cf.worker_window = 16;   /* v2 P2a; ORD boundary for nqp=1 */
     cf->ext_cf.qp_per_worker = 1;
     cf->ext_cf.ord_limit = 0;      /* 0 = adopt the CM-negotiated per-QP depth */
     cf->ext_cf.batch = EXT_BATCH_DEFAULT;
@@ -1327,7 +1326,6 @@ int storage_read_config(void *conf, char **subopt) {
     enum {
         EXT_PAGE_SIZE,
         EXT_PATH,
-        EXT_WORKER_WINDOW,
         EXT_QP_PER_WORKER,
         EXT_ORD_LIMIT,
         EXT_BATCH,
@@ -1345,7 +1343,6 @@ int storage_read_config(void *conf, char **subopt) {
     char *const subopts_tokens[] = {
         [EXT_PAGE_SIZE] = "ext_page_size",
         [EXT_PATH] = "ext_path",
-        [EXT_WORKER_WINDOW] = "ext_worker_window",
         [EXT_QP_PER_WORKER] = "ext_qp_per_worker",
         [EXT_ORD_LIMIT] = "ext_ord_limit",
         [EXT_BATCH] = "ext_batch",
@@ -1372,14 +1369,6 @@ int storage_read_config(void *conf, char **subopt) {
                 return 1;
             }
             ext_cf->page_size *= 1024 * 1024; /* megabytes */
-            break;
-        case EXT_WORKER_WINDOW:
-            if (subopts_value == NULL ||
-                !safe_strtoul(subopts_value, &ext_cf->worker_window) ||
-                ext_cf->worker_window < 1) {
-                fprintf(stderr, "ext_worker_window must be >= 1\n");
-                return 1;
-            }
             break;
         case EXT_POST_CHAIN:
             if (subopts_value == NULL ||
@@ -1565,7 +1554,6 @@ void *storage_init(void *conf) {
     ext_crypto_init(key);
     g_crypto_on = true;
 
-    g_worker_window = ext_cf->worker_window;
     g_qp_per_worker = ext_cf->qp_per_worker;
     storage = extstore_init(cf->storage_file, ext_cf, &eres);
     if (storage == NULL) {
@@ -1607,8 +1595,7 @@ int storage_prepare_workers(void *storage, int nthreads) {
      * 잡아 DMA 등록이 745 KB가 되고, SEV의 SWIOTLB가 파편화됐을 때
      * ibv_reg_mr이 EIO로 죽는다(실측). 실제 설정값으로 잡는다. */
     extstore_set_staging_need(storage, g_setq_max);
-    return extstore_workers_prepare(storage, nthreads,
-                                    g_qp_per_worker, g_worker_window);
+    return extstore_workers_prepare(storage, nthreads, g_qp_per_worker);
 }
 
 #endif

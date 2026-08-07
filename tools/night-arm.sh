@@ -29,5 +29,7 @@ $G 'printf "stats settings\r\nquit\r\n" | nc -q1 127.0.0.1 11411 | tr -d "\r" |
     printf "stats\r\nquit\r\n" | nc -q1 127.0.0.1 11411 | tr -d "\r" |
       grep -E "ext_qp_per_worker|ext_ord_limit|ext_read_slots|ext_pac_fallback|curr_items|extstore_prof_span_ver" |
       sed "s/^STAT //" | tr "\n" " "; echo'
-grep -o "ext_worker_window=[0-9]*" /tmp/night-arm.out | head -1
-sha=$($G 'sha256sum ~/coherent-mr-v2/bin/memcached | cut -c1-24'); echo "build $sha"
+# 지문은 **실제로 띄운 바이너리**를 해시해야 한다. 고정 경로를 해시하면
+# BIN 으로 다른 빌드를 띄웠을 때 게이트가 엉뚱한 sha 를 인증한다.
+MCBIN=${BIN:-'$HOME/coherent-mr-v2/bin/memcached'}
+sha=$($G "sha256sum $MCBIN | cut -c1-24"); echo "build $sha"

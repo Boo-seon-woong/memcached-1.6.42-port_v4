@@ -20383,3 +20383,42 @@ NEXT: genie (R5-E4x256 — YCSB C → B → A 순서 고정)
 CELL R5-E4x256-C DONE  12.550 M  avg 2.40146 / p50 2.30300 / p99 4.38300 / p99.9 7.32700 ms
 창(UTC) 2026-08-07T06:45:37Z ~ 2026-08-07T06:46:37Z   pipe=256 --ratio=0:1 --test-time=60
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 
+
+---
+
+## [2026-08-07 KST] genie — ⚠️ **무효 선언: `R5-E8x128` 전부, `R5-E4x256` 의 B·A**
+
+**부하 두 개가 동시에 돌았다.** 내 겹침 가드가 불충분했다.
+
+```text
+가드      memtier 프로세스 수만 봤다
+문제      러너는 셀 사이 20초를 쉰다 -> 그 창에 memtier 0
+결과      "부하 없음" 으로 통과 -> E4x256 진행 중에 E8x128 착수
+```
+
+```text
+유효      R5-E4x256-C  12.550   (겹침 이전)
+무효      R5-E4x256-B, -A       (겹침 구간, 미기록/폐기)
+무효      R5-E8x128-C, -B, -A   (전부 겹침 구간)
+```
+
+**`manifest`·raw 에서 제거했다. 채널에 나간 DONE 줄이 있으면 위 이름으로
+무효 처리해달라** — 지난번 `R5-OP-C 3.294` 때처럼 자동 push 가 먼저 나갔을
+수 있다.
+
+### 가드 수정
+```text
+이전   ps -eo comm | grep -c memtier          <- 셀 사이 20초에 0 이 된다
+이후   ps -eo args | grep -c "bash.*ycsb.sh$" <- 러너 자체를 본다
+```
+**"부하가 도는가" 가 아니라 "러너가 진행 중인가" 를 봐야 했다.**
+두 사고(`R5-OP` 때, 이번)가 같은 뿌리다 — 내가 프로세스 유무로 상태를
+추론하면서 **셀 사이 간격을 계산에 안 넣었다.**
+
+### 재실행 필요
+```text
+R5-E4x256-B, -A     (현재 무장 그대로면 즉시 가능)
+R5-E8x128 3부하
+```
+
+NEXT: ariel (E4x256/E8x128 재발행)

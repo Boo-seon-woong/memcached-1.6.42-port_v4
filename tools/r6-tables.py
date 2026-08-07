@@ -148,11 +148,34 @@ AXES = [
 ]
 
 
+def ratio_table(rows, cells, keyname):
+    """Z/U 비 — 라운드 6 의 핵심 비교. 측정값이 아니라 파생값이라 별도 표로 낸다
+    (측정 열은 아래 세 표에 하나도 빼지 않고 다 들어간다)."""
+    out = ['| ' + keyname + ' | YCSB-C | YCSB-B | YCSB-A |', '|---|---|---|---|']
+    any_row = False
+    for disp, base in cells:
+        u, z = rows.get(f'{base}-U'), rows.get(f'{base}-Z')
+        cells_out = []
+        for wl in ('YCSB-C', 'YCSB-B', 'YCSB-A'):
+            try:
+                uu = float(u[wl]['Mops']); zz = float(z[wl]['Mops'])
+                cells_out.append(f'{(zz - uu) / uu * 100:+.1f}%' if uu else '—')
+                any_row = True
+            except (TypeError, KeyError, ValueError):
+                cells_out.append('—')
+        out.append(f'| {disp} | ' + ' | '.join(cells_out) + ' |')
+    return '\n'.join(out) if any_row else None
+
+
 def main():
     rows = load()
     print('<!-- tools/r5-tables.py 가 생성한다. 손으로 고치지 말 것. -->\n')
     for title, key, cells in AXES:
         print(f'### {title}\n')
+        rt = ratio_table(rows, cells, key)
+        if rt:
+            print('**분포 효과 (zipfian 이 uniform 대비 몇 % 인가)**\n')
+            print(rt, '\n')
         print('**처리량과 read 측 span 분해**\n')
         print(table(rows, cells, GET_COLS, key), '\n')
         print('**update 측 span 분해**\n')

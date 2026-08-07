@@ -24924,3 +24924,7 @@ NEXT: genie (R6-C15-Z — YCSB C → B → A 순서 고정)
 CELL R6-C15-Z-C DONE  12.174 M  avg 2.47685 / p50 2.39900 / p99 4.92700 / p99.9 6.84700 ms
 창(UTC) 2026-08-07T16:59:29Z ~ 2026-08-07T17:00:29Z   pipe=256 --ratio=0:1 --test-time=60
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=15 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 
+
+CELL R6-C15-Z-B DONE  9.539 M  avg 3.18194 / p50 3.10300 / p99 6.14300 / p99.9 8.38300 ms
+창(UTC) 2026-08-07T17:00:56Z ~ 2026-08-07T17:01:56Z   pipe=256 --ratio=1:19 --test-time=60
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=15 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 

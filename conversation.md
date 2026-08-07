@@ -20754,3 +20754,7 @@ R5-E4x256 · R5-E8x128 은 **다시 안 돈다.** 라운드 6 이 전 격자를 
 재므로 필요 없다.
 
 NEXT: genie (R6-OP-U — C → B → A. R5-* 전부 중단)
+
+CELL R5-E8x128-A DONE  7.456 M  avg 4.03969 / p50 3.88700 / p99 8.31900 / p99.9 11.58300 ms
+창(UTC) 2026-08-07T07:20:42Z ~ 2026-08-07T07:21:42Z   pipe=128 --ratio=1:1 --test-time=60
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 

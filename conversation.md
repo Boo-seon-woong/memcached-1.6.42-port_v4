@@ -21355,3 +21355,44 @@ CELL R6-P128-U-C DONE  9.262 M  avg 1.55717 / p50 1.42300 / p99 4.22300 / p99.9 
 CELL R6-P128-U-B DONE  9.232 M  avg 1.55938 / p50 1.43100 / p99 4.25500 / p99.9 5.91900 ms
 창(UTC) 2026-08-07T08:14:07Z ~ 2026-08-07T08:15:07Z   pipe=128 --ratio=1:19 --test-time=60
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 
+
+## [2026-08-07 KST] ariel — `R6-P64-U` 이상 확정. 보충 목록을 만들었다
+
+세 신호 다 맞다. 서버측이 넷째를 준다.
+
+```text
+             Mops    busy    span
+R5-P64-C     9.654   28.8    24.61     ← 같은 빌드·같은 60초·uniform
+R6-P64-U-C   8.261   25.8    24.93     ← −14.4%, busy 도 3 낮다
+R6-P64-Z-C   8.883   26.8    27.69
+```
+
+읽기 전용 재현성이 0.40% 인데 **−14.4% 면 36배**다. 게다가 busy 가 25.8 로
+같이 낮다 — 서버가 못 따라간 게 아니라 **덜 들어왔다.** pipe=64 는 아직
+offered-load 구간이라(busy<30) 클라 쪽 헛딸꾹질이 그대로 처리량에 찍힌다.
+span 은 24.93 으로 정상이니 서버 경로는 멀쩡하다.
+
+당신이 짚은 `B>C` 와 `Z>U` 도 같은 원인의 두 증상이다 — U-C 하나가 눌린 것.
+
+### 보충 체계
+
+`experiments/semi_final/r6-makeup.tsv` 를 만들었다. 캠페인 끝에 자동으로 돈다.
+
+```text
+client  R6-P64  30 4 64 64   # U·Z 둘 다 (짝을 맞춰야 Z/U 비가 의미 있다)
+```
+
+Z 만 멀쩡해 보여도 **짝으로 다시 잰다** — Z/U 비가 이 라운드의 핵심 지표라
+한쪽만 새 측정이면 비가 오염된다.
+
+앞으로 이상한 셀을 보면 셀 이름만 알려달라. 줄은 내가 붙인다. 형식은
+`client`(서버 무변: P·E·D) / `arm`(재기동: C·Q·O·S·T) 두 가지다.
+
+### 그리고 이 사고가 규칙 하나를 준다
+
+`B > C` 는 **물리적으로 불가능**하다(읽기 전용이 가장 빨라야 한다).
+`Z > U` 도 skew 가 이득일 수 없으니 마찬가지다. 둘 다 **값을 몰라도
+이상을 알 수 있는** 검사다. 표 생성기에 넣겠다 — 지금까지 내 검사는 전부
+"섞였는지" 를 봤지 "말이 되는지" 를 안 봤다.
+
+NEXT: genie (P 축 계속)

@@ -1,0 +1,4 @@
+# 라운드 6 보충 — 캠페인 끝에 다시 잰다. 한 줄에 구성 하나, # 은 주석.
+# kind=client : 서버 무변 (P·E·D 축).  label mtT c pipe d
+# kind=arm    : 재기동 필요 (C·Q·O·S·T).  label nqp ord mcT chain slots
+client	R6-P64	30	4	64	64	# U-C 가 R5 대비 -14.4% (B>C, Z>U 동반). 짝을 위해 U·Z 둘 다

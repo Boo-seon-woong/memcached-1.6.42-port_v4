@@ -54,9 +54,11 @@ ORD)를 운영점에서 **하나씩만** 흔들고, 7번은 wire 곱을 256 으�
         순서는 C → B → A 고정 (읽기 전용 먼저, 쓰기 비중이 커지는 순).
         genie 의 `-A` 보고를 확인한 뒤 다음 구성으로 넘어간다.
 
-        ▲ 한계: YCSB 본래 정의는 요청 분포도 Zipfian 이지만 memtier 에는
-          Zipfian 이 없다. 이 격자는 **비율만 YCSB 를 따르고 키 분포는
-          uniform(`--key-pattern=R:R`)** 이다. 문서·논문에 쓸 때 그대로 적는다.
+        ▲ 키 분포: 이 격자는 **uniform**(`--key-pattern=R:R`)이다.
+          YCSB 본래 정의는 Zipfian 이고 **이 memtier 빌드는 zipf 를 지원한다**
+          (`--key-pattern=Z:Z --key-zipf-exp=0.99`). 다만 상류 2.1.4 태그에는
+          없는 기능이라 게스트 바이너리는 master 계열 빌드다 — 버전 문자열만
+          2.1.4 로 찍힌다. Zipfian 은 별도 축으로 붙인다(§5).
 채널    conversation.md 에 GO/DONE. GO 맨 위에 SERVER: 줄 필수
 기록    guest 추적기 42열 1초 + manifest.tsv + genie DONE 줄
 저장    ① csv/R5-{OP,P,E,D,C,Q,O,S,T}.csv + rows.tsv + client.tsv
@@ -160,3 +162,30 @@ SET 측  Sv3_avg · Sv3_p50 · Sv3_p99 · Sadmit · Sv2 · Sret · Sxfer · Scry
 재기동 41회 (+프리로드) · value flush 9회                    ≈ 110분
 합계                                                        ≈ 6 시간
 ```
+
+## 5. Zipfian 축 (계획 — 라운드 5 완료 후)
+
+`--key-pattern=Z:Z --key-zipf-exp=0.99` 로 YCSB 기본 지수를 맞춘다. 분포의
+**모양은 YCSB 와 같다** — 지수 의미가 동일한 `1/k^s` 이고, 구현만 이산 zeta
+대신 연속 근사(Hörmann-Derflinger 거부-역변환, `obj_gen.cpp:391`)다. n=100만
+에서 차이는 무시할 수준이다.
+
+**다른 점은 배치다.** memtier 는 스크램블을 하지 않는다 — `generate_key()` 가
+`prefix + key_index` 를 그대로 쓰고 분포의 최빈값이 `key_min` 이라, 핫 키가
+문자 그대로 `m-1, m-2, …` 최저 번호다. YCSB 는 `ScrambledZipfian` 으로 순위를
+해시에 통과시켜 키공간에 흩뿌린다.
+
+memcached 해시 테이블에는 무해하다(키 문자열을 해시하므로 버킷·락은 흩어진다).
+문제는 **원격 저장 쪽**이다 — 프리로드가 순차라 키 번호와 원격 오프셋이 삽입
+순서로 대응하므로, 스크램블이 없으면 핫 데이터가 원격 메모리 앞쪽 연속 구간에
+몰린다. YCSB 가 스크램블하는 취지가 정확히 이걸 막는 것이다.
+
+```text
+이론값 (exp=0.99, 키 100만)
+  1위 키 6.50%  ·  상위 10 = 19.2%  ·  상위 1,000 = 50.2%  ·  상위 1% = 66.4%
+  12.6M ops/s 라면 1위 키 하나에 초당 82만 요청
+```
+
+이 설계에는 값 수준 로컬 캐시가 없어(recache 경로 없음) 핫 키도 매번 RDMA READ
+를 탄다. 따라서 Zipfian 은 캐시 효과가 아니라 **skew 아래의 잠금·원격 지역성**
+을 재는 축이다. 처리량이 떨어지면 그 폭이 결과다.

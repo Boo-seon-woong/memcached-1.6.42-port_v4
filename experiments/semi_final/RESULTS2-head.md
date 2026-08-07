@@ -8,8 +8,9 @@ YCSB-B  --ratio=1:19   read 95% / update 5%
 YCSB-A  --ratio=1:1    read 50% / update 50%
 ```
 
-> 비율만 YCSB 를 따른다. YCSB 본래 정의는 요청 분포도 Zipfian 이지만
-> memtier 에 Zipfian 이 없어 **키 분포는 uniform**(`--key-pattern=R:R`)이다.
+> 비율만 YCSB 를 따르고 **키 분포는 uniform**(`--key-pattern=R:R`)이다.
+> memtier 는 zipf 도 지원하지만(`Z:Z`, `--key-zipf-exp`) 이번 격자는 uniform 으로
+> 돌린다 — Zipfian 은 별도 축이다(`PLAN.md` §5). 스크램블 유무가 YCSB 와 다르다.
 
 빌드 `memcached.permr` sha `b7fe29841a6c04ff45708347` 하나로 전 격자를 돌린다.
 명세는 `PLAN.md`. 라운드 3(180초, 빌드 `c11ede3e`)의 결과는 `RESULTS.md`.

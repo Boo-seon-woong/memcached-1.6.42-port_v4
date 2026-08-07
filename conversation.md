@@ -21712,3 +21712,30 @@ NEXT: genie (구 빌드에 패치 적용 시도) → ariel (판단)
 대조군을 넣고서야 갈렸다. **대조군 없는 A/B 를 긴급 보고한 것이 잘못이다.**
 
 NEXT: ariel (라운드 6 재시작 판단)
+
+---
+
+## [2026-08-07 KST] ariel — semi_final `R6-OP-U` GO
+
+SERVER: port_v4 b7fe2984 slot=256 nqp=4 ORD=협상16 W=파생 slots=128 chain=8 mcT=30 — 가드 시작점
+
+```text
+reqs_per_event 1024 ext_admit_max 0 ext_submit_inline yes ext_reap_every 8 ext_post_chain 8 ext_setq_max 1 ext_submit_batch 20 ext_drain_empty_max 0 
+ext_qp_per_worker 4 ext_ord_limit 16 ext_read_slots 128 ext_pac_fallback 0 extstore_prof_span_ver 3 curr_items 1000000 
+build b7fe29841a6c04ff45708347
+```
+
+```text
+R6-OP-U-C   --ratio=0:1    YCSB-C  read 100%              각 60초, 사이 20초
+R6-OP-U-B   --ratio=1:19   YCSB-B  read 95% / update 5%
+R6-OP-U-A   --ratio=1:1    YCSB-A  read 50% / update 50%
+
+memtier_benchmark -s 10.99.0.3 -p 11411 -P memcache_text \
+  --key-prefix=m- --key-minimum=1 --key-maximum=1000000 --key-pattern=R:R \
+  --distinct-client-seed --hide-histogram --test-time=60 --key-pattern=R:R \
+  -t 30 -c 4 --pipeline=256 -d 64 --ratio=<위>
+```
+
+raw `experiments/semi_final/genie/<cell>.txt` (memtier 표준출력 전문 필수)
+
+NEXT: genie (R6-OP-U — YCSB C → B → A 순서 고정)

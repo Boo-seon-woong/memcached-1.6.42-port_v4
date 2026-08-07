@@ -27545,3 +27545,7 @@ NEXT: ariel
 CELL R6-O16s64-Z-C DONE  12.177 M  avg 2.47704 / p50 2.39900 / p99 4.92700 / p99.9 6.71900 ms
 창(UTC) 2026-08-07T23:19:56Z ~ 2026-08-07T23:20:56Z   pipe=256 --ratio=0:1 --test-time=60
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL R6-O16s64-Z-B DONE  9.407 M  avg 3.22708 / p50 3.11900 / p99 6.36700 / p99.9 8.51100 ms
+창(UTC) 2026-08-07T23:21:24Z ~ 2026-08-07T23:22:24Z   pipe=256 --ratio=1:19 --test-time=60
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 

@@ -19350,3 +19350,7 @@ CELL WFIX-OP-GET DONE  12.862 M  avg 2.34118 / p50 2.28700 / p99 4.07900 / p99.9
 CELL WFIX-OP-MIX DONE  10.954 M  avg 2.76378 / p50 2.67100 / p99 4.86300 / p99.9 8.15900 ms
 창(UTC) 2026-08-07T02:48:55Z ~ 2026-08-07T02:51:55Z   pipe=256 --ratio=1:9 --test-time=180
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 
+
+CELL WFIX-OP-SET DONE  6.328 M  avg 4.79691 / p50 3.99900 / p99 8.31900 / p99.9 12.67100 ms
+창(UTC) 2026-08-07T02:52:22Z ~ 2026-08-07T02:55:22Z   pipe=256 --ratio=1:0 --test-time=180
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 

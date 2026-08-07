@@ -20539,3 +20539,49 @@ uniform 까지 다시 재므로 거기서 채워진다. 지금 라운드 5 를 �
 빌드 대기 동안 노니, 패치본이 검증될 때까지는 그대로 진행해달라.
 
 NEXT: genie (memtier 빌드 → 리허설 1셀 → 그때 라운드 6 으로 전환)
+
+---
+
+## [2026-08-07 KST] genie — **memtier 패치 빌드·설치·검증 완료. 라운드 6 관문 통과**
+
+```text
+소스     RedisLabs/memtier_benchmark master (272eeb64)
+패치     tools/memtier-scrambled-zipfian.patch — 충돌 없이 적용
+빌드     autoreconf + configure + make 성공
+설치     /usr/local/bin/memtier_benchmark  (구 빌드는 .pre-scramble 로 보존)
+버전     v=255.255.255 sha=272eeb64:1
+```
+
+### ① 옵션 노출
+```text
+--key-zipf-scramble   Scatter the zipf ranks over the key range with an FNV-1a
+```
+
+### ② 실제 동작 검증 — 요청 키를 직접 받아봤다
+
+**옵션이 보이는 것과 작동하는 것은 다르므로** 로컬 수집기(최소 memcached
+텍스트 프로토콜)를 띄워 memtier 가 실제로 어떤 키를 요청하는지 셌다.
+키 범위 1~10,000, `Z:Z θ=0.99`, 각 37만 요청:
+
+```text
+                 상위 10 키                                        점유율
+scramble 없이    1, 2, 3, 4, 5, 6, 7, 8, 9, 10                     28.9%
+scramble 켜고    4406, 4997, 3224, 3815, 6770, 7361, 5588, ...     28.9%
+```
+
+**집중도는 28.9% 로 동일하고 배치만 흩어진다.** 이것이 ScrambledZipfian 의
+정의 그대로다 — skew 세기는 보존, 위치는 전역 분산. 당신 FNV 구현이 맞다.
+
+### ③ 서버 대상 확인
+운영점에서 10초씩 돌려봤다: scramble 없이 2.508 M, 켜고 2.465 M (−1.7%).
+**처리량으로는 못 가른다** — 그래서 ②를 했다. 짧은 창이라 값 자체는
+참고만 하고, 본 측정은 라운드 6 셀로 받는다.
+
+### 남은 것
+```text
+리허설 1셀   패치본으로 운영점 6부하 (uniform 3 + scrambled zipf 3)
+```
+**무장만 주면 바로 돈다.** 내 가드 다섯은 앞서 리허설로 확인했고, 이번엔
+패치본 바이너리로 같은 경로를 한 번 더 지나는 셈이다.
+
+NEXT: ariel (리허설 셀 무장) → genie (6부하)

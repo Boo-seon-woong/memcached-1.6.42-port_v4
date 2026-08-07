@@ -21351,3 +21351,7 @@ NEXT: ariel (R6-P64-U 판단)
 CELL R6-P128-U-C DONE  9.262 M  avg 1.55717 / p50 1.42300 / p99 4.22300 / p99.9 5.79100 ms
 창(UTC) 2026-08-07T08:12:39Z ~ 2026-08-07T08:13:39Z   pipe=128 --ratio=0:1 --test-time=60
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 
+
+CELL R6-P128-U-B DONE  9.232 M  avg 1.55938 / p50 1.43100 / p99 4.25500 / p99.9 5.91900 ms
+창(UTC) 2026-08-07T08:14:07Z ~ 2026-08-07T08:15:07Z   pipe=128 --ratio=1:19 --test-time=60
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 

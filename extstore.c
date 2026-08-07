@@ -627,13 +627,24 @@ static int cm_connect_worker_qp(store_engine *e, store_worker *w,
         e->pd = ibv_alloc_pd(w->cm_id[qi]->verbs);
         if (!e->pd) WCM_FAIL("alloc_pd");
     }
-    /* 동시성 상한은 nqp × ORD 하나뿐이다(§W). ORD 는 QP 당 하드웨어 한도라
-     * 핀이 없으면 장치 최대치를 쓴다 — 연결 전에 알 수 있는 값이다. */
-    unsigned int ord = e->ord_limit;
-    if (ord == 0) {
+    /* 동시성 상한은 nqp × ORD 하나뿐이다(§W). ORD 는 QP 가 연결될 때 박히는
+     * 하드웨어 속성이라 장치 최대치를 넘겨 요청할 수 없다 — 넘기면 rdma_connect
+     * 가 EINVAL 을 내고, uint8_t 로 잘리면(256→0) READ 못 하는 QP 가 선다.
+     * 핀은 "무엇을 요청할지"만 정하고, 실효값은 언제나 협상 결과다. */
+    unsigned int dev_max = 16;
+    {
         struct ibv_device_attr da;
-        ord = (ibv_query_device(w->cm_id[qi]->verbs, &da) == 0 &&
-               da.max_qp_rd_atom > 0) ? (unsigned int)da.max_qp_rd_atom : 16;
+        if (ibv_query_device(w->cm_id[qi]->verbs, &da) == 0 && da.max_qp_rd_atom > 0)
+            dev_max = (unsigned int)da.max_qp_rd_atom;
+    }
+    unsigned int ord = e->ord_limit ? e->ord_limit : dev_max;
+    if (ord > dev_max) {
+        static _Atomic int ord_clamp_warned;
+        if (!atomic_exchange(&ord_clamp_warned, 1))
+            fprintf(stderr, "extstore: ext_ord_limit=%u exceeds the HCA's "
+                    "max_qp_rd_atom=%u; clamped (depth is a QP attribute, not a "
+                    "software gate)\n", ord, dev_max);
+        ord = dev_max;
     }
     if (!w->cq) {
         w->window = w->nqp * ord;
@@ -653,22 +664,22 @@ static int cm_connect_worker_qp(store_engine *e, store_worker *w,
     if (rdma_create_qp(w->cm_id[qi], e->pd, &ia)) WCM_FAIL("create_qp");
     w->qp[qi] = w->cm_id[qi]->qp;
 
-    /* Ask for the configured ORD; 0 means "ask for the device maximum and take
-     * whatever the CM negotiates". The negotiated value is adopted below unless
-     * the operator pinned one explicitly. */
-    unsigned int ask = ord;
-    struct rdma_conn_param cp = { .responder_resources = (uint8_t)ask,
-        .initiator_depth = (uint8_t)ask, .retry_count = 7, .rnr_retry_count = 7 };
+    /* ord 는 dev_max 이하이므로 uint8_t 로 잘리지 않는다. */
+    struct rdma_conn_param cp = { .responder_resources = (uint8_t)ord,
+        .initiator_depth = (uint8_t)ord, .retry_count = 7, .rnr_retry_count = 7 };
     struct rdma_cm_event *ev;
     if (rdma_connect(w->cm_id[qi], &cp)) WCM_FAIL("connect");
     if (cm_wait(ch, RDMA_CM_EVENT_ESTABLISHED, &ev))
         WCM_FAIL("ESTABLISHED event");
-    /* Adopt the negotiated depth when the operator did not pin one. A pinned
-     * value is honoured verbatim even if it exceeds what the HCA negotiated —
-     * the excess simply queues in the SQ, which is a measurable outcome. */
-    if (e->ord_limit == 0) {
+    /* 협상 결과를 언제나 채택한다. 소프트 게이트(read_out < ord_limit)는 깊이
+     * 제어가 아니라 "나갈 수 없는 READ 로 bounce 슬롯을 묶지 않기" 위한
+     * 최적화이므로, 하드웨어가 실제로 무는 값과 어긋나면 안 된다. */
+    {
         unsigned int neg = ev->param.conn.initiator_depth;
-        w->ord_limit = neg ? neg : ask;
+        if (!neg) neg = ord;
+        w->ord_limit = neg;
+        w->window = w->nqp * neg;    /* 게이트를 실효 깊이에 맞춰 조인다 */
+        e->w_window = w->window;
     }
     if (first) {
         if (ev->param.conn.private_data_len < sizeof(struct xrd_mr_info)) {

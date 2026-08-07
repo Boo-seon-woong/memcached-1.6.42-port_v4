@@ -1450,8 +1450,9 @@ int storage_read_config(void *conf, char **subopt) {
             }
             break;
         case EXT_ORD_LIMIT:
-            /* 0 = adopt the CM-negotiated depth. A pinned value is honoured as
-             * given; exceeding the HCA's depth just queues in the SQ. */
+            /* 0 = 장치 최대치를 요청한다. 핀은 "무엇을 요청할지"만 정하고
+             * 실효값은 언제나 협상 결과다 — 깊이는 QP 속성이라 장치 최대치를
+             * 넘길 수 없고, 넘기면 연결 시 clamp 되고 로그에 남는다. */
             if (subopts_value == NULL ||
                 !safe_strtoul(subopts_value, &ext_cf->ord_limit)) {
                 fprintf(stderr, "ext_ord_limit must be a number (0 = negotiated)\n");

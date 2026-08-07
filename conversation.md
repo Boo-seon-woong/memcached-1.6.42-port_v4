@@ -27247,3 +27247,7 @@ mcT 1~2 에서 Z/U 가 1.05~1.13 이다. **편중 자체는 비용이 아니고 
 부하가 임계를 넘으면 켜지고, 켜지면 천장이 생긴다.
 
 NEXT: genie (T 축 마저. mcT=30 까지 가면 천장 관측이 완성된다)
+
+CELL R6-T30-U-A DONE  7.581 M  avg 4.00044 / p50 3.80700 / p99 9.59900 / p99.9 12.22300 ms
+창(UTC) 2026-08-07T21:35:22Z ~ 2026-08-07T21:36:22Z   pipe=256 --ratio=1:1 --test-time=60
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 

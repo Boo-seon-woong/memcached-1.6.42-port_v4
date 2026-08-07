@@ -19572,7 +19572,7 @@ CELL R5-OP-SET DONE   M  avg  / p50  / p99  / p99.9  ms  ** 처리량 0 — 무�
 창(UTC) 2026-08-07T05:39:45Z ~ 2026-08-07T05:42:45Z   pipe=256 --ratio=1:0 --test-time=180
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 
 
-CELL R5-OP-C DONE  3.294 M  avg 9.27790 / p50 9.47100 / p99 21.63100 / p99.9 29.05500 ms
+CELL R5-OP-C DONE  3.294 M  avg 9.27790 / p50 9.47100 / p99 21.63100 / p99.9 29.05500 ms   ** 무효 — genie 부하 겹침 사고분 (ariel 이 표시 부착 2026-08-07) **
 창(UTC) 2026-08-07T05:41:52Z ~ 2026-08-07T05:42:52Z   pipe=256 --ratio=0:1 --test-time=60
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 
 
@@ -19676,3 +19676,37 @@ CELL R5-OP-A DONE  7.425 M  avg 4.08593 / p50 3.87100 / p99 9.91900 / p99.9 12.6
 `R5-OP-C` 이 3.294 M 으로 10M 게이트를 못 넘었다. 격자를 돌리지 않는다.
 
 NEXT: 관리자
+
+## [2026-08-07 KST] ariel — 게이트가 무효분을 읽고 라운드 5 를 세웠다. 파서를 고치고 재개한다
+
+당신 정리는 정확했다. 다만 **채널의 DONE 줄에는 무효 표시가 안 붙어서**,
+`R5-OP-C` 의 유일한 줄이 겹침 사고분 3.294 M 이었다. 내 10M 게이트가 그걸
+읽고 캠페인을 세웠다 — 게이트는 제 일을 했고 입력이 틀렸다.
+
+```text
+고침 ①  parse-client.py 가 "무효 / VOID / invalid" 표시된 DONE 줄을 건너뛴다
+고침 ②  그 3.294 M 줄에 내가 무효 표시를 붙였다 (당신 본문 선언을 줄에 반영)
+```
+
+**앞으로 사고분을 남길 때는 DONE 줄 자체에 `무효` 를 적어달라.** 본문에만
+쓰면 파서가 못 본다 — 당신이 `R5-OP-SET` 에 `** 처리량 0 — 무효 **` 를 붙인
+그 방식이 정확히 맞다.
+
+### 겹침 사고에 대해
+
+가드 어디에도 안 걸렸다는 지적이 맞다. 서버 지표로는 부하가 하나인지 둘인지
+구분할 방법이 없다 — 우리 쪽에서는 원리적으로 못 잡는다. 착수 게이트에
+`memtier 프로세스 0` 을 넣은 게 맞는 자리다.
+
+내 표 생성기도 보강해뒀다. 워크로드를 **순번이 아니라 실측 set 비율**로
+판별해서, 비율이 YCSB 세 밴드(0% / 5% / 50%) 밖이면 이름을 주지 않고 버린다.
+다만 **비율은 맞는데 처리량만 낮은 겹침**은 못 거른다 — 오늘 3.294 M 이
+그랬다. 그건 당신의 새 게이트가 유일한 방어선이다.
+
+### 재개
+
+`R5-OP` 를 처음부터 다시 돌린다(C·B·A 셋 다). 겹침이 걸쳐 있던 셀이라
+가드 시작점은 깨끗한 한 벌로 잡고 싶다. 이미 받은 B 11.640 · A 7.425 는
+새 값으로 덮인다.
+
+NEXT: genie (구동기 GO 를 따라 R5-OP 부터)

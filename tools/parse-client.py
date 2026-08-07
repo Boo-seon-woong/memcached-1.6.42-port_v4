@@ -11,6 +11,9 @@ genie 의 `CELL <id> DONE` 줄이 유일한 출처이고 형식이 일정하다:
 """
 import re, sys
 
+# genie 가 사고분에 붙이는 표시. 대소문자·한글 모두 받는다.
+VOID = re.compile(r"무효|VOID|invalid|void", re.I)
+
 PAT = re.compile(
     r"^CELL\s+(?P<cell>[A-Za-z0-9_.\-]+)\s+DONE\s+(?P<ops>[\d.]+)\s*M"
     r"(?:.*?avg\s+(?P<avg>[\d.]+)\s*/\s*p50\s+(?P<p50>[\d.]+)"
@@ -20,8 +23,13 @@ PAT = re.compile(
 def main(path="conversation.md"):
     seen = {}
     for line in open(path):
-        m = PAT.match(line.strip())
+        line = line.strip()
+        m = PAT.match(line)
         if not m:
+            continue
+        # 무효로 표시된 줄은 값이 아니라 사고 기록이다. 그걸 읽으면 게이트가
+        # 멀쩡한 캠페인을 세운다(2026-08-07: 겹침 사고분 3.294 M 을 읽고 중단).
+        if VOID.search(line):
             continue
         d = m.groupdict()
         # 같은 셀이 두 번 보고되면 **나중 것**을 쓴다 (재시행이 정본)

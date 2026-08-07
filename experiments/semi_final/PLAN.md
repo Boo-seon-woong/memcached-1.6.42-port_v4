@@ -42,7 +42,10 @@ ORD)를 운영점에서 **하나씩만** 흔들고, 7번은 wire 곱을 256 으�
         ★ EXT_READ_SLOTS = max(64, 2 × wire 곱).  wire 곱 = nqp × min(ORD,16)
         ★ slot=256. slot 1024 는 같은 조건 대비 −27.4% 실측이라 되돌렸고,
           그래서 value 축은 d ≤ 128 이다.
-부하    genie off-box. memtier -s 10.99.0.3 -p 11411 -P memcache_text
+부하    genie off-box. **memtier = e64b26b8 + scrambled-zipfian 패치**
+        (상류 master 272eeb64 는 구 커밋 대비 −22.1% 라 쓰지 않는다 —
+         패치는 무해했고 느린 건 upstream 변경이었다. genie 교대 대조 2026-08-07)
+        memtier -s 10.99.0.3 -p 11411 -P memcache_text
         -t 30 -c 4 --pipeline=256 -d 64 --key-prefix=m-
         --key-minimum=1 --key-maximum=1000000 --key-pattern=R:R
         --distinct-client-seed --hide-histogram --test-time=60

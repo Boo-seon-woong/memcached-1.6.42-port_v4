@@ -58,6 +58,38 @@ def void_cells():
     return out
 
 
+def sanity(out):
+    """값을 몰라도 아는 이상. 지금까지 내 검사는 "다른 게 섞였나" 만 봤고
+    "말이 되나" 를 안 봤다 — genie 가 R6-P64-U 에서 B>C 로 잡아낸 부류다.
+
+      C ≥ B ≥ A   읽기 전용이 가장 빠르다. 쓰기가 늘수록 느려진다
+      Z ≤ U       skew 가 이득일 수 없다
+    """
+    bad = []
+    for lbl, wls in sorted(out.items()):
+        try:
+            c, b, a = (float(wls[w]['Mops']) for w in ('YCSB-C', 'YCSB-B', 'YCSB-A'))
+        except (KeyError, ValueError):
+            continue
+        if b > c * 1.01:
+            bad.append(f'`{lbl}` B({b:.3f}) > C({c:.3f}) — 읽기 전용이 더 느릴 수 없다')
+        if a > b * 1.01:
+            bad.append(f'`{lbl}` A({a:.3f}) > B({b:.3f}) — 쓰기가 많은데 더 빠를 수 없다')
+    for base in sorted({k[:-2] for k in out if k.endswith(('-U', '-Z'))}):
+        for w in ('YCSB-C', 'YCSB-B', 'YCSB-A'):
+            try:
+                u = float(out[base + '-U'][w]['Mops']); z = float(out[base + '-Z'][w]['Mops'])
+            except (KeyError, ValueError):
+                continue
+            if z > u * 1.02:
+                bad.append(f'`{base}` {w}: Z({z:.3f}) > U({u:.3f}) — skew 가 이득일 수 없다')
+    if bad:
+        print('> ⚠ **말이 안 되는 값** — 셀 사고를 의심할 것.\n>')
+        for m in bad:
+            print('> ' + m)
+        print()
+
+
 def load():
     voids = void_cells()
     lines = ROWS.read_text().strip().split('\n')
@@ -85,6 +117,7 @@ def load():
     # 부하가 섞였다는 뜻이다 — 라운드 전환 때 낡은 GO 를 따라온 부하가 실제로
     # 그렇게 들어왔다(2026-08-07). 비율도 이름도 형식상 맞아 자동으로는 못
     # 가르므로, **개수로 신고만** 한다. 값 판단은 사람이 한다.
+    sanity(out)
     odd = {k: v for k, v in counts.items() if v != 3}
     if odd:
         print('> ⚠ **창 안 부하 수가 3이 아닌 셀** — 다른 부하가 섞였을 수 있다.\n>')

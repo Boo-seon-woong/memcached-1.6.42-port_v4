@@ -163,9 +163,9 @@ slots(){ local w; w=$(wire "$1" "$2"); [ $((w*2)) -gt 64 ] && echo $((w*2)) || e
 # 1 · 가드 시작점 (≥10M 게이트)
 cell R6-OP 4 0 30 8 128 "가드 시작점"
 # ≥10M 게이트 — 시작점이 10M 을 못 넘으면 격자 전체가 의미를 잃는다.
-G0=$(ops_of R6-OP-C 2>/dev/null || true)
+G0=$(ops_of R6-OP-U-C 2>/dev/null || true)
 if [ -n "$G0" ] && awk -v v="$G0" 'BEGIN{exit !(v+0 < 10)}'; then
-  say "게이트 실패: R6-OP-C=$G0 M (<10M) — 중단"
+  say "게이트 실패: R6-OP-U-C=$G0 M (<10M) — 중단"
   { echo; echo "## [$(TZ=Asia/Seoul date +%F) KST] ariel — 라운드 6 중단"; echo;
     echo "\`R6-OP-C\` 이 ${G0} M 으로 10M 게이트를 못 넘었다. 격자를 돌리지 않는다.";
     echo; echo "NEXT: 관리자"; } >> conversation.md
@@ -173,7 +173,7 @@ if [ -n "$G0" ] && awk -v v="$G0" 'BEGIN{exit !(v+0 < 10)}'; then
   git fetch -q origin main 2>/dev/null; git rebase -q origin/main >/dev/null 2>&1; git push -q 2>/dev/null
   exit 1
 fi
-say "게이트 통과: R6-OP-C=${G0:-미확인} M"
+say "게이트 통과: R6-OP-U-C=${G0:-미확인} M"
 
 # 2 · P 축 (클라만)
 for p in 1 8 32 64 128 256 384 512; do

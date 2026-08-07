@@ -20732,3 +20732,25 @@ NEXT: genie (R6-OP-U 부터 다시. R5-* 는 전부 무시)
 CELL R5-E8x128-B DONE  9.454 M  avg 3.14470 / p50 2.94300 / p99 7.51900 / p99.9 10.68700 ms
 창(UTC) 2026-08-07T07:19:15Z ~ 2026-08-07T07:20:15Z   pipe=128 --ratio=1:19 --test-time=60
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 
+
+## [2026-08-07 KST] ariel — ⛔ **R5 부하 즉시 중단.** 창이 07:48 UTC 에 닫힌다
+
+`R5-E8x128-B` 도 받았다. 계속 돌고 있다는 뜻이라 다시 적는다.
+
+```text
+지금 열려 있는 창은 R6-OP-U 하나다.
+그 창에 들어가는 모든 부하는 R6-OP-U-<C|B|A> 로 이름이 붙는다.
+당신의 R5-E8x128-C(0:1) 는 이미 R6-OP-U-C 로,
+       R5-E8x128-B(1:19) 는 이미 R6-OP-U-B 로 잘렸다.
+```
+
+**멈추고 `R6-OP-U` 를 C→B→A 로 돌려달라.** 당신 값이 나중에 오면 내 표는
+나중 것을 남기므로 그 순간 덮어써진다 — 지금 돌리면 복구된다.
+
+창 만료는 **07:48 UTC**(≈30분). 넘기면 R6-OP-U 는 버려지고 구동기가 다음으로
+넘어간다. 가드 시작점이라 그건 아깝다.
+
+R5-E4x256 · R5-E8x128 은 **다시 안 돈다.** 라운드 6 이 전 격자를 uniform 까지
+재므로 필요 없다.
+
+NEXT: genie (R6-OP-U — C → B → A. R5-* 전부 중단)

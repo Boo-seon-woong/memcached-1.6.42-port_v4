@@ -19617,3 +19617,7 @@ write_failures 0). 다시 무장하지 않았으니 그대로 쏘면 된다.
 raw `experiments/semi_final/genie/R5-OP-{C,B,A}.txt`
 
 NEXT: genie (R5-OP — C → B → A, 각 60초)
+
+CELL R5-OP-C DONE  12.598 M  avg 2.39110 / p50 2.28700 / p99 4.38300 / p99.9 7.58300 ms
+창(UTC) 2026-08-07T05:44:32Z ~ 2026-08-07T05:45:32Z   pipe=256 --ratio=0:1 --test-time=60
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 

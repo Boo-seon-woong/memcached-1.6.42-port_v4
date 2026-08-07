@@ -1,0 +1,64 @@
+Writing results to stdout
+[RUN #1] Preparing benchmark client...
+[RUN #1] Launching threads now...
+[RUN #1 2%,   1 secs] 30 threads  4 conns:     9129172 ops, 9107814 (avg: 9107814) ops/sec, 918.77MB/sec (avg: 918.77MB/sec),  1.58 (avg:  1.58) msec latency
+warning: high CPU on thread 10: 95.1% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 12: 95.4% of a core (threshold 95.0%) - results may be unreliable
+[RUN #1 3%,   2 secs] 30 threads  4 conns:    18417487 ops, 9285817 (avg: 9196723) ops/sec, 936.73MB/sec (avg: 927.74MB/sec),  1.56 (avg:  1.57) msec latency
+warning: high CPU on thread 2: 95.2% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 6: 95.9% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 13: 95.3% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 17: 95.5% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 19: 95.3% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 20: 95.3% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 21: 95.8% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 26: 95.2% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 27: 96.4% of a core (threshold 95.0%) - results may be unreliable
+[RUN #1 5%,   3 secs] 30 threads  4 conns:    27697694 ops, 9277599 (avg: 9223663) ops/sec, 935.90MB/sec (avg: 930.46MB/sec),  1.55 (avg:  1.56) msec latency
+warning: high CPU on thread 0: 96.7% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 1: 97.0% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 3: 97.0% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 4: 95.4% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 5: 97.3% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 7: 96.3% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 8: 96.2% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 9: 95.8% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 11: 97.0% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 14: 97.1% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 15: 95.8% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 16: 96.8% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 18: 96.8% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 22: 98.2% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 23: 97.2% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 24: 96.7% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 25: 96.8% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 28: 97.8% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 29: 96.5% of a core (threshold 95.0%) - results may be unreliable
+[RUN #1 7%,   4 secs] 30 threads  4 conns:    36826964 ops, 9123111 (avg: 9198531) ops/sec, 920.32MB/sec (avg: 927.93MB/sec),  1.58 (avg:  1.57) msec latency[RUN #1 8%,   5 secs] 30 threads  4 conns:    46227095 ops, 9397537 (avg: 9238312) ops/sec, 948.00MB/sec (avg: 931.94MB/sec),  1.54 (avg:  1.56) msec latency[RUN #1 10%,   6 secs] 30 threads  4 conns:    55516037 ops, 9286323 (avg: 9246311) ops/sec, 936.78MB/sec (avg: 932.75MB/sec),  1.55 (avg:  1.56) msec latency[RUN #1 12%,   7 secs] 30 threads  4 conns:    64744434 ops, 9225647 (avg: 9243360) ops/sec, 930.66MB/sec (avg: 932.45MB/sec),  1.56 (avg:  1.56) msec latency[RUN #1 13%,   8 secs] 30 threads  4 conns:    73930928 ops, 9184069 (avg: 9235951) ops/sec, 926.47MB/sec (avg: 931.70MB/sec),  1.57 (avg:  1.56) msec latency[RUN #1 15%,   9 secs] 30 threads  4 conns:    83250378 ops, 9316813 (avg: 9244933) ops/sec, 939.86MB/sec (avg: 932.61MB/sec),  1.55 (avg:  1.56) msec latency[RUN #1 17%,  10 secs] 30 threads  4 conns:    92469727 ops, 9216878 (avg: 9242128) ops/sec, 929.77MB/sec (avg: 932.32MB/sec),  1.56 (avg:  1.56) msec latency[RUN #1 18%,  11 secs] 30 threads  4 conns:   101779206 ops, 9305021 (avg: 9247846) ops/sec, 938.67MB/sec (avg: 932.90MB/sec),  1.55 (avg:  1.56) msec latency[RUN #1 20%,  12 secs] 30 threads  4 conns:   111042458 ops, 9260612 (avg: 9248909) ops/sec, 934.19MB/sec (avg: 933.01MB/sec),  1.56 (avg:  1.56) msec latency[RUN #1 22%,  13 secs] 30 threads  4 conns:   120237328 ops, 9192801 (avg: 9244594) ops/sec, 927.35MB/sec (avg: 932.57MB/sec),  1.57 (avg:  1.56) msec latency[RUN #1 23%,  14 secs] 30 threads  4 conns:   129490862 ops, 9250989 (avg: 9245051) ops/sec, 933.22MB/sec (avg: 932.62MB/sec),  1.56 (avg:  1.56) msec latency[RUN #1 25%,  15 secs] 30 threads  4 conns:   138815484 ops, 9322179 (avg: 9250192) ops/sec, 940.39MB/sec (avg: 933.14MB/sec),  1.55 (avg:  1.56) msec latency[RUN #1 27%,  16 secs] 30 threads  4 conns:   148140745 ops, 9322659 (avg: 9254721) ops/sec, 940.45MB/sec (avg: 933.59MB/sec),  1.55 (avg:  1.56) msec latency[RUN #1 28%,  17 secs] 30 threads  4 conns:   157491950 ops, 9347895 (avg: 9260201) ops/sec, 943.00MB/sec (avg: 934.15MB/sec),  1.54 (avg:  1.56) msec latency[RUN #1 30%,  18 secs] 30 threads  4 conns:   166687165 ops, 9192751 (avg: 9256454) ops/sec, 927.34MB/sec (avg: 933.77MB/sec),  1.57 (avg:  1.56) msec latency[RUN #1 32%,  19 secs] 30 threads  4 conns:   176004061 ops, 9313543 (avg: 9259459) ops/sec, 939.53MB/sec (avg: 934.07MB/sec),  1.55 (avg:  1.56) msec latency[RUN #1 33%,  20 secs] 30 threads  4 conns:   185290058 ops, 9283546 (avg: 9260663) ops/sec, 936.50MB/sec (avg: 934.19MB/sec),  1.55 (avg:  1.56) msec latency[RUN #1 35%,  21 secs] 30 threads  4 conns:   194557966 ops, 9265443 (avg: 9260891) ops/sec, 934.68MB/sec (avg: 934.22MB/sec),  1.56 (avg:  1.56) msec latency[RUN #1 37%,  22 secs] 30 threads  4 conns:   203883077 ops, 9323078 (avg: 9263717) ops/sec, 940.49MB/sec (avg: 934.50MB/sec),  1.55 (avg:  1.56) msec latency[RUN #1 38%,  23 secs] 30 threads  4 conns:   213107866 ops, 9220049 (avg: 9261818) ops/sec, 930.10MB/sec (avg: 934.31MB/sec),  1.56 (avg:  1.56) msec latency[RUN #1 40%,  24 secs] 30 threads  4 conns:   222296041 ops, 9185768 (avg: 9258650) ops/sec, 926.64MB/sec (avg: 933.99MB/sec),  1.57 (avg:  1.56) msec latency[RUN #1 42%,  25 secs] 30 threads  4 conns:   231524246 ops, 9226009 (avg: 9257344) ops/sec, 930.70MB/sec (avg: 933.86MB/sec),  1.56 (avg:  1.56) msec latency[RUN #1 43%,  26 secs] 30 threads  4 conns:   240785930 ops, 9256426 (avg: 9257309) ops/sec, 933.77MB/sec (avg: 933.85MB/sec),  1.56 (avg:  1.56) msec latency[RUN #1 45%,  27 secs] 30 threads  4 conns:   250012347 ops, 9223557 (avg: 9256059) ops/sec, 930.45MB/sec (avg: 933.73MB/sec),  1.56 (avg:  1.56) msec latency[RUN #1 47%,  28 secs] 30 threads  4 conns:   259241999 ops, 9225666 (avg: 9254973) ops/sec, 930.66MB/sec (avg: 933.62MB/sec),  1.56 (avg:  1.56) msec latency[RUN #1 48%,  29 secs] 30 threads  4 conns:   268467737 ops, 9222196 (avg: 9253843) ops/sec, 930.31MB/sec (avg: 933.50MB/sec),  1.56 (avg:  1.56) msec latency[RUN #1 50%,  30 secs] 30 threads  4 conns:   277793890 ops, 9322629 (avg: 9256136) ops/sec, 940.44MB/sec (avg: 933.74MB/sec),  1.55 (avg:  1.56) msec latency[RUN #1 52%,  31 secs] 30 threads  4 conns:   286905249 ops, 9106896 (avg: 9251321) ops/sec, 918.68MB/sec (avg: 933.25MB/sec),  1.58 (avg:  1.56) msec latency[RUN #1 53%,  32 secs] 30 threads  4 conns:   295978908 ops, 9070828 (avg: 9245681) ops/sec, 915.04MB/sec (avg: 932.68MB/sec),  1.59 (avg:  1.56) msec latency[RUN #1 55%,  33 secs] 30 threads  4 conns:   305150848 ops, 9169482 (avg: 9243373) ops/sec, 924.99MB/sec (avg: 932.45MB/sec),  1.57 (avg:  1.56) msec latency[RUN #1 57%,  34 secs] 30 threads  4 conns:   314390460 ops, 9234920 (avg: 9243124) ops/sec, 931.60MB/sec (avg: 932.42MB/sec),  1.56 (avg:  1.56) msec latency[RUN #1 58%,  35 secs] 30 threads  4 conns:   323684760 ops, 9290880 (avg: 9244488) ops/sec, 937.24MB/sec (avg: 932.56MB/sec),  1.55 (avg:  1.56) msec latency[RUN #1 60%,  36 secs] 30 threads  4 conns:   332944983 ops, 9257223 (avg: 9244842) ops/sec, 933.85MB/sec (avg: 932.60MB/sec),  1.56 (avg:  1.56) msec latency[RUN #1 62%,  37 secs] 30 threads  4 conns:   342330654 ops, 9382743 (avg: 9248569) ops/sec, 946.51MB/sec (avg: 932.97MB/sec),  1.54 (avg:  1.56) msec latency[RUN #1 63%,  38 secs] 30 threads  4 conns:   351680373 ops, 9347699 (avg: 9251177) ops/sec, 942.97MB/sec (avg: 933.24MB/sec),  1.54 (avg:  1.56) msec latency[RUN #1 65%,  39 secs] 30 threads  4 conns:   360968542 ops, 9284269 (avg: 9252026) ops/sec, 936.57MB/sec (avg: 933.32MB/sec),  1.55 (avg:  1.56) msec latency[RUN #1 67%,  40 secs] 30 threads  4 conns:   370144295 ops, 9172340 (avg: 9250034) ops/sec, 925.29MB/sec (avg: 933.12MB/sec),  1.57 (avg:  1.56) msec latency[RUN #1 68%,  41 secs] 30 threads  4 conns:   379453756 ops, 9307041 (avg: 9251424) ops/sec, 938.87MB/sec (avg: 933.26MB/sec),  1.55 (avg:  1.56) msec latency[RUN #1 70%,  42 secs] 30 threads  4 conns:   388830519 ops, 9374100 (avg: 9254344) ops/sec, 945.64MB/sec (avg: 933.56MB/sec),  1.54 (avg:  1.56) msec latency[RUN #1 72%,  43 secs] 30 threads  4 conns:   398182935 ops, 9348938 (avg: 9256544) ops/sec, 943.10MB/sec (avg: 933.78MB/sec),  1.54 (avg:  1.56) msec latency[RUN #1 73%,  44 secs] 30 threads  4 conns:   407443429 ops, 9258234 (avg: 9256583) ops/sec, 933.95MB/sec (avg: 933.78MB/sec),  1.56 (avg:  1.56) msec latency[RUN #1 75%,  45 secs] 30 threads  4 conns:   416818853 ops, 9372799 (avg: 9259165) ops/sec, 945.51MB/sec (avg: 934.04MB/sec),  1.54 (avg:  1.56) msec latency[RUN #1 77%,  46 secs] 30 threads  4 conns:   426045376 ops, 9222207 (avg: 9258361) ops/sec, 930.32MB/sec (avg: 933.96MB/sec),  1.56 (avg:  1.56) msec latency[RUN #1 78%,  47 secs] 30 threads  4 conns:   435391955 ops, 9344186 (avg: 9260187) ops/sec, 942.62MB/sec (avg: 934.15MB/sec),  1.54 (avg:  1.56) msec latency

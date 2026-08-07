@@ -677,8 +677,12 @@ static int cm_connect_worker_qp(store_engine *e, store_worker *w,
      * 제어가 아니라 "나갈 수 없는 READ 로 bounce 슬롯을 묶지 않기" 위한
      * 최적화이므로, 하드웨어가 실제로 무는 값과 어긋나면 안 된다. */
     {
+        /* 협상값과 요청값 중 **작은 쪽**을 쓴다. 상대가 요청보다 큰 값을
+         * 돌려줄 수 있는데(실측: ORD=1 을 요청해도 16 이 온다), 무조건 채택하면
+         * 운영자가 건 핀이 지워져 ORD 스윕이 통째로 무의미해진다.
+         * 하드웨어가 무는 값보다 크게 잡지도, 핀보다 크게 잡지도 않는다. */
         unsigned int neg = ev->param.conn.initiator_depth;
-        if (!neg) neg = ord;
+        if (!neg || neg > ord) neg = ord;
         w->ord_limit = neg;
         w->window = w->nqp * neg;    /* 게이트를 실효 깊이에 맞춰 조인다 */
         e->w_window = w->window;

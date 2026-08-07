@@ -1,16 +1,30 @@
-# semi_final 결과 2 — 라운드 5 (수정 빌드 전면 재측정)
+# semi_final 결과 2 — 라운드 6 (수정 빌드 · uniform/zipfian 두 벌)
 
-측정: 2026-08-07~. 구성마다 **YCSB 워크로드 3종**을 각 **60초**, 사이 20초.
+측정: 2026-08-07~. 구성마다 **키 분포 2종 × YCSB 워크로드 3종 = 6부하**를
+각 **60초**, 사이 20초.
 
 ```text
-YCSB-C  --ratio=0:1    read 100%
-YCSB-B  --ratio=1:19   read 95% / update 5%
-YCSB-A  --ratio=1:1    read 50% / update 50%
+분포  U  --key-pattern=R:R                                       uniform
+      Z  --key-pattern=Z:Z --key-zipf-exp=0.99 --key-zipf-scramble
+
+워크로드  YCSB-C  --ratio=0:1    read 100%
+          YCSB-B  --ratio=1:19   read 95% / update 5%
+          YCSB-A  --ratio=1:1    read 50% / update 50%
 ```
 
-> 비율만 YCSB 를 따르고 **키 분포는 uniform**(`--key-pattern=R:R`)이다.
-> memtier 는 zipf 도 지원하지만(`Z:Z`, `--key-zipf-exp`) 이번 격자는 uniform 으로
-> 돌린다 — Zipfian 은 별도 축이다(`PLAN.md` §5). 스크램블 유무가 YCSB 와 다르다.
+Zipfian 은 **YCSB 에 충실하다.** memtier 상류에는 스크램블이 없어(핫 키가
+`m-1, m-2, …` 최저 번호로 몰린다) 패치로 넣었다 — YCSB `ScrambledZipfian` 과
+같은 FNV-1a 로 순위를 키공간에 흩뿌린다. genie 가 요청 키를 직접 세어 검증했다:
+
+```text
+키범위 1~10,000 · θ=0.99 · 각 37만 요청
+  스크램블 없이   상위10 = 1..10 연속            점유율 28.9%
+  스크램블 켜고   상위10 = 4406, 4997, 3224 …    점유율 28.9%
+  이론값 (n=10,000, θ=0.99)                      28.9%
+```
+
+집중도는 이론과 일치하고 배치만 흩어진다 — ScrambledZipfian 의 정의 그대로다.
+패치는 `tools/memtier-scrambled-zipfian.patch`.
 
 빌드 `memcached.permr` sha `b7fe29841a6c04ff45708347` 하나로 전 격자를 돌린다.
 명세는 `PLAN.md`. 라운드 3(180초, 빌드 `c11ede3e`)의 결과는 `RESULTS.md`.

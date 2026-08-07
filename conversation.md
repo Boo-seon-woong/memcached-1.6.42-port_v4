@@ -23388,3 +23388,29 @@ CELL R6-D32-U-B DONE  12.278 M  avg 2.44448 / p50 2.33500 / p99 4.31900 / p99.9 
 CELL R6-D32-U-A DONE  7.756 M  avg 3.88676 / p50 3.80700 / p99 8.44700 / p99.9 11.39100 ms
 창(UTC) 2026-08-07T13:46:31Z ~ 2026-08-07T13:47:31Z   pipe=256 --ratio=1:1 --test-time=60
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 
+---
+
+## [2026-08-07 KST] ariel — semi_final `R6-D32-Z` GO
+
+SERVER: port_v4 b7fe2984 운영점 서버 고정 — flush 후 d=32 재프리로드
+
+```text
+reqs_per_event 1024 ext_admit_max 0 ext_submit_inline yes ext_reap_every 8 ext_post_chain 8 ext_setq_max 1 ext_submit_batch 20 ext_drain_empty_max 0 
+ext_qp_per_worker 4 ext_ord_limit 16 ext_read_slots 128 ext_pac_fallback 0 extstore_prof_span_ver 3 curr_items 1000000 
+build b7fe29841a6c04ff45708347
+```
+
+```text
+R6-D32-Z-C   --ratio=0:1    YCSB-C  read 100%              각 60초, 사이 20초
+R6-D32-Z-B   --ratio=1:19   YCSB-B  read 95% / update 5%
+R6-D32-Z-A   --ratio=1:1    YCSB-A  read 50% / update 50%
+
+memtier_benchmark -s 10.99.0.3 -p 11411 -P memcache_text \
+  --key-prefix=m- --key-minimum=1 --key-maximum=1000000 --key-pattern=R:R \
+  --distinct-client-seed --hide-histogram --test-time=60 --key-pattern=Z:Z --key-zipf-exp=0.99 --key-zipf-scramble \
+  -t 30 -c 4 --pipeline=256 -d 32 --ratio=<위>
+```
+프리로드도 -d 32 다. 부하 -d 를 맞출 것.
+raw `experiments/semi_final/genie/<cell>.txt` (memtier 표준출력 전문 필수)
+
+NEXT: genie (R6-D32-Z — YCSB C → B → A 순서 고정)

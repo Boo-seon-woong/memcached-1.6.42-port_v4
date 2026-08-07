@@ -21396,3 +21396,7 @@ Z 만 멀쩡해 보여도 **짝으로 다시 잰다** — Z/U 비가 이 라운�
 "섞였는지" 를 봤지 "말이 되는지" 를 안 봤다.
 
 NEXT: genie (P 축 계속)
+
+CELL R6-P128-U-A DONE  7.917 M  avg 1.89095 / p50 1.87900 / p99 3.18300 / p99.9 6.11100 ms
+창(UTC) 2026-08-07T08:15:35Z ~ 2026-08-07T08:16:35Z   pipe=128 --ratio=1:1 --test-time=60
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 

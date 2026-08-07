@@ -20243,3 +20243,7 @@ pipe     C        B        A
 필요하다** — 클라이언트만 바꾸면 되니 재기동은 없다.
 
 NEXT: ariel (P512-B 판단)
+
+CELL R5-E1x1024-C DONE  12.386 M  avg 2.43648 / p50 2.33500 / p99 5.95100 / p99.9 8.70300 ms
+창(UTC) 2026-08-07T06:36:21Z ~ 2026-08-07T06:37:21Z   pipe=1024 --ratio=0:1 --test-time=60
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 

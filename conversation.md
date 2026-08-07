@@ -20175,3 +20175,7 @@ CELL R5-P512-C DONE  12.287 M  avg 4.95511 / p50 4.41500 / p99 9.27900 / p99.9 1
 CELL R5-P512-B DONE  5.181 M  avg 11.81131 / p50 10.11100 / p99 35.83900 / p99.9 49.40700 ms
 창(UTC) 2026-08-07T06:32:41Z ~ 2026-08-07T06:33:41Z   pipe=512 --ratio=1:19 --test-time=60
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 
+
+CELL R5-P512-A DONE  7.434 M  avg 8.20850 / p50 7.80700 / p99 17.15100 / p99.9 22.01500 ms
+창(UTC) 2026-08-07T06:34:09Z ~ 2026-08-07T06:35:09Z   pipe=512 --ratio=1:1 --test-time=60
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 

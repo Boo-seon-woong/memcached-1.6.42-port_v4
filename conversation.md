@@ -22008,3 +22008,7 @@ memtier_benchmark -s 10.99.0.3 -p 11411 -P memcache_text \
 raw `experiments/semi_final/genie/<cell>.txt` (memtier 표준출력 전문 필수)
 
 NEXT: genie (R6-P32-U — YCSB C → B → A 순서 고정)
+
+CELL R6-P32-U-C DONE  7.492 M  avg 0.48572 / p50 0.40700 / p99 1.63900 / p99.9 2.65500 ms
+창(UTC) 2026-08-07T10:44:56Z ~ 2026-08-07T10:45:57Z   pipe=32 --ratio=0:1 --test-time=60
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 

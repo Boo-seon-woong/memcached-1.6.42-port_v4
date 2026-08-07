@@ -79,11 +79,20 @@ nqp = 64     Q64 S64x4
 ```
 
 - **ORD>16 은 무장 자체가 안 된다.** `extstore.c:644` 가 핀 값을 소프트
-  게이트가 아니라 CM 협상 파라미터(`initiator_depth`·`responder_resources`)로
-  넣어, HCA 최대 16 을 넘는 depth 로 선 QP 는 첫 READ 가
-  `remote invalid request (9)` 로 죽는다(`uint8_t` 캐스트라 ORD=256 은 0 으로
-  잘리기까지 한다). 재개하려면 CM 파라미터만 HCA 최대로 clamp 하고 소프트
-  게이트에 핀 값을 쓰면 된다 — 바이너리 교체이므로 관리자 결정 사항이다.
+  게이트(813행)로만 쓰지 않고 CM 연결 파라미터(`initiator_depth` ·
+  `responder_resources`)에도 넣기 때문이다. ORD 는 연결 시점에 QP 에 박히는
+  하드웨어 속성이지 소프트웨어 손잡이가 아니다. 실패는 두 갈래다.
+
+  ```text
+  ORD 32 · 64 · 128   rdma_connect: Invalid argument
+                      장치 max_qp_rd_atom(16) 초과라 CM 이 연결을 거부
+  ORD 256             connect OK → 첫 READ 가 remote invalid request (9)
+                      (uint8_t)256 == 0 으로 잘려 READ 능력 0 인 QP 가 선다
+  ```
+
+  재개하려면 CM 파라미터에 `min(핀값, max_qp_rd_atom)` 을 넣고 813행 소프트
+  게이트에만 핀 값을 쓰면 된다 — 그래야 "초과분은 SQ 에 쌓이고 그 대기를
+  측정한다"가 실제로 성립한다. 바이너리 교체이므로 관리자 결정 사항이다.
 - **nqp=64 는 자원 한계다.** 총 QP = mcT30 × 64 = 1,920 에서
   `create_cq failed: Cannot allocate memory`.
 

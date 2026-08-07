@@ -158,10 +158,18 @@ wire 16 · slots 64            wire 256 · slots 512
 extstore.c:644   .responder_resources = (uint8_t)ask, .initiator_depth = (uint8_t)ask
 ```
 
-핀 값이 소프트 게이트가 아니라 **CM 협상 파라미터**로 들어간다. HCA 최대
-16 을 넘는 depth 로 QP 가 서면 첫 READ 가 `remote invalid request (9)` 로
-죽는다. `extstore.c:650` 주석의 "초과분은 SQ 에 쌓인다"는 실측으로 거짓이고,
-`uint8_t` 캐스트라 ORD=256 은 0 으로 잘리기까지 한다.
+핀 값이 소프트 게이트(`extstore.c:813`)로만 쓰이지 않고 **CM 연결
+파라미터로도** 들어간다. ORD 는 연결 시점에 QP 에 박히는 하드웨어 속성이라
+소프트웨어로 올릴 수 없다. 실패는 두 갈래다.
+
+```text
+ORD 32 · 64 · 128   rdma_connect: Invalid argument
+                    장치 max_qp_rd_atom(16) 초과라 CM 이 연결을 거부한다
+ORD 256             connect OK → 첫 READ 가 remote invalid request (9)
+                    (uint8_t)256 == 0 으로 잘려 READ 능력 0 인 QP 가 선다
+```
+
+`extstore.c:650` 주석의 "초과분은 SQ 에 쌓인다"는 실측으로 거짓이다.
 
 측정 불가: `O32 O64 S1x256 S2x128 S4x64 S8x32`.
 고치려면 CM 파라미터만 HCA 최대로 clamp 하고 소프트 게이트는 핀 값을 쓰면

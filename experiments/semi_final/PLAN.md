@@ -93,8 +93,19 @@ nqp = 64     Q64 S64x4
   재개하려면 CM 파라미터에 `min(핀값, max_qp_rd_atom)` 을 넣고 813행 소프트
   게이트에만 핀 값을 쓰면 된다 — 그래야 "초과분은 SQ 에 쌓이고 그 대기를
   측정한다"가 실제로 성립한다. 바이너리 교체이므로 관리자 결정 사항이다.
-- **nqp=64 는 자원 한계다.** 총 QP = mcT30 × 64 = 1,920 에서
-  `create_cq failed: Cannot allocate memory`.
+- **nqp=64 는 자원 한계다** — `create_cq failed: Cannot allocate memory`.
+  CQ 는 `2 × W × nqp`(`extstore.c:626`)로 잡히고 `MLX5_COHERENT_CQ=1` 이라
+  그 메모리가 유한한 coherent 풀에서 나온다. 관측된 경계:
+
+  ```text
+  S32x8   nqp 32  W 256  CQ 16,384/워커   무장 성공
+  S64x4   nqp 64  W 256  CQ 32,768/워커   ENOMEM
+  ```
+
+  W·slots 가 같고 nqp 만 두 배인 쌍이다. QP 수(960→1,920)와 CQ 크기가 함께
+  움직이므로 **둘 중 무엇이 천장인지는 이 데이터로 구분되지 않는다.**
+  구분하려면 nqp=64 에 작은 W 를 주고(CQ 8,192) 무장만 시도해 보면 된다 —
+  측정용이 아니라 진단용 1회.
 
 ### 격자를 읽는 규칙
 

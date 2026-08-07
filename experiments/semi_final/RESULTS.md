@@ -195,8 +195,11 @@ T30    slots 512   12.808      OP-r3  slots 128   12.988     1.4%
 extstore rdma_cm: create_cq failed (worker 0 qp 0): Cannot allocate memory
 ```
 
-QP 1920 개에서 CQ 할당이 실패한다. 측정 불가: `Q64 · S64x4`.
-S64x4 가 빠져 §4 의 단조 추세 검정이 불가능해졌다.
+CQ 는 `2 × W × nqp`(`extstore.c:626`)로 잡히고 `MLX5_COHERENT_CQ=1` 이라
+유한한 coherent 풀에서 나온다. 관측된 경계는 W·slots 가 같고 nqp 만 두 배인
+쌍이다 — `S32x8`(nqp32, CQ 16,384/워커) 성공, `S64x4`(nqp64, CQ 32,768/워커)
+실패. QP 수와 CQ 크기가 함께 움직여 **어느 쪽이 천장인지는 미구분**이다.
+측정 불가: `Q64 · S64x4`. S64x4 가 빠져 §4 의 단조 추세 검정이 불가능해졌다.
 
 ### (4) 축 CSV 분류 누락 — O 축이 `etc.csv` 로 (해결)
 

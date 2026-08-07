@@ -25156,3 +25156,7 @@ CELL R6-Q2-Z-C DONE  12.135 M  avg 2.48634 / p50 2.39900 / p99 5.02300 / p99.9 7
 CELL R6-Q2-Z-B DONE  9.465 M  avg 3.20724 / p50 3.10300 / p99 6.36700 / p99.9 8.51100 ms
 창(UTC) 2026-08-07T17:30:42Z ~ 2026-08-07T17:31:42Z   pipe=256 --ratio=1:19 --test-time=60
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=32 ext_qp_per_worker=2 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+CELL R6-Q2-Z-A DONE  1.721 M  avg 17.78684 / p50 15.61500 / p99 47.35900 / p99.9 56.83100 ms
+창(UTC) 2026-08-07T17:32:09Z ~ 2026-08-07T17:33:10Z   pipe=256 --ratio=1:1 --test-time=60
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=32 ext_qp_per_worker=2 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 

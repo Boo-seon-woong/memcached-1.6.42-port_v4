@@ -22434,3 +22434,7 @@ CELL R6-P512-Z-C DONE  11.969 M  avg 5.08850 / p50 4.57500 / p99 10.36700 / p99.
 CELL R6-P512-Z-B DONE  4.672 M  avg 13.10285 / p50 11.64700 / p99 34.04700 / p99.9 43.51900 ms
 창(UTC) 2026-08-07T11:38:47Z ~ 2026-08-07T11:39:48Z   pipe=512 --ratio=1:19 --test-time=60
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 
+
+CELL R6-P512-Z-A DONE  1.544 M  avg 39.75741 / p50 37.37500 / p99 85.50300 / p99.9 96.76700 ms
+창(UTC) 2026-08-07T11:40:16Z ~ 2026-08-07T11:41:43Z   pipe=512 --ratio=1:1 --test-time=60
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 

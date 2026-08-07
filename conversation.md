@@ -19966,3 +19966,60 @@ CELL R5-P64-C DONE  9.666 M  avg 0.75442 / p50 0.70300 / p99 2.39900 / p99.9 4.7
 CELL R5-P64-B DONE  9.093 M  avg 0.80405 / p50 0.74300 / p99 2.60700 / p99.9 4.86300 ms
 창(UTC) 2026-08-07T06:13:44Z ~ 2026-08-07T06:14:44Z   pipe=64 --ratio=1:19 --test-time=60
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 
+
+---
+
+## [2026-08-07 KST] ariel — memtier 에 **ScrambledZipfian** 을 넣는 패치. 빌드 요청
+
+관리자 결정: 실험 1~8 **전부** uniform / zipfian 두 벌로 잰다. zipfian 은
+YCSB 에 충실해야 하고, 그래서 스크램블이 필요하다.
+
+### 왜 필요한가
+
+당신 바이너리의 zipf 는 상류 master 기능이고 **분포 모양은 YCSB 와 같다**
+(지수 의미 동일, 구현만 이산 zeta 대신 연속 근사). 다른 건 **배치**다.
+
+```text
+memtier   generate_key() 가 prefix + key_index 를 그대로 쓴다
+          → 핫 키가 문자 그대로 m-1, m-2, m-3 … 최저 번호
+YCSB      ScrambledZipfian 이 순위를 FNV 해시로 키공간에 흩뿌린다
+```
+
+memcached 해시 테이블에는 무해하다(키 문자열을 해시하니 버킷·락은 흩어진다).
+문제는 **원격 저장**이다 — 프리로드가 순차라 키 번호와 원격 오프셋이 삽입
+순서로 대응하므로, 스크램블이 없으면 핫 데이터가 원격 메모리 앞쪽 연속
+구간에 몰린다. YCSB 가 스크램블하는 취지가 정확히 이걸 막는 것이다.
+
+### 패치
+
+`tools/memtier-scrambled-zipfian.patch` (164행, master 기준). 4파일 43줄 추가.
+
+```text
+obj_gen.cpp   zipf_distribution() 을 zipf_rank() + 스크램블 래퍼로 분리
+              FNV-1a 64 (YCSB Utils.fnvhash64 와 동일 상수)
+              k → key_min + fnvhash64(k - key_min) % n
+obj_gen.h     m_key_zipf_scramble 멤버, zipf_rank() 선언
+memtier_*.cpp --key-zipf-scramble 옵션 (기본 off — 기존 동작 불변)
+```
+
+기본값 off 라 이 패치가 기존 측정을 바꾸지 않는다. 켤 때만 YCSB 배치가 된다.
+`g++ -fsyntax-only` 로 obj_gen.cpp 통과 확인했다.
+
+### 빌드 후 확인 요청
+
+```text
+① --help 에 --key-zipf-scramble 이 뜨는지
+② 운영점에서 GET-only 60초를 셋 — uniform / zipf(스크램블 없음) /
+   zipf(스크램블) — 처리량과 hit 을 보고해달라
+   스크램블 유무로 차이가 나면 그게 "핫 데이터 원격 지역성" 효과다
+③ 세 경우 다 hit 100% 여야 한다 (키공간은 그대로다)
+```
+
+참고로 FNV 가 순위를 어디로 보내는지 미리 계산해뒀다 — 순위 0~9 가 키
+174406 · 584997 · 353224 · 763815 · 816770 · 227361 · 995588 · 406179 ·
+338062 · 748653 로 간다(키 100만 기준). 당신 빌드가 같은 값을 내면 정확하다.
+
+**라운드 5 는 그대로 계속 돌려달라** — uniform 한 벌은 어차피 필요하고,
+빌드 동안 노는 것보다 낫다. 패치본이 검증되면 두 벌 격자로 다시 짠다.
+
+NEXT: genie (memtier 빌드 + 확인 3종. 라운드 5 는 병행)

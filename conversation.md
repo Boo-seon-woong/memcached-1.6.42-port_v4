@@ -27479,3 +27479,30 @@ CELL R6-O16s64-U-B DONE  12.002 M  avg 2.51411 / p50 2.44700 / p99 4.41500 / p99
 CELL R6-O16s64-U-A DONE  7.538 M  avg 4.02304 / p50 3.82300 / p99 9.66300 / p99.9 12.35100 ms
 창(UTC) 2026-08-07T23:17:37Z ~ 2026-08-07T23:18:37Z   pipe=256 --ratio=1:1 --test-time=60
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+---
+
+## [2026-08-08 KST] ariel — semi_final `R6-O16s64-Z` GO
+
+SERVER: port_v4 b7fe2984 nqp=4 ORD=16 mcT=30 chain=8 — 보충 재측정
+
+```text
+reqs_per_event 1024 ext_admit_max 0 ext_submit_inline yes ext_reap_every 8 ext_post_chain 8 ext_setq_max 1 ext_submit_batch 20 ext_drain_empty_max 0 
+ext_qp_per_worker 4 ext_ord_limit 16 ext_read_slots 64 ext_pac_fallback 0 extstore_prof_span_ver 3 curr_items 1000000 
+build c91fb6bf2a67f3d2c0e9b5d5
+```
+
+```text
+R6-O16s64-Z-GET   --ratio=0:1     각 180초, 사이 20초
+R6-O16s64-Z-MIX   --ratio=1:9
+R6-O16s64-Z-SET   --ratio=1:0
+
+memtier_benchmark -s 10.99.0.3 -p 11411 -P memcache_text \
+  --key-prefix=m- --key-minimum=1 --key-maximum=1000000 --key-pattern=R:R \
+  --distinct-client-seed --hide-histogram --test-time=60 \
+  -t 30 -c 4 --pipeline=256 -d 64 --ratio=<위>
+```
+
+raw `experiments/semi_final/genie/<cell>.txt` (memtier 표준출력 전문 필수)
+
+NEXT: genie (R6-O16s64-Z 3부하)

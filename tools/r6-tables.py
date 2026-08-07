@@ -64,6 +64,7 @@ def load():
     hdr = lines[0].split('\t')
     idx = {n: i for i, n in enumerate(hdr)}
     out = collections.defaultdict(dict)
+    counts = collections.Counter()
     dropped = 0
     for ln in lines[1:]:
         f = ln.split('\t')
@@ -75,9 +76,21 @@ def load():
         if wl is None:
             dropped += 1
             continue
+        counts[rec[hdr[0]]] += 1
         out[rec[hdr[0]]][wl] = rec      # 같은 워크로드가 반복되면 나중 것이 남는다
     if dropped:
         print(f'<!-- YCSB 비율에 안 맞아 버린 부하 {dropped}개 -->\n')
+
+    # 창 하나에는 부하가 정확히 3개여야 한다(C·B·A). 더 많으면 그 창에 다른
+    # 부하가 섞였다는 뜻이다 — 라운드 전환 때 낡은 GO 를 따라온 부하가 실제로
+    # 그렇게 들어왔다(2026-08-07). 비율도 이름도 형식상 맞아 자동으로는 못
+    # 가르므로, **개수로 신고만** 한다. 값 판단은 사람이 한다.
+    odd = {k: v for k, v in counts.items() if v != 3}
+    if odd:
+        print('> ⚠ **창 안 부하 수가 3이 아닌 셀** — 다른 부하가 섞였을 수 있다.\n>')
+        for k in sorted(odd):
+            print(f'> `{k}` {odd[k]}개')
+        print()
     return out
 
 

@@ -27116,3 +27116,7 @@ CELL R6-T28-Z-C DONE  11.775 M  avg 2.38998 / p50 2.30300 / p99 4.47900 / p99.9 
 CELL R6-T28-Z-B DONE  9.344 M  avg 3.03054 / p50 2.91100 / p99 5.63100 / p99.9 7.90300 ms
 창(UTC) 2026-08-07T21:28:44Z ~ 2026-08-07T21:29:44Z   pipe=256 --ratio=1:19 --test-time=60
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 
+
+CELL R6-T28-Z-A DONE  1.734 M  avg 16.46814 / p50 14.39900 / p99 44.28700 / p99.9 52.73500 ms
+창(UTC) 2026-08-07T21:30:11Z ~ 2026-08-07T21:31:11Z   pipe=256 --ratio=1:1 --test-time=60
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 

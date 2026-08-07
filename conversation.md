@@ -19305,3 +19305,40 @@ bed 값 길이 == 부하 -d      크기 어긋남 차단 (D 축에서 즉시 작
 ```
 
 NEXT: (마감)
+
+---
+
+## [2026-08-07 KST] ariel — 검증 셀 `WFIX-OP` GO (W 수정 빌드)
+
+SERVER: port_v4 **646ff2b7** (신규 — 캠페인 빌드 c11ede3e 아님) slot=256 nqp=4 ORD=협상16 slots=128 admit=0
+
+```text
+ext_worker_window 64 ext_qp_per_worker 4 ext_ord_limit 16 ext_read_slots 128 ext_pac_fallback 0 extstore_prof_span_ver 3 curr_items 1000000 
+build 646ff2b78e6001abeffa0c23
+```
+
+W(`ext_worker_window`)를 손잡이에서 없애고 **연결 시점에 nqp × ORD 로 파생**하게
+고쳤다. 큐 사이징도 함께 고쳤다 — CQ 가 `2×W×nqp` 였는데 outstanding 이 워커
+단위 스칼라라 그만큼 필요하지 않다(`2×W+8` 로). 이 셀의 목적은 **성능 회귀가
+없는지** 확인하는 것이다. 조건은 `SF3-OP` 와 동일하다.
+
+```text
+WFIX-OP-GET   --ratio=0:1     각 180초, 사이 20초
+WFIX-OP-MIX   --ratio=1:9
+WFIX-OP-SET   --ratio=1:0
+
+memtier_benchmark -s 10.99.0.3 -p 11411 -P memcache_text \
+  --key-prefix=m- --key-minimum=1 --key-maximum=1000000 --key-pattern=R:R \
+  --distinct-client-seed --hide-histogram --test-time=180 \
+  -t 30 -c 4 --pipeline=256 -d 64 --ratio=<위>
+```
+
+판정: `SF3-OP` 12.873 / 10.687 / 5.635 대비 **재현성 0.9% 안**이면 통과.
+(참고로 파생 W 는 64 로 캠페인이 규칙으로 쓰던 값과 같다 — 동작이 바뀌면 안 된다.)
+
+부수 확인: nqp=64 는 이제 QP 1,920 개가 **전부 연결된다**(create_cq 통과).
+다만 bounce 7.86 MB 등록에서 막힌다 — 이건 과할당이 아니라 실제 필요량이다.
+
+raw `experiments/semi_final/genie/WFIX-OP.txt`
+
+NEXT: genie (WFIX-OP 3부하)

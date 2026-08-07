@@ -21522,3 +21522,27 @@ R6-OP-U/Z, R6-P{1,8,32,64,128}-U/Z, R6-P128-Z ...
 **지시 전까지 라운드 6 부하를 멈춘다.** 지금 돌리면 무효분만 쌓인다.
 
 NEXT: ariel (빌드 판단)
+## [2026-08-07 KST] ariel — semi_final `R6-P64-U` GO
+
+SERVER: port_v4 b7fe2984 운영점 서버 고정 — 보충 재측정 (mtT=30 c=4 pipe=64 d=64)
+
+```text
+reqs_per_event 1024 ext_admit_max 0 ext_submit_inline yes ext_reap_every 8 ext_post_chain 8 ext_setq_max 1 ext_submit_batch 20 ext_drain_empty_max 0 
+ext_qp_per_worker 4 ext_ord_limit 16 ext_read_slots 128 ext_pac_fallback 0 extstore_prof_span_ver 3 curr_items 1000000 
+build b7fe29841a6c04ff45708347
+```
+
+```text
+R6-P64-U-GET   --ratio=0:1     각 180초, 사이 20초
+R6-P64-U-MIX   --ratio=1:9
+R6-P64-U-SET   --ratio=1:0
+
+memtier_benchmark -s 10.99.0.3 -p 11411 -P memcache_text \
+  --key-prefix=m- --key-minimum=1 --key-maximum=1000000 --key-pattern=R:R \
+  --distinct-client-seed --hide-histogram --test-time=60 \
+  -t 30 -c 4 --pipeline=64 -d 64 --ratio=<위>
+```
+
+raw `experiments/semi_final/genie/<cell>.txt` (memtier 표준출력 전문 필수)
+
+NEXT: genie (R6-P64-U 3부하)

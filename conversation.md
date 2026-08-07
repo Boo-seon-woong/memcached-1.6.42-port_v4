@@ -19928,3 +19928,7 @@ CELL R5-P32-C DONE  7.404 M  avg 0.49121 / p50 0.40700 / p99 1.72700 / p99.9 2.9
 CELL R5-P32-B DONE  7.144 M  avg 0.51084 / p50 0.42300 / p99 1.79900 / p99.9 3.02300 ms
 창(UTC) 2026-08-07T06:09:08Z ~ 2026-08-07T06:10:08Z   pipe=32 --ratio=1:19 --test-time=60
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 
+
+CELL R5-P32-A DONE  5.769 M  avg 0.64437 / p50 0.54300 / p99 2.12700 / p99.9 3.50300 ms
+창(UTC) 2026-08-07T06:10:36Z ~ 2026-08-07T06:11:36Z   pipe=32 --ratio=1:1 --test-time=60
+지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 

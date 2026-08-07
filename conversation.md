@@ -19354,3 +19354,49 @@ CELL WFIX-OP-MIX DONE  10.954 M  avg 2.76378 / p50 2.67100 / p99 4.86300 / p99.9
 CELL WFIX-OP-SET DONE  6.328 M  avg 4.79691 / p50 3.99900 / p99 8.31900 / p99.9 12.67100 ms
 창(UTC) 2026-08-07T02:52:22Z ~ 2026-08-07T02:55:22Z   pipe=256 --ratio=1:0 --test-time=180
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=128 extstore_prof_span_ver=3 
+
+## [2026-08-07 KST] ariel — W 수정 검증 통과. **쓰기가 +12.3%** (개선폭이 쓰기 비중에 비례)
+
+```text
+워크로드  쓰기비중   캠페인(c11ede3e)  수정후(646ff2b7)     차이
+GET          0%          12.873          12.862        −0.09%
+MIX         10%          10.687          10.954        +2.50%
+SET        100%           5.635           6.328       +12.30%
+
+err5 0 · write_failures 0 · read_failures 0 · engine_dead 0
+pac_fallback 0 · slot_acct_leak 0 · listen_disabled_num 0
+```
+
+일이 줄어서 오른 게 아니다 — 실패 계수기가 전부 0 이다.
+
+### 무엇을 고쳤나
+
+`W`(ext_worker_window)를 손잡이에서 없애고 연결 시점에 `nqp × ORD` 로
+파생하게 했다. 핵심은 큐 사이징이었다.
+
+```text
+CQ   2 × W × nqp  →  2 × W + 8     outstanding 은 워커 단위 스칼라라
+                                    W 개 넘는 CQE 가 동시에 존재할 수 없다
+SQ   W + 1        →  2 × ORD + 8   QP 하나엔 READ 가 ORD, WRITE 가 W/nqp 몫
+```
+
+READ 는 ORD 로 묶여 큐를 얕게 쓰지만 WRITE 는 ORD 면제라 깊게 쓴다
+(`extstore.c:972`). 과대한 큐의 비용을 **쓰기 경로가 다 물고 있었다.**
+
+### 당신 데이터에 대한 함의 — MIX·SET 은 전부 눌려 있던 값이다
+
+```text
+P·E·D·C·T   nqp·ORD 고정이라 CQ 가 512 로 균일 → 축 내부 형태는 유효
+Q·O·S       CQ 가 셀마다 달랐다(W=nqp×ORD 라 nqp² 로 증가)
+            → GET 보다 MIX·SET 이 더 교란됐다
+```
+
+그래서 **형태 효과(+1.9%) 판정을 철회했다.** 두 쌍 다 이긴 쪽이 큐도 작았고
+(Q1 CQ 32 vs O4 128, S16x16 8,192 vs S32x8 16,384), ATTR 이 "큐 크면 느리다"를
+이미 보였으니 부호가 같은 방향이다. 형태 몫과 큐 몫을 못 가른다.
+`RESULTS.md` §4 에 철회 사유를 남겼다.
+
+부수: nqp=64 는 이제 QP 1,920 개가 **전부 연결된다**(create_cq 통과). 다만
+bounce 7.86 MB 등록에서 막힌다 — 이건 그 동시성의 실제 필요량이라 한계가 맞다.
+
+NEXT: 관리자 결정 대기 (Q·O·S 13구성 재측정 여부)

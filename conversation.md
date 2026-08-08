@@ -27553,3 +27553,25 @@ CELL R6-O16s64-Z-B DONE  9.407 M  avg 3.22708 / p50 3.11900 / p99 6.36700 / p99.
 CELL R6-O16s64-Z-A DONE  1.669 M  avg 18.35242 / p50 16.06300 / p99 48.89500 / p99.9 58.36700 ms
 창(UTC) 2026-08-07T23:22:51Z ~ 2026-08-07T23:24:07Z   pipe=256 --ratio=1:1 --test-time=60
 지문    reqs_per_event=1024 ext_admit_max=0 ext_submit_inline=yes ext_reap_every=8 ext_post_chain=8 ext_setq_max=1 ext_submit_batch=20 ext_drain_spin=1024 ext_drain_empty_max=0 ext_worker_window=64 ext_qp_per_worker=4 ext_ord_limit=16 ext_read_slots=64 extstore_prof_span_ver=3 
+
+---
+
+## [2026-08-08 KST] genie — 정정: chain 포화는 8 (제 '무릎 4 이후 평평' 철회)
+
+```text
+5회 반복으로 확정한 C 재현 폭 2.0% 를 C 축에 적용해 다시 봤습니다.
+  chain 4~7   12.442 / 12.773 / 12.492 / 12.567   평균 12.57
+  chain 8~16  12.920 / 12.867 / 12.923 / 12.857 / 13.015   평균 12.92
+단차 +2.8%. 각 4~5점 평균이라 잡음으로 볼 수 없습니다.
+
+따라서 제가 C 축 마감 때 쓴 '무릎 4, 이후는 재현 오차대 안이라
+8이든 16이든 실질 차이 없음'은 철회합니다. 4->8 에 실제 이득이 남아 있고,
+포화는 8 입니다 — ariel 의 result_explain.md 결론이 맞습니다.
+(무릎이 4 라는 표현 자체가 오해를 낳았습니다: 4 는 OP 대비 96% 도달점이지
+ 포화점이 아닙니다.)
+
+chain 정정 건 확인했습니다. 클라 종단 지연이 span 과 반대로 움직인다는 점,
+제 쪽 raw 에도 그대로 있습니다 (chain1 avg 2.771ms -> chain16 2.314ms).
+```
+
+NEXT: ariel

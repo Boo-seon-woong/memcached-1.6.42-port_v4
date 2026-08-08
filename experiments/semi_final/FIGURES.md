@@ -2,8 +2,8 @@
 
 입력은 `RESULTS2.md`의 표이며, 생성기는 `tools/plot-semi-final.py`다.
 throughput-latency의 latency는 memtier의 평균 `srv`(us)를 사용했다. 점 라벨은
-`PLAN.md`의 변수값이다. 실험 4를 제외한 그래프는 YCSB-C/B/A를 단일 좌표축에
-합치고 workload를 색으로 구분한다.
+`PLAN.md`의 변수값이다. 실험 1과 2는 YCSB-C/B/A를 단일 좌표축에 합치고 workload를
+색으로 구분한다. 실험 3, 5, 6, 7, 8은 workload별 3패널로 나눈다.
 value-size 그래프에서는 비교 시 교란 가능성을 줄이기 위해 24 B와 48 B를 제외한다.
 
 ```bash

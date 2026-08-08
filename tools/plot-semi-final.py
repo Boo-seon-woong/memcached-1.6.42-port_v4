@@ -20,6 +20,7 @@ plt.rcParams.update({"font.family": "NanumGothic", "axes.unicode_minus": False})
 
 WORKLOADS = ("YCSB-C", "YCSB-B", "YCSB-A")
 DISTRIBUTIONS = ("uniform", "zipfian")
+COMBINED_EXPERIMENTS = {1, 2}
 
 EXPERIMENTS = (
     (1, "P 파이프라인", "pipeline", "Pipeline", ("1", "8", "32", "64", "128", "256", "384", "512"), "256"),
@@ -205,50 +206,81 @@ def throughput_latency_figure(tables, experiment, outdir, distribution):
     client_index = index_rows(client_rows, variable)
 
     series = []
-    all_throughput = []
-    all_latency = []
     for workload in WORKLOADS:
         throughput = ordered_rows(read_index, values, distribution, workload)
         latency = ordered_rows(client_index, values, distribution, workload)
-        xs = [number(row, "Mops") for row in throughput]
-        ys = [number(row, "srv") for row in latency]
-        series.append((workload, xs, ys))
-        all_throughput.extend(xs)
-        all_latency.extend(ys)
+        series.append((
+            workload,
+            [number(row, "Mops") for row in throughput],
+            [number(row, "srv") for row in latency],
+        ))
 
-    fig, ax = plt.subplots(figsize=(8.2, 5.8))
-    ax.set_xlim(*padded_limits(all_throughput))
-    ax.set_ylim(*padded_limits(all_latency))
-    for workload_index, (workload, xs, ys) in enumerate(series):
-        color = WORKLOAD_COLORS[workload]
-        ax.plot(xs, ys, color=color, linewidth=1.4, alpha=0.65, zorder=2)
-        ax.scatter(xs, ys, s=28, color=color, edgecolors="white", linewidths=0.7, zorder=3)
-        annotate_points(
-            ax,
-            xs,
-            ys,
-            [display_label(value) for value in values],
-            color,
-            offset_phase=workload_index,
+    if number_id in COMBINED_EXPERIMENTS:
+        fig, ax = plt.subplots(figsize=(8.2, 5.8))
+        all_throughput = [x for _workload, xs, _ys in series for x in xs]
+        all_latency = [y for _workload, _xs, ys in series for y in ys]
+        ax.set_xlim(*padded_limits(all_throughput))
+        ax.set_ylim(*padded_limits(all_latency))
+        for workload_index, (workload, xs, ys) in enumerate(series):
+            color = WORKLOAD_COLORS[workload]
+            ax.plot(xs, ys, color=color, linewidth=1.4, alpha=0.65, zorder=2)
+            ax.scatter(xs, ys, s=28, color=color, edgecolors="white", linewidths=0.7, zorder=3)
+            annotate_points(
+                ax,
+                xs,
+                ys,
+                [display_label(value) for value in values],
+                color,
+                offset_phase=workload_index,
+            )
+
+        style_axis(ax)
+        ax.set_xlabel("Throughput (M ops/s)", fontsize=10)
+        ax.set_ylabel("srv avg (us)", fontsize=10)
+        workload_handles = [
+            Line2D([0], [0], color=WORKLOAD_COLORS[workload], marker="o", linewidth=1.4,
+                   markersize=5, label=workload)
+            for workload in WORKLOADS
+        ]
+        ax.legend(handles=workload_handles, loc="upper center", bbox_to_anchor=(0.5, 1.02),
+                  ncol=3, frameon=False, fontsize=8.5)
+        subtitle = (
+            "Color = YCSB workload; labels are the swept variable. "
+            "Lines connect values in PLAN.md order."
         )
-
-    style_axis(ax)
-    ax.set_xlabel("Throughput (M ops/s)", fontsize=10)
-    ax.set_ylabel("srv avg (us)", fontsize=10)
-    workload_handles = [
-        Line2D([0], [0], color=WORKLOAD_COLORS[workload], marker="o", linewidth=1.4,
-               markersize=5, label=workload)
-        for workload in WORKLOADS
-    ]
-    ax.legend(handles=workload_handles, loc="upper center", bbox_to_anchor=(0.5, 1.02),
-              ncol=3, frameon=False, fontsize=8.5)
+        subplot_adjust = {"left": 0.12, "right": 0.98, "bottom": 0.13, "top": 0.78}
+    else:
+        fig, axes = plt.subplots(1, 3, figsize=(13.2, 4.2))
+        color = COLORS[distribution]
+        for column_index, (workload, xs, ys) in enumerate(series):
+            ax = axes[column_index]
+            ax.plot(xs, ys, color=color, linewidth=1.4, alpha=0.65, zorder=2)
+            ax.scatter(xs, ys, s=28, color=color, edgecolors="white", linewidths=0.7, zorder=3)
+            ax.set_xlim(*padded_limits(xs))
+            ax.set_ylim(*padded_limits(ys))
+            annotate_points(ax, xs, ys, [display_label(value) for value in values], color)
+            style_axis(ax)
+            ax.set_title(workload, fontsize=10, fontweight="bold")
+            ax.set_xlabel("Throughput (M ops/s)", fontsize=9)
+            if column_index == 0:
+                ax.set_ylabel("srv avg (us)", fontsize=9)
+        subtitle = (
+            "Each panel is autoscaled; labels are the swept variable. "
+            "Lines connect values in PLAN.md order."
+        )
+        subplot_adjust = {
+            "left": 0.07,
+            "right": 0.98,
+            "bottom": 0.15,
+            "top": 0.80,
+            "wspace": 0.24,
+        }
 
     fig.suptitle(f"Experiment {number_id}: {title} ({distribution})",
                  fontsize=15, fontweight="bold", y=0.98)
-    fig.text(0.5, 0.91,
-             "Color = YCSB workload; labels are the swept variable. Lines connect values in PLAN.md order.",
+    fig.text(0.5, 0.91, subtitle,
              ha="center", va="top", fontsize=9, color="#4b5563")
-    fig.subplots_adjust(left=0.12, right=0.98, bottom=0.13, top=0.78)
+    fig.subplots_adjust(**subplot_adjust)
     save_figure(fig, outdir, distribution, f"{FILE_STEMS[number_id]}-throughput-latency")
 
 

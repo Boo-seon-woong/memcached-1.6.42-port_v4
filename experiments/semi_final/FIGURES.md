@@ -3,6 +3,7 @@
 입력은 `RESULTS2.md`의 표이며, 생성기는 `tools/plot-semi-final.py`다.
 throughput-latency의 latency는 memtier의 평균 `srv`(us)를 사용했다. 각 패널은
 세부 변화가 보이도록 독립적으로 autoscale하며, 점 라벨은 `PLAN.md`의 변수값이다.
+value-size 그래프에서는 비교 시 교란 가능성을 줄이기 위해 24 B와 48 B를 제외한다.
 
 ```bash
 MPLCONFIGDIR=/tmp/matplotlib python3 tools/plot-semi-final.py
@@ -16,8 +17,8 @@ img/semi-final-r6/
 │   ├── png/
 │   └── svg/
 ├── zipfian/
-    ├── png/
-    └── svg/
+│   ├── png/
+│   └── svg/
 └── comparison/
     ├── png/
     └── svg/
@@ -77,4 +78,5 @@ SET other v2 = Sv2 - Sxfer - Scrypto
 
 실험 9는 `img/reference/example_exp9.png`의 구성을 따라 단일 scatter로 합쳤다.
 YCSB-C/B/A는 색으로, uniform/zipfian은 원/사각형 마커로 구분하며 같은 workload의
-두 분포를 선으로 잇는다. 선형 축이고 지연은 다른 그림과 같은 `srv avg`를 쓴다.
+두 분포를 선으로 잇는다. 다른 throughput-latency 그림과 동일하게 x축은 throughput,
+y축은 `srv avg`이며 두 축 모두 선형이다.

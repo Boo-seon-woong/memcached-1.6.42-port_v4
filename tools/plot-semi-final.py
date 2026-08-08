@@ -24,7 +24,7 @@ DISTRIBUTIONS = ("uniform", "zipfian")
 EXPERIMENTS = (
     (1, "P 파이프라인", "pipeline", "Pipeline", ("1", "8", "32", "64", "128", "256", "384", "512"), "256"),
     (2, "T 스레드", "mcT", "memcached threads", ("1", "2", "4", "8", "12", "16", "24", "28", "30"), "30"),
-    (3, "D 값 크기", "d(B)", "Value size (B)", ("4", "8", "16", "24", "32", "48", "64", "96", "128"), "64"),
+    (3, "D 값 크기", "d(B)", "Value size (B)", ("4", "8", "16", "32", "64", "96", "128"), "64"),
     (4, "C 체인", "chain", "ext_post_chain", tuple(str(v) for v in range(1, 17)), "8"),
     (5, "Q nqp", "nqp", "QP count", ("1", "2", "4", "8", "16", "64"), "4"),
     (6, "O ORD", "ORD", "RDMA read depth", ("1", "2", "4", "8", "협상16"), "협상16"),
@@ -221,9 +221,9 @@ def throughput_latency_figure(tables, experiment, outdir, distribution):
         ax.set_title(workload, fontsize=10, fontweight="bold")
         ax.set_xlabel("Throughput (M ops/s)", fontsize=9)
         if column_index == 0:
-            ax.set_ylabel("Client latency, srv avg (us)", fontsize=9)
+            ax.set_ylabel("srv avg (us)", fontsize=9)
 
-    fig.suptitle(f"Experiment {number_id}: {title} - throughput vs. client latency ({distribution})",
+    fig.suptitle(f"Experiment {number_id}: {title} ({distribution})",
                  fontsize=15, fontweight="bold", y=0.98)
     fig.text(0.5, 0.91,
              "Each panel is autoscaled; labels are the swept variable. Lines connect values in PLAN.md order.",
@@ -241,14 +241,14 @@ def distribution_figure(tables, outdir):
     latency = {(row["분포"], row["워크로드"]): row for row in client_rows}
 
     fig, ax = plt.subplots(figsize=(8.2, 5.8))
-    all_latency = []
     all_throughput = []
+    all_latency = []
     marker_by_distribution = {"uniform": "o", "zipfian": "s"}
     short_label = {"uniform": "U", "zipfian": "Z"}
 
     for workload in WORKLOADS:
-        xs = [number(latency[(distribution, workload)], "srv") for distribution in DISTRIBUTIONS]
-        ys = [number(throughput[(distribution, workload)], "Mops") for distribution in DISTRIBUTIONS]
+        xs = [number(throughput[(distribution, workload)], "Mops") for distribution in DISTRIBUTIONS]
+        ys = [number(latency[(distribution, workload)], "srv") for distribution in DISTRIBUTIONS]
         color = WORKLOAD_COLORS[workload]
         ax.plot(xs, ys, color=color, linewidth=1.4, alpha=0.5, zorder=2)
         for x, y, distribution in zip(xs, ys, DISTRIBUTIONS):
@@ -256,15 +256,15 @@ def distribution_figure(tables, outdir):
                        color=color, edgecolors="white", linewidths=0.8, zorder=3)
             ax.annotate(short_label[distribution], (x, y), xytext=(3, 3),
                         textcoords="offset points", fontsize=8, color=color)
-        all_latency.extend(xs)
-        all_throughput.extend(ys)
+        all_throughput.extend(xs)
+        all_latency.extend(ys)
 
-    ax.set_xlim(*padded_limits(all_latency, 0.13))
-    ax.set_ylim(*padded_limits(all_throughput, 0.16))
+    ax.set_xlim(*padded_limits(all_throughput, 0.13))
+    ax.set_ylim(*padded_limits(all_latency, 0.16))
     style_axis(ax)
     ax.xaxis.set_major_formatter(FuncFormatter(metric_formatter))
-    ax.set_xlabel("Client latency, srv avg (us)", fontsize=10)
-    ax.set_ylabel("Throughput (M ops/s)", fontsize=10)
+    ax.set_xlabel("Throughput (M ops/s)", fontsize=10)
+    ax.set_ylabel("srv avg (us)", fontsize=10)
 
     workload_handles = [
         Line2D([0], [0], color=WORKLOAD_COLORS[workload], marker="o", linewidth=1.4,
@@ -278,7 +278,7 @@ def distribution_figure(tables, outdir):
     ]
     ax.legend(handles=workload_handles + distribution_handles, loc="upper center",
               bbox_to_anchor=(0.5, 1.02), ncol=5, frameon=False, fontsize=8.5)
-    fig.suptitle("Experiment 9: key distribution - throughput vs. client latency",
+    fig.suptitle("Experiment 9: key distribution",
                  fontsize=15, fontweight="bold", y=0.98)
     fig.text(0.5, 0.91,
              "Color = YCSB workload; marker = key distribution; lines connect the U/Z pair.",
@@ -354,7 +354,7 @@ def experiment4_figure(tables, outdir, distribution, workload):
     curve_ax.set_box_aspect(1)
     curve_ax.set_title("(a) Throughput-latency", fontsize=11, fontweight="bold")
     curve_ax.set_xlabel("Throughput (M ops/s)", fontsize=10)
-    curve_ax.set_ylabel("Client latency, srv avg (us)", fontsize=10)
+    curve_ax.set_ylabel("srv avg (us)", fontsize=10)
 
     component_names = ("admit (batch wait)", "sync", "xfer", "crypto", "other v2", "return")
     component_colors = (COLORS["admit"], COLORS["sync"], COLORS["xfer"],

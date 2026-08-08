@@ -1,8 +1,9 @@
 # semi_final R6 러프 그래프
 
 입력은 `RESULTS2.md`의 표이며, 생성기는 `tools/plot-semi-final.py`다.
-throughput-latency의 latency는 memtier의 평균 `srv`(us)를 사용했다. 각 패널은
-세부 변화가 보이도록 독립적으로 autoscale하며, 점 라벨은 `PLAN.md`의 변수값이다.
+throughput-latency의 latency는 memtier의 평균 `srv`(us)를 사용했다. 점 라벨은
+`PLAN.md`의 변수값이다. 실험 4를 제외한 그래프는 YCSB-C/B/A를 단일 좌표축에
+합치고 workload를 색으로 구분한다.
 value-size 그래프에서는 비교 시 교란 가능성을 줄이기 위해 24 B와 48 B를 제외한다.
 
 ```bash
